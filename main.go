@@ -9,7 +9,7 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-provider-scaffolding-framework/internal/provider"
+	"terraform-provider-permit-io/internal/provider"
 )
 
 // Run "go generate" to format example terraform files and generate the docs for the registry/website
@@ -31,6 +31,13 @@ var (
 	// https://goreleaser.com/cookbooks/using-main.version/
 )
 
+//	func main() {
+//		clientConfig := permitConfig.NewConfigBuilder("").WithDebug(true).Build()
+//		permitClient := permit.NewPermit(clientConfig)
+//		a, _ := permitClient.Api.Resources.Get(context.Background(), "1098f0f1360d4e76bfee159aff20c487")
+//		println(a.Name)
+//
+// }
 func main() {
 	var debug bool
 
@@ -38,8 +45,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		// TODO: Update this string with the published name of your provider.
-		Address: "registry.terraform.io/hashicorp/scaffolding",
+		Address: "registry.terraform.io/permitio/permit-io",
 		Debug:   debug,
 	}
 

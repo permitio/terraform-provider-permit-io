@@ -5,7 +5,11 @@ package provider
 
 import (
 	"context"
-	"net/http"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	permitConfig "github.com/permitio/permit-golang/pkg/config"
+	"github.com/permitio/permit-golang/pkg/permit"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -14,71 +18,138 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
-var _ provider.Provider = &ScaffoldingProvider{}
+const (
+	DefaultApiUrl = "https://api.permit.io"
+	PDPApiUrl     = "https://localhost:3000"
+)
 
-// ScaffoldingProvider defines the provider implementation.
-type ScaffoldingProvider struct {
+// Ensure PermitProvider satisfies various provider interfaces.
+var _ provider.Provider = &PermitProvider{}
+
+// PermitProvider defines the provider implementation.
+type PermitProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
+// PermitProviderModel describes the provider data model.
+type PermitProviderModel struct {
+	ApiUrl types.String `tfsdk:"api_url"`
+	ApiKey types.String `tfsdk:"api_key"`
 }
 
-func (p *ScaffoldingProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "scaffolding"
+func (p *PermitProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "permitio"
 	resp.Version = p.version
 }
 
-func (p *ScaffoldingProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *PermitProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
+			"api_url": schema.StringAttribute{
 				Optional:            true,
+				MarkdownDescription: "The URL of Permit.io API",
+				// TODO: Add validation for URL
+			},
+			"api_key": schema.StringAttribute{
+				Optional:  true,
+				Sensitive: true,
+				// TODO: Add support in more API key levels
+				MarkdownDescription: "The API key for Permit.io API (Required)",
 			},
 		},
 	}
 }
 
-func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data ScaffoldingProviderModel
+func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var config PermitProviderModel
+	tflog.Info(ctx, "Configuring Permit.io client")
 
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
+	if config.ApiUrl.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("api_url"),
+			"Unknown Permit.io API URL",
+			"The provider cannot create the Permit.io API client as there is an unknown configuration value for the Permit.io API URL. "+
+				"Either target apply the source of the value first, set the value statically in the configuration, or use the PERMITIO_API_URL environment variable.",
+		)
+	}
 
-	// Example client configuration for data sources and resources
-	client := http.DefaultClient
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	if config.ApiKey.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("api_key"),
+			"Unknown Permit.io API Key",
+			"The provider cannot create the Permit.io API client as there is an unknown configuration value for the Permit.io API Key. "+
+				"Either target apply the source of the value first, set the value statically in the configuration, or use the PERMITIO_API_KEY environment variable.",
+		)
+	}
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	debug := os.Getenv("PERMITIO_DEBUG") == "true"
+	apiKey, apiKeyExist := os.LookupEnv("PERMITIO_API_KEY")
+	if !apiKeyExist {
+		if config.ApiKey.IsNull() {
+			resp.Diagnostics.AddError(
+				"Missing Permit.io API Key",
+				"The provider cannot create the Permit.io API client as there is an unknown configuration value for the Permit.io API Key."+
+					"Either target apply the source of the value first, set the value statically in the configuration, or use the PERMITIO_API_KEY environment variable.")
+		} else {
+			apiKey = config.ApiKey.String()
+		}
+	}
+
+	apiUrl, apiUrlExist := os.LookupEnv("PERMITIO_API_URL")
+	if !apiUrlExist {
+		if config.ApiUrl.IsNull() {
+			apiUrl = DefaultApiUrl
+		} else {
+			apiUrl = config.ApiUrl.String()
+		}
+	}
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	ctx = tflog.SetField(ctx, "permitio_api_url", apiUrl)
+	ctx = tflog.SetField(ctx, "permitio_api_key", apiKey)
+	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "permitio_api_key")
+
+	tflog.Debug(ctx, "Instantiating Permit.io client")
+	clientConfig := permitConfig.NewConfigBuilder(apiKey).WithApiUrl(apiUrl).WithDebug(debug).Build()
+	permitClient := permit.NewPermit(clientConfig)
+
+	resp.DataSourceData = permitClient
+	resp.ResourceData = permitClient
+
+	tflog.Info(ctx, "Permit.io client configured", map[string]any{"success": true})
 }
 
-func (p *ScaffoldingProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *PermitProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewExampleResource,
+		//NewExampleResource,
 	}
 }
 
-func (p *ScaffoldingProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *PermitProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewExampleDataSource,
+		NewResourceDataSource,
 	}
 }
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &ScaffoldingProvider{
+		return &PermitProvider{
 			version: version,
 		}
 	}

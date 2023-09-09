@@ -3,17 +3,17 @@
 page_title: "scaffolding_example Data Source - terraform-provider-scaffolding-framework"
 subcategory: ""
 description: |-
-  Example data source
+  Example config source
 ---
 
 # scaffolding_example (Data Source)
 
-Example data source
+Example config source
 
 ## Example Usage
 
 ```terraform
-data "scaffolding_example" "example" {
+config "scaffolding_example" "example" {
   configurable_attribute = "some-value"
 }
 ```
