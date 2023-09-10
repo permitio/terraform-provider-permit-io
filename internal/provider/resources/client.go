@@ -144,12 +144,6 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 	}
 
 	resourcePlan.Name = types.StringValue(resourceRead.Name)
-	//if resourceRead.Urn != nil {
-	//	resourcePlan.Urn = types.StringValue(*resourceRead.Urn)
-	//}
-	//if resourceRead.Description != nil {
-	//	resourcePlan.Description = types.StringValue(*resourceRead.Description)
-	//}
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
 	if resourceRead.Actions != nil {

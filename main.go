@@ -31,13 +31,6 @@ var (
 	// https://goreleaser.com/cookbooks/using-main.version/
 )
 
-//	func main() {
-//		clientConfig := permitConfig.NewConfigBuilder("").WithDebug(true).Build()
-//		permitClient := permit.NewPermit(clientConfig)
-//		a, _ := permitClient.Api.Resources.Get(context.Background(), "1098f0f1360d4e76bfee159aff20c487")
-//		println(a.Name)
-//
-// }
 func main() {
 	var debug bool
 

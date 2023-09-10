@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -99,11 +100,17 @@ func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				ElementType: types.StringType,
 				Computed:    true,
 				Optional:    true,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"extends": schema.ListAttribute{
 				ElementType: types.StringType,
-				Computed:    true,
-				Optional:    true,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
+				Computed: true,
+				Optional: true,
 			},
 		},
 	}
@@ -119,15 +126,15 @@ func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	err, diagsAddition := r.RoleCreate(ctx, &rolePlan)
-	if err != nil || diagsAddition.HasError() {
+	err, diags := r.RoleCreate(ctx, &rolePlan)
+	if err != nil || diags.HasError() {
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Unable to create role",
 				fmt.Sprintf("Unable to create role: %s", err),
 			)
 		} else {
-			resp.Diagnostics.Append(diagsAddition...)
+			resp.Diagnostics.Append(diags...)
 		}
 		return
 	}
@@ -142,24 +149,29 @@ func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 // Read refreshes the Terraform state with the latest data.
 func (r *RoleResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
-	var data RoleModel
+	var (
+		data RoleModel
+	)
 
 	response.Diagnostics.Append(request.State.Get(ctx, &data)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
-
-	state, err := r.RoleRead(ctx, data)
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Unable to Read Resource",
-			fmt.Sprintf("Unable to read resource: %s, Error: %s", data.Id.String(), err.Error()),
-		)
+	state, err, diags := r.RoleRead(ctx, data)
+	if err != nil || diags.HasError() {
+		if err != nil {
+			response.Diagnostics.AddError(
+				"Unable to create role",
+				fmt.Sprintf("Unable to create role: %s", err),
+			)
+		} else {
+			response.Diagnostics.Append(diags...)
+		}
 		return
 	}
 
 	// Set state
-	diags := response.State.Set(ctx, &state)
+	diags = response.State.Set(ctx, &state)
 	response.Diagnostics.Append(diags...)
 	if response.Diagnostics.HasError() {
 		return
@@ -177,15 +189,15 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	err, diagsAddition := r.RoleUpdate(ctx, &resourcePlan)
-	if err != nil || diagsAddition.HasError() {
+	err, diags := r.RoleUpdate(ctx, &resourcePlan)
+	if err != nil || diags.HasError() {
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Unable to create role",
 				fmt.Sprintf("Unable to create role: %s", err),
 			)
 		} else {
-			resp.Diagnostics.Append(diagsAddition...)
+			resp.Diagnostics.Append(diags...)
 		}
 		return
 	}
@@ -199,7 +211,6 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 // Delete deletes the resource and removes the Terraform state on success.
 func (r *RoleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// Retrieve values from state
 	var state RoleModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)

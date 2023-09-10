@@ -115,17 +115,21 @@ func (d *RoleDataSource) Read(ctx context.Context, request datasource.ReadReques
 		return
 	}
 
-	state, err := d.RoleRead(ctx, data)
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Unable to Read Role",
-			fmt.Sprintf("Unable to read role: %s, Error: %s", data.Id.String(), err.Error()),
-		)
+	state, err, diags := d.RoleRead(ctx, data)
+	if err != nil || diags.HasError() {
+		if err != nil {
+			response.Diagnostics.AddError(
+				"Unable to create role",
+				fmt.Sprintf("Unable to create role: %s", err),
+			)
+		} else {
+			response.Diagnostics.Append(diags...)
+		}
 		return
 	}
 
 	// Set state
-	diags := response.State.Set(ctx, &state)
+	diags = response.State.Set(ctx, &state)
 	response.Diagnostics.Append(diags...)
 	if response.Diagnostics.HasError() {
 		return

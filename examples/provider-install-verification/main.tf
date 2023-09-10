@@ -7,43 +7,49 @@ terraform {
 }
 
 provider "permitio" {
-  api_key = "permit_key_YzqvnAxYJgsAyAQUNm17Vg4lITVTC9h5pZd7JU5NmohY2uDGcp1xfCEcxEjHBAxnCnE1zNHBDQiG4bsOMXs5gi"
+  api_key = ""
 }
 
-#data "permitio_resource" "wow" {
-#  id = "1098f0f1360d4e76bfee159aff20c487"
-#}
+data "permitio_resource" "wow" {
+  id = "1098f0f1360d4e76bfee159aff20c487"
+}
 
-#resource "permitio_resource" "wowa" {
-#  key         = "wowazaa"
-#  name        = "wowazaa"
-#  urn = "urn:permitio:resource:1234"
-#  actions     = {
-#    read  = {
-#      name = "read"
-#      description = "asdfasdf"
-#    }
-#    delete  = {
-#      name = "read"
-#      description = "asdfasdf"
-#    }
-#
-#    write = {
-#      name = "write"
-#      description = "asdfasdassdfasdff"
-#    }
-#    remove = {
-#        name = "remove"
-#    }
-#  }
-#
-#
-#}
+resource "permitio_resource" "wowa" {
+  key         = "wowazaa"
+  name        = "wowazaa"
+  urn = "urn:permitio:resource:1234"
+  actions     = {
+    read  = {
+      name = "read"
+      description = "asdfasdf"
+    }
+    delete  = {
+      name = "read"
+      description = "asdfasdf"
+    }
+
+    write = {
+      name = "write"
+      description = "asdfasdassdfasdff"
+    }
+    remove = {
+        name = "remove"
+    }
+  }
+
+
+}
 
 resource "permitio_role" "writer" {
-  key = "writer"
-    name = "writer"
-    description = "admin"
+  key         = "writer"
+  name        = "writer"
+  description = "admin"
+  permissions = [
+    "farm:set-on-fire"
+  ]
+  extends = [
+    "admin"
+  ]
 }
 
 output "my_resource" {

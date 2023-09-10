@@ -3,6 +3,7 @@ package roles
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -20,8 +21,11 @@ type RoleMethods interface {
 	RoleUpdate(ctx context.Context, resourcePlan *RoleModel) error
 }
 
-func (d *RoleClient) RoleRead(ctx context.Context, data RoleModel) (RoleModel, error) {
-	var resourceKeyOrId string
+func (d *RoleClient) RoleRead(ctx context.Context, data RoleModel) (RoleModel, error, diag.Diagnostics) {
+	var (
+		resourceKeyOrId string
+		diags           diag.Diagnostics
+	)
 	if data.Key.IsNull() {
 		resourceKeyOrId = data.Id.ValueString()
 	} else {
@@ -29,8 +33,12 @@ func (d *RoleClient) RoleRead(ctx context.Context, data RoleModel) (RoleModel, e
 	}
 	role, err := d.client.Api.Roles.Get(ctx, resourceKeyOrId)
 	if err != nil {
-		return RoleModel{}, err
+		return RoleModel{}, err, diags
 	}
+	permissions, diagsAddition := types.ListValueFrom(ctx, types.StringType, role.Permissions)
+	diags.Append(diagsAddition...)
+	extends, diagsAddition := types.ListValueFrom(ctx, types.StringType, role.Extends)
+	diags.Append(diagsAddition...)
 
 	state := RoleModel{
 		Id:             types.StringValue(role.Id),
@@ -42,8 +50,10 @@ func (d *RoleClient) RoleRead(ctx context.Context, data RoleModel) (RoleModel, e
 		Key:            types.StringValue(role.Key),
 		Name:           types.StringValue(role.Name),
 		Description:    types.StringPointerValue(role.Description),
+		Permissions:    permissions,
+		Extends:        extends,
 	}
-	return state, nil
+	return state, nil, diags
 }
 
 func (r *RoleClient) RoleCreate(ctx context.Context, rolePlan *RoleModel) (error, diag.Diagnostics) {
@@ -51,11 +61,11 @@ func (r *RoleClient) RoleCreate(ctx context.Context, rolePlan *RoleModel) (error
 
 	permissions := make([]string, 0)
 	for _, permission := range rolePlan.Permissions.Elements() {
-		permissions = append(permissions, permission.String())
+		permissions = append(permissions, RemoveDoubleQuotes(permission.String()))
 	}
 	extends := make([]string, 0)
 	for _, extend := range rolePlan.Extends.Elements() {
-		extends = append(extends, extend.String())
+		extends = append(extends, RemoveDoubleQuotes(extend.String()))
 
 	}
 	roleCreate := models.RoleCreate{
@@ -66,7 +76,6 @@ func (r *RoleClient) RoleCreate(ctx context.Context, rolePlan *RoleModel) (error
 		Extends:     extends,
 		Attributes:  nil, // TODO: Add attributes
 	}
-	tflog.Info(ctx, fmt.Sprint("Creating role: %v", roleCreate))
 	roleRead, err := r.client.Api.Roles.Create(ctx, roleCreate)
 	if err != nil {
 		return err, diags
@@ -78,18 +87,44 @@ func (r *RoleClient) RoleCreate(ctx context.Context, rolePlan *RoleModel) (error
 	rolePlan.OrganizationId = types.StringValue(roleRead.OrganizationId)
 	rolePlan.ProjectId = types.StringValue(roleRead.ProjectId)
 	rolePlan.EnvironmentId = types.StringValue(roleRead.EnvironmentId)
-	rolePlan.Extends, diags = types.ListValueFrom(ctx, types.StringType, roleRead.Extends)
-	rolePlan.Permissions, diags = types.ListValueFrom(ctx, types.StringType, roleRead.Permissions)
+	extendsPlan, diagsAddition := types.ListValueFrom(ctx, types.StringType, roleRead.Extends)
+	diags.Append(diagsAddition...)
+	permissionsPlan, diagsAddition := types.ListValueFrom(ctx, types.StringType, roleRead.Permissions)
+	diags.Append(diagsAddition...)
+	rolePlan.Extends = extendsPlan
+	rolePlan.Permissions = permissionsPlan
 
 	return nil, diags
 }
 
+func stringListToAttrList(list []string) []attr.Value {
+	attrs := make([]attr.Value, 0)
+	for _, item := range list {
+		attrs = append(attrs, types.StringValue(item))
+	}
+	return attrs
+}
+
 func (r *RoleClient) RoleUpdate(ctx context.Context, rolePlan *RoleModel) (error, diag.Diagnostics) {
-	var diags diag.Diagnostics
+	var (
+		diags               diag.Diagnostics
+		extendsAsGoType     []string
+		permissionsAsGoType []string
+	)
+	for _, extend := range rolePlan.Extends.Elements() {
+		extendsAsGoType = append(extendsAsGoType, RemoveDoubleQuotes(extend.String()))
+	}
+	for _, permission := range rolePlan.Permissions.Elements() {
+		permissionsAsGoType = append(permissionsAsGoType, RemoveDoubleQuotes(permission.String()))
+	}
 	roleUpdate := models.RoleUpdate{
 		Name:        rolePlan.Name.ValueStringPointer(),
 		Description: rolePlan.Description.ValueStringPointer(),
+		Permissions: permissionsAsGoType,
+		Extends:     extendsAsGoType,
 	}
+	tflog.Info(ctx, fmt.Sprintf("Updating role: %v", permissionsAsGoType))
+
 	roleRead, err := r.client.Api.Roles.Update(ctx, rolePlan.Key.ValueString(), roleUpdate)
 	if err != nil {
 		return err, diags
@@ -102,8 +137,12 @@ func (r *RoleClient) RoleUpdate(ctx context.Context, rolePlan *RoleModel) (error
 	rolePlan.ProjectId = types.StringValue(roleRead.ProjectId)
 	rolePlan.Id = types.StringValue(roleRead.Id)
 	rolePlan.OrganizationId = types.StringValue(roleRead.OrganizationId)
-	rolePlan.Extends, diags = types.ListValueFrom(ctx, types.StringType, roleRead.Extends)
-	rolePlan.Permissions, diags = types.ListValueFrom(ctx, types.StringType, roleRead.Permissions)
+	extends, diagsAddition := types.ListValueFrom(ctx, types.StringType, roleRead.Extends)
+	diags.Append(diagsAddition...)
+	permissions, diagsAddition := types.ListValueFrom(ctx, types.StringType, roleRead.Permissions)
+	diags.Append(diagsAddition...)
+	rolePlan.Extends = extends
+	rolePlan.Permissions = permissions
 
 	return nil, diags
 }
