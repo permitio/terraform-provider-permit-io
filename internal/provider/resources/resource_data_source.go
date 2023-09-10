@@ -1,4 +1,4 @@
-package provider
+package resources
 
 import (
 	"context"
@@ -20,22 +20,19 @@ func NewResourceDataSource() datasource.DataSource {
 }
 
 type ResourceDataSource struct {
-	client *permit.Client
+	ResourceClient
 }
-
-//type ResourcesDataSourceModel struct {
-//	Resources []resourceModel `tfsdk:"resources"`
-//}
-
 type actionsModel struct {
-	Id types.String `tfsdk:"id"`
+	Id          types.String `tfsdk:"id"`
+	Name        types.String `tfsdk:"name"`
+	Description types.String `tfsdk:"description"`
 }
 
-type ResourceDataSourceModel struct {
-	ID             types.String            `tfsdk:"id"`
-	OrganizationID types.String            `tfsdk:"organization_id"`
-	ProjectID      types.String            `tfsdk:"project_id"`
-	EnvironmentID  types.String            `tfsdk:"environment_id"`
+type ResourceModel struct {
+	Id             types.String            `tfsdk:"id"`
+	OrganizationId types.String            `tfsdk:"organization_id"`
+	ProjectId      types.String            `tfsdk:"project_id"`
+	EnvironmentId  types.String            `tfsdk:"environment_id"`
 	CreatedAt      types.String            `tfsdk:"created_at"`
 	UpdatedAt      types.String            `tfsdk:"updated_at"`
 	Key            types.String            `tfsdk:"key"`
@@ -124,62 +121,20 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 
 // Read refreshes the Terraform state with the latest data.
 func (d *ResourceDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
-	var data ResourceDataSourceModel
+	var data ResourceModel
 
 	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	resource, err := d.client.Api.Resources.Get(ctx, data.ID.ValueString())
+	state, err := d.ResourceRead(ctx, data)
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to Read Resource",
-			fmt.Sprintf("Unable to read resource: %s, Error: %s", data.ID.String(), err.Error()),
+			fmt.Sprintf("Unable to read resource: %s, Error: %s", data.Id.String(), err.Error()),
 		)
 		return
-	}
-
-	var (
-		urn         types.String
-		description types.String
-		actions     map[string]actionsModel
-	)
-
-	if resource.Urn == nil {
-		urn = types.StringNull()
-	} else {
-		urn = types.StringValue(*resource.Urn)
-	}
-
-	if resource.Description == nil {
-		description = types.StringNull()
-	} else {
-		description = types.StringValue(*resource.Description)
-	}
-
-	if resource.Actions != nil {
-		actions = make(map[string]actionsModel)
-		for key, action := range *resource.Actions {
-			actions[key] = actionsModel{
-				Id: types.StringValue(action.Id),
-			}
-		}
-
-	}
-
-	state := ResourceDataSourceModel{
-		ID:             types.StringValue(resource.Id),
-		OrganizationID: types.StringValue(resource.OrganizationId),
-		ProjectID:      types.StringValue(resource.ProjectId),
-		EnvironmentID:  types.StringValue(resource.EnvironmentId),
-		CreatedAt:      types.StringValue(resource.CreatedAt.String()),
-		UpdatedAt:      types.StringValue(resource.UpdatedAt.String()),
-		Key:            types.StringValue(resource.Key),
-		Name:           types.StringValue(resource.Name),
-		Urn:            urn,
-		Description:    description,
-		Actions:        actions,
 	}
 
 	// Set state
