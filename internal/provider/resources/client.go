@@ -15,7 +15,7 @@ type ResourceClient struct {
 
 type ResourceMethods interface {
 	ResourceRead(ctx context.Context, data ResourceModel) (ResourceModel, error)
-	ResourceCreate(ctx context.Context, actions map[string]models.ActionBlockEditable, resourcePlan *ResourceModel) error
+	ResourceCreate(ctx context.Context, resourcePlan *ResourceModel) error
 	ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel) error
 }
 
@@ -34,22 +34,8 @@ func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (
 	}
 
 	var (
-		urn         types.String
-		description types.String
-		actions     map[string]actionsModel
+		actions map[string]actionsModel
 	)
-
-	if resource.Urn == nil {
-		urn = types.StringNull()
-	} else {
-		urn = types.StringValue(*resource.Urn)
-	}
-
-	if resource.Description == nil {
-		description = types.StringNull()
-	} else {
-		description = types.StringValue(*resource.Description)
-	}
 
 	if resource.Actions != nil {
 		actions = make(map[string]actionsModel)
@@ -78,8 +64,8 @@ func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (
 		UpdatedAt:      types.StringValue(resource.UpdatedAt.String()),
 		Key:            types.StringValue(resource.Key),
 		Name:           types.StringValue(resource.Name),
-		Urn:            urn,
-		Description:    description,
+		Urn:            types.StringPointerValue(resource.Urn),
+		Description:    types.StringPointerValue(resource.Description),
 		Actions:        actions,
 	}
 	return state, nil
@@ -134,7 +120,7 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 	return nil
 }
 
-func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel, resourceState *ResourceModel) error {
+func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel) error {
 	actions := make(map[string]models.ActionBlockEditable)
 	for actionKey, action := range resourcePlan.Actions {
 		// TODO: Known bug with Go SDK - null description doesn't get updated correctly
@@ -145,7 +131,7 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 	}
 	resourceUpdate := models.ResourceUpdate{
 		Name:        resourcePlan.Name.ValueStringPointer(),
-		Urn:         resourceState.Urn.ValueStringPointer(),
+		Urn:         resourcePlan.Urn.ValueStringPointer(),
 		Description: resourcePlan.Description.ValueStringPointer(),
 		Actions:     &actions,
 	}
@@ -158,12 +144,14 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 	}
 
 	resourcePlan.Name = types.StringValue(resourceRead.Name)
-	if resourceRead.Urn != nil {
-		resourcePlan.Urn = types.StringValue(*resourceRead.Urn)
-	}
-	if resourceRead.Description != nil {
-		resourcePlan.Description = types.StringValue(*resourceRead.Description)
-	}
+	//if resourceRead.Urn != nil {
+	//	resourcePlan.Urn = types.StringValue(*resourceRead.Urn)
+	//}
+	//if resourceRead.Description != nil {
+	//	resourcePlan.Description = types.StringValue(*resourceRead.Description)
+	//}
+	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
+	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
 	if resourceRead.Actions != nil {
 		actions := make(map[string]actionsModel)
 		for actionKey, action := range *resourceRead.Actions {
@@ -188,13 +176,13 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 			}
 		}
 		resourcePlan.Actions = actions
-		resourcePlan.UpdatedAt = types.StringValue(resourceRead.UpdatedAt.String())
-		resourcePlan.CreatedAt = types.StringValue(resourceRead.CreatedAt.String())
-		resourcePlan.EnvironmentId = types.StringValue(resourceRead.EnvironmentId)
-		resourcePlan.ProjectId = types.StringValue(resourceRead.ProjectId)
-		resourcePlan.Id = types.StringValue(resourceRead.Id)
-		resourcePlan.OrganizationId = types.StringValue(resourceRead.OrganizationId)
-
 	}
+	resourcePlan.UpdatedAt = types.StringValue(resourceRead.UpdatedAt.String())
+	resourcePlan.CreatedAt = types.StringValue(resourceRead.CreatedAt.String())
+	resourcePlan.EnvironmentId = types.StringValue(resourceRead.EnvironmentId)
+	resourcePlan.ProjectId = types.StringValue(resourceRead.ProjectId)
+	resourcePlan.Id = types.StringValue(resourceRead.Id)
+	resourcePlan.OrganizationId = types.StringValue(resourceRead.OrganizationId)
+
 	return nil
 }

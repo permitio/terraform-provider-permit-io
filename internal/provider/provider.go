@@ -11,6 +11,7 @@ import (
 	"github.com/permitio/permit-golang/pkg/permit"
 	"os"
 	"terraform-provider-permit-io/internal/provider/resources"
+	"terraform-provider-permit-io/internal/provider/roles"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -139,12 +140,14 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 func (p *PermitProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		resources.NewResourceResource,
+		roles.NewRoleResource,
 	}
 }
 
 func (p *PermitProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		resources.NewResourceDataSource,
+		roles.NewRoleDataSource,
 	}
 }
 

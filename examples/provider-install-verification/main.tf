@@ -14,32 +14,38 @@ provider "permitio" {
 #  id = "1098f0f1360d4e76bfee159aff20c487"
 #}
 
-resource "permitio_resource" "wowa" {
-  key         = "wowazaa"
-  name        = "wowazaa"
-  description = "wosdsfwazaa"
-  actions     = {
-    read  = {
-      name = "read"
-      description = "asdfasdf"
-    }
-    delete  = {
-      name = "read"
-      description = "asdfasdf"
-    }
+#resource "permitio_resource" "wowa" {
+#  key         = "wowazaa"
+#  name        = "wowazaa"
+#  urn = "urn:permitio:resource:1234"
+#  actions     = {
+#    read  = {
+#      name = "read"
+#      description = "asdfasdf"
+#    }
+#    delete  = {
+#      name = "read"
+#      description = "asdfasdf"
+#    }
+#
+#    write = {
+#      name = "write"
+#      description = "asdfasdassdfasdff"
+#    }
+#    remove = {
+#        name = "remove"
+#    }
+#  }
+#
+#
+#}
 
-    write = {
-      name = "write"
-      description = "asdfasdassdfasdff"
-    }
-    remove = {
-        name = "remove"
-    }
-  }
-
-
+resource "permitio_role" "writer" {
+  key = "writer"
+    name = "writer"
+    description = "admin"
 }
 
 output "my_resource" {
-  value = permitio_resource.wowa
+  value = permitio_role.writer
 }

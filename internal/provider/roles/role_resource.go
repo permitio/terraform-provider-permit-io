@@ -1,4 +1,4 @@
-package resources
+package roles
 
 import (
 	"context"
@@ -7,27 +7,27 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/permit"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &ResourceResource{}
-	_ resource.ResourceWithConfigure = &ResourceResource{}
+	_ resource.Resource              = &RoleResource{}
+	_ resource.ResourceWithConfigure = &RoleResource{}
 )
 
-// NewResourceResource is a helper function to simplify the provider implementation.
-func NewResourceResource() resource.Resource {
-	return &ResourceResource{}
+// NewRoleResource is a helper function to simplify the provider implementation.
+func NewRoleResource() resource.Resource {
+	return &RoleResource{}
 }
 
-// ResourceResource is the resource implementation.
-type ResourceResource struct {
-	ResourceClient
+// RoleResource is the resource implementation.
+type RoleResource struct {
+	RoleClient
 }
 
-func (r *ResourceResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+func (r *RoleResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
 	if request.ProviderData == nil {
 		return
 	}
@@ -43,12 +43,12 @@ func (r *ResourceResource) Configure(ctx context.Context, request resource.Confi
 }
 
 // Metadata returns the resource type name.
-func (r *ResourceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_resource"
+func (r *RoleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_role"
 }
 
 // Schema defines the schema for the resource.
-func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -91,61 +91,49 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"name": schema.StringAttribute{
 				Required: true,
 			},
-			"urn": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
 			"description": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
 			},
-			"actions": schema.MapNestedAttribute{
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"id": schema.StringAttribute{
-							Computed: true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-						},
-						"name": schema.StringAttribute{
-							Required: true,
-						},
-						"description": schema.StringAttribute{
-							Optional: true,
-						},
-					},
-				},
-				Required: true,
+			"permissions": schema.ListAttribute{
+				ElementType: types.StringType,
+				Computed:    true,
+				Optional:    true,
+			},
+			"extends": schema.ListAttribute{
+				ElementType: types.StringType,
+				Computed:    true,
+				Optional:    true,
 			},
 		},
 	}
 }
 
 // Create creates the resource and sets the initial Terraform state.
-func (r *ResourceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var (
-		resourcePlan ResourceModel
+		rolePlan RoleModel
 	)
-
-	diags := req.Plan.Get(ctx, &resourcePlan)
+	diags := req.Plan.Get(ctx, &rolePlan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.ResourceCreate(ctx, &resourcePlan); err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to create resource",
-			fmt.Sprintf("Unable to create resource: %s", err),
-		)
+	err, diagsAddition := r.RoleCreate(ctx, &rolePlan)
+	if err != nil || diagsAddition.HasError() {
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to create role",
+				fmt.Sprintf("Unable to create role: %s", err),
+			)
+		} else {
+			resp.Diagnostics.Append(diagsAddition...)
+		}
 		return
 	}
 
 	// Set state to fully populated data
-	diags = resp.State.Set(ctx, resourcePlan)
+	diags = resp.State.Set(ctx, rolePlan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -153,15 +141,15 @@ func (r *ResourceResource) Create(ctx context.Context, req resource.CreateReques
 }
 
 // Read refreshes the Terraform state with the latest data.
-func (r *ResourceResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
-	var data ResourceModel
+func (r *RoleResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+	var data RoleModel
 
 	response.Diagnostics.Append(request.State.Get(ctx, &data)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	state, err := r.ResourceRead(ctx, data)
+	state, err := r.RoleRead(ctx, data)
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to Read Resource",
@@ -179,24 +167,29 @@ func (r *ResourceResource) Read(ctx context.Context, request resource.ReadReques
 }
 
 // Update updates the resource and sets the updated Terraform state on success.
-func (r *ResourceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var (
-		resourcePlan ResourceModel
+		resourcePlan RoleModel
 	)
 	diags := req.Plan.Get(ctx, &resourcePlan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	tflog.Info(ctx, fmt.Sprintf("update %v", resourcePlan.Actions))
 
-	if err := r.ResourceUpdate(ctx, &resourcePlan); err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to update resource",
-			fmt.Sprintf("Unable to update resource: %s", err),
-		)
+	err, diagsAddition := r.RoleUpdate(ctx, &resourcePlan)
+	if err != nil || diagsAddition.HasError() {
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to create role",
+				fmt.Sprintf("Unable to create role: %s", err),
+			)
+		} else {
+			resp.Diagnostics.Append(diagsAddition...)
+		}
 		return
 	}
+
 	diags = resp.State.Set(ctx, resourcePlan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -205,20 +198,20 @@ func (r *ResourceResource) Update(ctx context.Context, req resource.UpdateReques
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
-func (r *ResourceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *RoleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Retrieve values from state
-	var state ResourceModel
+	var state RoleModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	err := r.client.Api.Resources.Delete(ctx, state.Key.ValueString())
+	err := r.client.Api.Roles.Delete(ctx, state.Key.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error Deleting Resource",
-			"Could not delete resource, unexpected error: "+err.Error(),
+			"Error Deleting Role",
+			"Could not delete role, unexpected error: "+err.Error(),
 		)
 		return
 	}

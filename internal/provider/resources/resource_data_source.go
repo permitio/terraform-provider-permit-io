@@ -66,23 +66,18 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Optional: true,
 				Computed: true,
 			},
 			"organization_id": schema.StringAttribute{
-				Optional: true,
 				Computed: true,
 			},
 			"project_id": schema.StringAttribute{
-				Optional: true,
 				Computed: true,
 			},
 			"environment_id": schema.StringAttribute{
-				Optional: true,
 				Computed: true,
 			},
 			"created_at": schema.StringAttribute{
-				Optional: true,
 				Computed: true,
 			},
 			"updated_at": schema.StringAttribute{
@@ -90,12 +85,10 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				Computed: true,
 			},
 			"key": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Required: true,
 			},
 			"name": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Required: true,
 			},
 			"urn": schema.StringAttribute{
 				Optional: true,
@@ -109,11 +102,17 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
+							Computed: true,
+						},
+						"name": schema.StringAttribute{
 							Required: true,
+						},
+						"description": schema.StringAttribute{
+							Optional: true,
 						},
 					},
 				},
-				Optional: true,
+				Required: true,
 			},
 		},
 	}
