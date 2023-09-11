@@ -19,7 +19,7 @@ The [examples directory](./examples) contains a number of examples of how to use
 terraform {
   required_providers {
     permitio = {
-      source  = "permitio/permitio"
+      source  = "registry.terraform.io/permitio/permit-io"
       version = "~> 0.0.1"
     }
   }
