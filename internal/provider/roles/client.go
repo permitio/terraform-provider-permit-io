@@ -35,11 +35,23 @@ func (d *RoleClient) RoleRead(ctx context.Context, data RoleModel) (RoleModel, e
 	if err != nil {
 		return RoleModel{}, err, diags
 	}
-	permissions, diagsAddition := types.ListValueFrom(ctx, types.StringType, role.Permissions)
-	diags.Append(diagsAddition...)
-	extends, diagsAddition := types.ListValueFrom(ctx, types.StringType, role.Extends)
-	diags.Append(diagsAddition...)
+	// Converting lists from data input to compare with the role read from the API
+	permissionsData := make([]string, 0)
+	for _, permission := range data.Permissions.Elements() {
+		permissionsData = append(permissionsData, RemoveDoubleQuotes(permission.String()))
+	}
 
+	extendsData := make([]string, 0)
+	for _, extend := range data.Extends.Elements() {
+		extendsData = append(extendsData, RemoveDoubleQuotes(extend.String()))
+	}
+
+	if !compareSlicesValues(role.Permissions, permissionsData) || !compareSlicesValues(role.Extends, extendsData) {
+		diags.AddError(
+			"Permissions or extends mismatch to the created role",
+			fmt.Sprintf("Permissions from data: %v, Permissions from api: %v, Extends from data: %v, Extends from api: %v ", permissionsData, role.Permissions, extendsData, role.Extends),
+		)
+	}
 	state := RoleModel{
 		Id:             types.StringValue(role.Id),
 		OrganizationId: types.StringValue(role.OrganizationId),
@@ -50,12 +62,30 @@ func (d *RoleClient) RoleRead(ctx context.Context, data RoleModel) (RoleModel, e
 		Key:            types.StringValue(role.Key),
 		Name:           types.StringValue(role.Name),
 		Description:    types.StringPointerValue(role.Description),
-		Permissions:    permissions,
-		Extends:        extends,
+		Permissions:    data.Permissions,
+		Extends:        data.Extends,
 	}
 	return state, nil, diags
 }
 
+func compareSlicesValues(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for _, aVal := range a {
+		found := false
+		for _, bVal := range b {
+			if aVal == bVal {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
 func (r *RoleClient) RoleCreate(ctx context.Context, rolePlan *RoleModel) (error, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
@@ -87,10 +117,17 @@ func (r *RoleClient) RoleCreate(ctx context.Context, rolePlan *RoleModel) (error
 	rolePlan.OrganizationId = types.StringValue(roleRead.OrganizationId)
 	rolePlan.ProjectId = types.StringValue(roleRead.ProjectId)
 	rolePlan.EnvironmentId = types.StringValue(roleRead.EnvironmentId)
-	extendsPlan, diagsAddition := types.ListValueFrom(ctx, types.StringType, roleRead.Extends)
+	if !compareSlicesValues(permissions, roleRead.Permissions) || !compareSlicesValues(extends, roleRead.Extends) {
+		diags.AddError(
+			"Permissions or extends mismatch to the created role",
+			fmt.Sprintf("Permissions from data: %v, Permissions from api: %v, Extends from data: %v, Extends from api: %v ", permissions, roleRead.Permissions, extends, roleRead.Extends),
+		)
+	}
+	permissionsPlan, diagsAddition := types.ListValueFrom(ctx, types.StringType, permissions)
 	diags.Append(diagsAddition...)
-	permissionsPlan, diagsAddition := types.ListValueFrom(ctx, types.StringType, roleRead.Permissions)
+	extendsPlan, diagsAddition := types.ListValueFrom(ctx, types.StringType, extends)
 	diags.Append(diagsAddition...)
+	tflog.Info(ctx, fmt.Sprintf("permissions: %v", permissionsPlan))
 	rolePlan.Extends = extendsPlan
 	rolePlan.Permissions = permissionsPlan
 
@@ -107,16 +144,18 @@ func stringListToAttrList(list []string) []attr.Value {
 
 func (r *RoleClient) RoleUpdate(ctx context.Context, rolePlan *RoleModel) (error, diag.Diagnostics) {
 	var (
-		diags               diag.Diagnostics
-		extendsAsGoType     []string
-		permissionsAsGoType []string
+		diags diag.Diagnostics
 	)
+	extendsAsGoType := make([]string, 0)
+	permissionsAsGoType := make([]string, 0)
 	for _, extend := range rolePlan.Extends.Elements() {
 		extendsAsGoType = append(extendsAsGoType, RemoveDoubleQuotes(extend.String()))
 	}
+
 	for _, permission := range rolePlan.Permissions.Elements() {
 		permissionsAsGoType = append(permissionsAsGoType, RemoveDoubleQuotes(permission.String()))
 	}
+
 	roleUpdate := models.RoleUpdate{
 		Name:        rolePlan.Name.ValueStringPointer(),
 		Description: rolePlan.Description.ValueStringPointer(),
@@ -137,12 +176,28 @@ func (r *RoleClient) RoleUpdate(ctx context.Context, rolePlan *RoleModel) (error
 	rolePlan.ProjectId = types.StringValue(roleRead.ProjectId)
 	rolePlan.Id = types.StringValue(roleRead.Id)
 	rolePlan.OrganizationId = types.StringValue(roleRead.OrganizationId)
-	extends, diagsAddition := types.ListValueFrom(ctx, types.StringType, roleRead.Extends)
+	if !compareSlicesValues(permissionsAsGoType, roleRead.Permissions) || !compareSlicesValues(extendsAsGoType, roleRead.Extends) {
+		diags.AddError(
+			"Permissions or extends mismatch to the created role",
+			fmt.Sprintf("Permissions from data: %v, Permissions from api: %v, Extends from data: %v, Extends from api: %v ", permissionsAsGoType, roleRead.Permissions, extendsAsGoType, roleRead.Extends),
+		)
+	}
+	extends, diagsAddition := types.ListValueFrom(ctx, types.StringType, extendsAsGoType)
 	diags.Append(diagsAddition...)
-	permissions, diagsAddition := types.ListValueFrom(ctx, types.StringType, roleRead.Permissions)
+	permissions, diagsAddition := types.ListValueFrom(ctx, types.StringType, permissionsAsGoType)
 	diags.Append(diagsAddition...)
-	rolePlan.Extends = extends
-	rolePlan.Permissions = permissions
+
+	// The framework can't handle empty lists, so we need to set them manually
+	if len(extendsAsGoType) > 0 {
+		rolePlan.Extends = extends
+	} else {
+		rolePlan.Extends, diags = types.ListValue(types.StringType, []attr.Value{})
+	}
+	if len(permissionsAsGoType) > 0 {
+		rolePlan.Permissions = permissions
+	} else {
+		rolePlan.Permissions, diags = types.ListValue(types.StringType, []attr.Value{})
+	}
 
 	return nil, diags
 }

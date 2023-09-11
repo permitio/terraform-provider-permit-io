@@ -14,14 +14,16 @@ import (
 // acceptance testing. The factory function will be invoked for every Terraform
 // CLI command executed to create a provider server to which the CLI can
 // reattach.
+
+var permitProvider = New("test")()
+
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"scaffolding": providerserver.NewProtocol6WithError(New("test")()),
+	"permitio": providerserver.NewProtocol6WithError(permitProvider),
 }
 
 const (
 	providerConfig = `
 		provider "permitio" {
-		  api_key = ""
 		}
 		`
 )

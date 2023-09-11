@@ -7,51 +7,50 @@ terraform {
 }
 
 provider "permitio" {
-  api_key = ""
+  api_key = "SET ENV - PERMITIO_API_KEY"
 }
 
-data "permitio_resource" "wow" {
-  id = "1098f0f1360d4e76bfee159aff20c487"
-}
 
-resource "permitio_resource" "wowa" {
-  key         = "wowazaa"
-  name        = "wowazaa"
-  urn = "urn:permitio:resource:1234"
+resource "permitio_resource" "document" {
+  key         = "document"
+  name        = "document"
+  description = "a new document"
   actions     = {
-    read  = {
-      name = "read"
-      description = "asdfasdf"
+    "read" = {
+      "name" = "read"
     }
-    delete  = {
-      name = "read"
-      description = "asdfasdf"
+    "write" = {
+      "name" = "write"
     }
-
-    write = {
-      name = "write"
-      description = "asdfasdassdfasdff"
-    }
-    remove = {
-        name = "remove"
+    "delete" = {
+      "name"        = "write"
+      "description" = "delete a document"
     }
   }
-
-
 }
 
 resource "permitio_role" "writer" {
   key         = "writer"
   name        = "writer"
-  description = "admin"
-  permissions = [
-    "farm:set-on-fire"
+  description = "a new admin"
+  permissions = ["document:read", "document:write", "document:delete"]
+  depends_on  = [
+    "permitio_resource.document"
   ]
-  extends = [
-    "admin"
+}
+resource "permitio_role" "admin" {
+  key         = "admin"
+  name        = "admin"
+  description = "a new admin"
+  permissions = ["document:read", "document:write"]
+  extends     = [
+  ]
+  depends_on  = [
+    "permitio_resource.document",
+    "permitio_role.writer"
   ]
 }
 
 output "my_resource" {
-  value = permitio_role.writer
+  value =  permitio_role.admin
 }

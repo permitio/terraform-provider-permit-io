@@ -119,8 +119,8 @@ func (d *RoleDataSource) Read(ctx context.Context, request datasource.ReadReques
 	if err != nil || diags.HasError() {
 		if err != nil {
 			response.Diagnostics.AddError(
-				"Unable to create role",
-				fmt.Sprintf("Unable to create role: %s", err),
+				"Unable to read role",
+				fmt.Sprintf("Unable to read role: %s", err),
 			)
 		} else {
 			response.Diagnostics.Append(diags...)

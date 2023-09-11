@@ -98,8 +98,9 @@ func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			},
 			"permissions": schema.ListAttribute{
 				ElementType: types.StringType,
-				Computed:    true,
-				Optional:    true,
+
+				Computed: true,
+				Optional: true,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.UseStateForUnknown(),
 				},
@@ -161,8 +162,8 @@ func (r *RoleResource) Read(ctx context.Context, request resource.ReadRequest, r
 	if err != nil || diags.HasError() {
 		if err != nil {
 			response.Diagnostics.AddError(
-				"Unable to create role",
-				fmt.Sprintf("Unable to create role: %s", err),
+				"Unable to read role",
+				fmt.Sprintf("Unable to read role: %s", err),
 			)
 		} else {
 			response.Diagnostics.Append(diags...)
@@ -193,8 +194,8 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if err != nil || diags.HasError() {
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Unable to create role",
-				fmt.Sprintf("Unable to create role: %s", err),
+				"Unable to update role",
+				fmt.Sprintf("Unable to update role: %s", err),
 			)
 		} else {
 			resp.Diagnostics.Append(diags...)
