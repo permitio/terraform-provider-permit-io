@@ -43,8 +43,7 @@ resource "permitio_role" "admin" {
   name        = "admin"
   description = "a new admin"
   permissions = ["document:read", "document:write"]
-  extends     = [
-  ]
+extends     = []
   depends_on  = [
     "permitio_resource.document",
     "permitio_role.writer"
