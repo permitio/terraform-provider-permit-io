@@ -15,7 +15,7 @@ resource "permitio_resource" "document" {
   key         = "document"
   name        = "document"
   description = "a new document"
-  actions     = {
+  actions = {
     "read" = {
       "name" = "read"
     }
@@ -34,7 +34,7 @@ resource "permitio_role" "writer" {
   name        = "writer"
   description = "a new admin"
   permissions = ["document:read", "document:write", "document:delete"]
-  depends_on  = [
+  depends_on = [
     "permitio_resource.document"
   ]
 }
@@ -43,13 +43,13 @@ resource "permitio_role" "admin" {
   name        = "admin"
   description = "a new admin"
   permissions = ["document:read", "document:write"]
-extends     = []
-  depends_on  = [
+  extends     = []
+  depends_on = [
     "permitio_resource.document",
     "permitio_role.writer"
   ]
 }
 
 output "my_resource" {
-  value =  permitio_role.admin
+  value = permitio_role.admin
 }
