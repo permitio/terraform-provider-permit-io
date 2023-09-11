@@ -134,14 +134,6 @@ func (r *RoleClient) RoleCreate(ctx context.Context, rolePlan *RoleModel) (error
 	return nil, diags
 }
 
-func stringListToAttrList(list []string) []attr.Value {
-	attrs := make([]attr.Value, 0)
-	for _, item := range list {
-		attrs = append(attrs, types.StringValue(item))
-	}
-	return attrs
-}
-
 func (r *RoleClient) RoleUpdate(ctx context.Context, rolePlan *RoleModel) (error, diag.Diagnostics) {
 	var (
 		diags diag.Diagnostics

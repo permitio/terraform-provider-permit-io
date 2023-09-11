@@ -9,9 +9,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
 	"os"
-	"terraform-provider-permit-io/internal/provider/resources"
-	"terraform-provider-permit-io/internal/provider/roles"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"

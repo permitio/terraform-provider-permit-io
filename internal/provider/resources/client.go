@@ -95,7 +95,6 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 		Actions:     actions,
 		Attributes:  nil,
 	}
-	tflog.Info(ctx, fmt.Sprint("Creating resource: %v", resourceCreate))
 	resourceRead, err := r.client.Api.Resources.Create(ctx, resourceCreate)
 	if err != nil {
 		return err

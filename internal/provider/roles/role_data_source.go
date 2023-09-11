@@ -22,12 +22,6 @@ func NewRoleDataSource() datasource.DataSource {
 type RoleDataSource struct {
 	RoleClient
 }
-type actionsModel struct {
-	Id          types.String `tfsdk:"id"`
-	Name        types.String `tfsdk:"name"`
-	Description types.String `tfsdk:"description"`
-}
-
 type RoleModel struct {
 	Id             types.String `tfsdk:"id"`
 	OrganizationId types.String `tfsdk:"organization_id"`

@@ -9,7 +9,7 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"terraform-provider-permit-io/internal/provider"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider"
 )
 
 // Run "go generate" to format example terraform files and generate the docs for the registry/website
