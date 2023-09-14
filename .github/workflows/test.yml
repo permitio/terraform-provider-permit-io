@@ -75,7 +75,9 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
+
       - env:
           TF_ACC: "1"
+          PERMITIO_API_KEY: ${{ fromJson(secrets.PERMITIO_API_KEY)[matrix.terraform] }}
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 10

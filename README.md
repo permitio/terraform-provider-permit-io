@@ -1,18 +1,78 @@
-# Terraform Provider Scaffolding (Terraform Plugin Framework)
+# Permit.io Terraform Provider
 
-_This template repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
+![tf.png](imgs/tf-0.png)
 
-This repository is a *template* for a [Terraform](https://www.terraform.io) provider. It is intended as a starting point for creating Terraform providers, containing:
+Permit.io is a cloud-based authorization service that allows you to define and manage permissions for your application.
+In order to make it easier and safer to manage your objects and policies in Permit.io, we have created a Terraform provider.
+ 
 
-- A resource and a data source (`internal/provider/`),
-- Examples (`examples/`) and generated documentation (`docs/`),
-- Miscellaneous meta files.
 
-These files contain boilerplate code that you will need to edit to create your own Terraform provider. Tutorials for creating Terraform providers can be found on the [HashiCorp Developer](https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework) platform. _Terraform Plugin Framework specific guides are titled accordingly._
+_This provider repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
 
-Please see the [GitHub template repository documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template) for how to create a new repository from this template on GitHub.
+## Usage 
 
-Once you've written your provider, you'll want to [publish it on the Terraform Registry](https://developer.hashicorp.com/terraform/registry/providers/publishing) so that others can use it.
+The [examples directory](./examples) contains a number of examples of how to use the provider.
+
+### Provider Definition
+
+```hcl
+terraform {
+  required_providers {
+    permitio = {
+      source  = "registry.terraform.io/permitio/permit-io"
+      version = "~> 0.0.1"
+    }
+  }
+}
+```
+
+
+### Configure the Provider
+```hcl
+provider "permitio" {
+    api_url = "https://api.permit.io" # Defaults to - "https://api.permit.io - Can be set as an environment variable PERMITIO_API_URL
+    api_key = "YOUR_API_KEY" # Can be set as an environment variable PERMITIO_API_KEY
+}
+```
+
+### Creating Objects in Permitio
+
+#### Create a Resource
+```hcl
+resource "permitio_resource" "document" {
+  key         = "document"
+  name        = "Document"
+  description = "A confidential document"
+  actions     = {
+    "read" : {
+      "name" : "Read",
+      "description" : "Read a document",
+    },
+    "write" : {
+      "name" : "Write",
+      "description" : "Write a document",
+    }
+  }
+}
+```
+
+#### Create a Role
+
+```hcl
+resource "permitio_role" "reader" {
+  key         = "reader"
+  name        = "Reader"
+  description = "A role that allows reading documents"
+  permissions = [
+    "document:read"
+  ]
+  extends     = []
+  depends_on  = [
+    permitio_resource.document # This is required to ensure that the resource is created before the role (for the permissions assignment)
+  ]
+}
+```
+
 
 ## Requirements
 
