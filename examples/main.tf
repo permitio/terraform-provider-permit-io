@@ -27,6 +27,12 @@ resource "permitio_resource" "document" {
       "description" = "delete a document"
     }
   }
+  attributes = {
+    "title" = {
+      "description" = "the title of the document"
+      "type"        = "string"
+    }
+  }
 }
 
 resource "permitio_role" "writer" {

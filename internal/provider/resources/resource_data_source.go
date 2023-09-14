@@ -3,7 +3,9 @@ package resources
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -28,6 +30,76 @@ type actionsModel struct {
 	Description types.String `tfsdk:"description"`
 }
 
+type attributeTypeValidator struct{}
+
+func (a attributeTypeValidator) Description(ctx context.Context) string {
+	return "The type of the attribute in the resource."
+}
+
+func (a attributeTypeValidator) MarkdownDescription(ctx context.Context) string {
+	return "The type of the attribute in the resource."
+}
+
+func (a attributeTypeValidator) ValidateString(ctx context.Context, request validator.StringRequest, response *validator.StringResponse) {
+	if request.ConfigValue.IsUnknown() {
+		response.Diagnostics.AddError("Unable to read resource attribute type",
+			fmt.Sprintf("Unable to read resource attribute type: %s", request.Path.String()),
+		)
+		return
+	}
+	if request.ConfigValue.IsNull() {
+		response.Diagnostics.AddError("Invalid resource attribute type",
+			fmt.Sprintf("Invalid null resource attribute type: %s", request.Path.String()),
+		)
+		return
+	}
+
+	value := request.ConfigValue.ValueString()
+	if !models.AttributeType(value).IsValid() {
+		response.Diagnostics.AddError("Invalid resource attribute type",
+			fmt.Sprintf("Invalid resource attribute type: %s", value),
+		)
+		return
+	}
+}
+
+type attributeModel struct {
+	Type        types.String `tfsdk:"type"`
+	Description types.String `tfsdk:"description"`
+}
+
+type attributesModel map[string]attributeModel
+
+func newAttributesModelsFromSDK(sdkAttributes *map[string]models.AttributeBlockRead) attributesModel {
+	var attributes attributesModel
+	if sdkAttributes == nil || *sdkAttributes == nil {
+		return attributes
+	}
+	attributes = make(attributesModel)
+	for key, attribute := range *sdkAttributes {
+		attributes[key] = attributeModel{
+			Type:        types.StringValue(string(attribute.Type)),
+			Description: types.StringPointerValue(attribute.Description),
+		}
+	}
+	return attributes
+}
+
+func (a attributesModel) toSDK() map[string]models.AttributeBlockEditable {
+	var attributes map[string]models.AttributeBlockEditable
+	if a == nil {
+		return attributes
+	}
+	attributes = make(map[string]models.AttributeBlockEditable)
+	for key, attribute := range a {
+		attributes[key] = models.AttributeBlockEditable{
+			Type:        models.AttributeType(attribute.Type.ValueString()),
+			Description: attribute.Description.ValueStringPointer(),
+		}
+	}
+	return attributes
+}
+
 type ResourceModel struct {
 	Id             types.String            `tfsdk:"id"`
 	OrganizationId types.String            `tfsdk:"organization_id"`
@@ -40,6 +112,7 @@ type ResourceModel struct {
 	Urn            types.String            `tfsdk:"urn"`
 	Description    types.String            `tfsdk:"description"`
 	Actions        map[string]actionsModel `tfsdk:"actions"`
+	Attributes     attributesModel         `tfsdk:"attributes"`
 }
 
 func (d *ResourceDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
@@ -113,6 +186,22 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 					},
 				},
 				Required: true,
+			},
+			"attributes": schema.MapNestedAttribute{
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"type": schema.StringAttribute{
+							Required: true,
+							Validators: []validator.String{
+								attributeTypeValidator{},
+							},
+						},
+						"description": schema.StringAttribute{
+							Optional: true,
+						},
+					},
+				},
+				Optional: true,
 			},
 		},
 	}

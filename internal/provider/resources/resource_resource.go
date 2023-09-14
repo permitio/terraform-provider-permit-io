@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/permitio/permit-golang/pkg/permit"
 )
@@ -120,6 +121,22 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 					},
 				},
 				Required: true,
+			},
+			"attributes": schema.MapNestedAttribute{
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"type": schema.StringAttribute{
+							Required: true,
+							Validators: []validator.String{
+								attributeTypeValidator{},
+							},
+						},
+						"description": schema.StringAttribute{
+							Optional: true,
+						},
+					},
+				},
+				Optional: true,
 			},
 		},
 	}
