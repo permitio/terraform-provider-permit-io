@@ -14,27 +14,33 @@ func TestResources(t *testing.T) {
 			{
 				Config: providerConfig +
 					`resource "permitio_resource" "document" {
-							key		 = "document"
-							name	 = "document"
-							description = "a new document"
-							actions = {
+						key		 = "document"
+						name	 = "document"
+						description = "a new document"
+						actions = {
 								"read" = {
 									"name" = "read"
 								}
 								"write" = {		
 									"name" = "write"
 								}
-								}
-							}` + "\n" +
+						}
+						attributes = {
+							"created_at" = {
+								"description" = "creation time of the document"
+							  	"type"        = "time"
+							}
+						}
+					}` + "\n" +
 					`resource "permitio_role" "admin" {
-							  key         = "admin"
-							  name        = "admin"	
-							  description = "a new admin"	
-							  permissions = ["document:read"]
-								depends_on = [
-								"permitio_resource.document"
-							  ]	
-							  }` + "\n" +
+						  key         = "admin"
+						  name        = "admin"	
+						  description = "a new admin"	
+						  permissions = ["document:read"]
+							depends_on = [
+							"permitio_resource.document"
+						  ]	
+					  }` + "\n" +
 					`resource "permitio_role" "writer" {
 							  key         = "writer"
 							  name        = "writer"
@@ -56,6 +62,8 @@ func TestResources(t *testing.T) {
 					resource.TestCheckResourceAttr("permitio_resource.document", "name", "document"),
 					resource.TestCheckResourceAttr("permitio_resource.document", "description", "a new document"),
 					resource.TestCheckResourceAttr("permitio_resource.document", "actions.read.name", "read"),
+					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.created_at.type", "time"),
+					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.created_at.description", "creation time of the document"),
 					// Admin Role tests
 					resource.TestCheckResourceAttr("permitio_role.admin", "key", "admin"),
 					resource.TestCheckResourceAttr("permitio_role.admin", "name", "admin"),
@@ -73,22 +81,32 @@ func TestResources(t *testing.T) {
 			{
 				Config: providerConfig +
 					`resource "permitio_resource" "document" {
-							key		 = "document"
-							name	 = "document"
-							description = "a new document"
-							actions = {
-								"read" = {
-									"name" = "read"
-								}
-								"write" = {		
-									"name" = "write"
-								}
-								"delete" = {		
-									"name" = "delete"
-									"description" = "delete a document"
-								}
-								}
-							}` + "\n" +
+						key		 = "document"
+						name	 = "document"
+						description = "a new document"
+						actions = {
+							"read" = {
+								"name" = "read"
+							}
+							"write" = {		
+								"name" = "write"
+							}
+							"delete" = {		
+								"name" = "delete"
+								"description" = "delete a document"
+							}
+						}
+						attributes = {
+							"created_at" = {
+								"description" = "creation time of the document"
+							  	"type"        = "number"
+							}
+							"content" = {
+								"description" = "the content of the document"	
+								"type"        = "string"
+							}
+						}
+					}` + "\n" +
 					`resource "permitio_role" "admin" {
 							  key         = "admin"
 							  name        = "admin"	
@@ -103,6 +121,10 @@ func TestResources(t *testing.T) {
 					resource.TestCheckResourceAttr("permitio_resource.document", "key", "document"),
 					resource.TestCheckResourceAttr("permitio_resource.document", "actions.delete.name", "delete"),
 					resource.TestCheckResourceAttr("permitio_resource.document", "actions.delete.description", "delete a document"),
+					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.created_at.type", "number"),
+					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.created_at.description", "creation time of the document"),
+					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.content.type", "string"),
+					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.content.description", "the content of the document"),
 					// Admin Role tests
 					resource.TestCheckResourceAttr("permitio_role.admin", "key", "admin"),
 					resource.TestCheckResourceAttr("permitio_role.admin", "permissions.#", "3"),

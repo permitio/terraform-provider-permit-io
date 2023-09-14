@@ -23,6 +23,7 @@ description: |-
 
 ### Optional
 
+- `attributes` (Attributes Map) (see [below for nested schema](#nestedatt--attributes))
 - `description` (String)
 - `updated_at` (String)
 - `urn` (String)
@@ -49,3 +50,15 @@ Optional:
 Read-Only:
 
 - `id` (String)
+
+
+<a id="nestedatt--attributes"></a>
+### Nested Schema for `attributes`
+
+Required:
+
+- `type` (String)
+
+Optional:
+
+- `description` (String)

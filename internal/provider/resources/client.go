@@ -34,7 +34,8 @@ func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (
 	}
 
 	var (
-		actions map[string]actionsModel
+		actions    map[string]actionsModel
+		attributes attributesModel
 	)
 
 	if resource.Actions != nil {
@@ -52,8 +53,8 @@ func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (
 			}
 			actions[key] = actionNew
 		}
-
 	}
+	attributes = newAttributesModelsFromSDK(resource.Attributes)
 
 	state := ResourceModel{
 		Id:             types.StringValue(resource.Id),
@@ -67,15 +68,18 @@ func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (
 		Urn:            types.StringPointerValue(resource.Urn),
 		Description:    types.StringPointerValue(resource.Description),
 		Actions:        actions,
+		Attributes:     attributes,
 	}
 	return state, nil
 }
 
 func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *ResourceModel) error {
 	var (
-		actions map[string]models.ActionBlockEditable
-		urn     *string
+		actions    map[string]models.ActionBlockEditable
+		attributes map[string]models.AttributeBlockEditable
+		urn        *string
 	)
+	attributes = resourcePlan.Attributes.toSDK()
 	actions = make(map[string]models.ActionBlockEditable)
 	for actionKey, action := range resourcePlan.Actions {
 		actions[actionKey] = models.ActionBlockEditable{
@@ -93,7 +97,7 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 		Urn:         urn,
 		Description: resourcePlan.Description.ValueStringPointer(),
 		Actions:     actions,
-		Attributes:  nil,
+		Attributes:  &attributes,
 	}
 	resourceRead, err := r.client.Api.Resources.Create(ctx, resourceCreate)
 	if err != nil {
@@ -107,6 +111,7 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 			Description: types.StringPointerValue(action.Description),
 		}
 	}
+	resourcePlan.Attributes = newAttributesModelsFromSDK(resourceRead.Attributes)
 	resourcePlan.Actions = actionsRead
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
@@ -128,11 +133,13 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 			Description: action.Description.ValueStringPointer(),
 		}
 	}
+	attributes := resourcePlan.Attributes.toSDK()
 	resourceUpdate := models.ResourceUpdate{
 		Name:        resourcePlan.Name.ValueStringPointer(),
 		Urn:         resourcePlan.Urn.ValueStringPointer(),
 		Description: resourcePlan.Description.ValueStringPointer(),
 		Actions:     &actions,
+		Attributes:  &attributes,
 	}
 	for actionKey, action := range *resourceUpdate.Actions {
 		tflog.Info(ctx, fmt.Sprintf("Updating action: %s, %v", actionKey, action))
@@ -142,6 +149,7 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 		return err
 	}
 
+	resourcePlan.Attributes = newAttributesModelsFromSDK(resourceRead.Attributes)
 	resourcePlan.Name = types.StringValue(resourceRead.Name)
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
