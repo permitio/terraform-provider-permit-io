@@ -56,6 +56,67 @@ resource "permitio_role" "admin" {
   ]
 }
 
+resource "permitio_user_set" "privileged_users" {
+  key  = "privileged_users"
+  name = "Privileged Users"
+  conditions = jsonencode({
+    "allOf" : [
+      {
+        "allOf" : [
+          {
+            "subject.email" = {
+              contains = "@admin.com"
+            },
+          }
+        ]
+      }
+    ]
+  })
+}
+
+resource "permitio_user_set" "unprivileged_users" {
+  key  = "unprivileged_users"
+  name = "Unprivileged Users"
+  conditions = jsonencode({
+    "allOf" : [
+      {
+        "allOf" : [
+          {
+            "subject.email" = {
+              contains = "@user.com"
+            },
+          }
+        ]
+      }
+    ]
+  })
+}
+
+resource "permitio_resource_set" "secret_docs" {
+  key      = "secret_docs"
+  name     = "Secret Docs"
+  resource = permitio_resource.document.key
+  conditions = jsonencode({
+    "allOf" : [
+      {
+        "allOf" : [
+          {
+            "resource.title" = {
+              contains = "Rye"
+            },
+          }
+        ]
+      }
+    ]
+  })
+}
+
+resource "permitio_condition_set_rule" "allow_privileged_users_to_read_secret_docs" {
+  user_set     = permitio_user_set.privileged_users.key
+  resource_set = permitio_resource_set.secret_docs.key
+  permission   = "document:read"
+}
+
 output "my_resource" {
   value = permitio_role.admin
 }

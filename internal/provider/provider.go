@@ -9,6 +9,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/permit"
+	conditionsetrules "github.com/permitio/terraform-provider-permit-io/internal/provider/conditionset_rules"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/conditionsets"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
 	"os"
@@ -137,17 +139,21 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	tflog.Info(ctx, "Permit.io client configured", map[string]any{"success": true})
 }
 
-func (p *PermitProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *PermitProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		resources.NewResourceResource,
 		roles.NewRoleResource,
+		conditionsets.NewUserSetResource,
+		conditionsets.NewResourceSetResource,
+		conditionsetrules.NewConditionSetRuleResource,
 	}
 }
 
-func (p *PermitProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *PermitProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		resources.NewResourceDataSource,
 		roles.NewRoleDataSource,
+		conditionsets.NewConditionSetDataSource,
 	}
 }
 
