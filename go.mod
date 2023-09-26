@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.18.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.4.0
-	github.com/permitio/permit-golang v0.0.18
+	github.com/permitio/permit-golang v1.0.0
 )
 
 require (

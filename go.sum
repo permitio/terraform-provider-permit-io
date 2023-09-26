@@ -240,8 +240,8 @@ github.com/mitchellh/reflectwalk v1.0.2 h1:G2LzWKi524PWgd3mLHV8Y5k7s6XUvT0Gef6zx
 github.com/mitchellh/reflectwalk v1.0.2/go.mod h1:mSTlrgnPZtwu0c4WaC2kGObEpuNDbx0jmZXqmk4esnw=
 github.com/oklog/run v1.0.0 h1:Ru7dDtJNOyC66gQ5dQmaCa0qIsAUFY3sFpK1Xk8igrw=
 github.com/oklog/run v1.0.0/go.mod h1:dlhp/R75TPv97u0XWUtDeV/lRKWPKSdTuV0TZvrmrQA=
-github.com/permitio/permit-golang v0.0.18 h1:94OQF7yTD6CCf72ARkVkXRGjZR7ToFYIkYvACf5nnU0=
-github.com/permitio/permit-golang v0.0.18/go.mod h1:phP2AVSL3bgDKfhhmhPt/VJAN8UUDJoQtVjUKRfY5Ck=
+github.com/permitio/permit-golang v1.0.0 h1:FVbZ56CJC3I7NRygfpc0XPPo5VzRZscNxEoHCaY0dic=
+github.com/permitio/permit-golang v1.0.0/go.mod h1:phP2AVSL3bgDKfhhmhPt/VJAN8UUDJoQtVjUKRfY5Ck=
 github.com/pjbgf/sha1cd v0.3.0 h1:4D5XXmUUBUl/xQ6IjCkEAbqXskkq/4O7LmGn0AqMDs4=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
