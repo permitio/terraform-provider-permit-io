@@ -117,6 +117,44 @@ resource "permitio_condition_set_rule" "allow_privileged_users_to_read_secret_do
   permission   = "document:read"
 }
 
+resource "permitio_proxy_config" "foaz" {
+  key            = "foaz"
+  name           = "Boaz"
+  auth_mechanism = "Basic"
+  auth_secret = {
+    basic = "hello:world"
+  }
+  mapping_rules = [
+    {
+      url         = "https://example.com/documents"
+      http_method = "post"
+      resource    = "document"
+      action      = "read"
+    },
+    {
+      url         = "https://example.com/documents/{project_id}"
+      http_method = "get"
+      resource    = "document"
+      action      = "read"
+    },
+    {
+      url         = "https://example.com/documents/{project_id}"
+      http_method = "put"
+      resource    = "document"
+      action      = "update"
+      headers = {
+        "x-update-id" : "foaz"
+      }
+    },
+    {
+      url         = "https://example.com/documents/{project_id}"
+      http_method = "delete"
+      resource    = "document"
+      action      = "delete"
+    }
+  ]
+}
+
 output "my_resource" {
   value = permitio_role.admin
 }

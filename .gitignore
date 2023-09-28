@@ -4,6 +4,8 @@
 example.tf
 terraform.tfplan
 terraform.tfstate
+.terraform.lock.hcl
+.terraform.tfstate.lock.info
 bin/
 dist/
 modules-dev/
@@ -33,4 +35,3 @@ website/vendor
 
 # Keep windows files with windows line endings
 *.winfile eol=crlf
-examples/.terraform.lock.hcl
