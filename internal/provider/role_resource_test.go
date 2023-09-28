@@ -166,6 +166,55 @@ func TestResources(t *testing.T) {
 					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "mapping_rules.#", "2"),
 				),
 			},
+			{
+				Config: providerConfig +
+					`resource "permitio_proxy_config" "foaz" {
+					  key            = "foaz"
+					  name           = "Boaz"
+					  auth_mechanism = "Basic"
+					  auth_secret = {
+						basic = "hello:world"
+					  }
+					  mapping_rules = [
+						{
+						  url         = "https://example.com/documents"
+						  http_method = "post"
+						  resource    = "document"
+						  action      = "read"
+						},
+						{
+						  url         = "https://example.com/documents/{project_id}"
+						  http_method = "get"
+						  resource    = "document"
+						  action      = "read"
+						},
+						{
+						  url         = "https://example.com/documents/{project_id}"
+						  http_method = "put"
+						  resource    = "document"
+						  action      = "update"
+						  headers = {
+							"x-update-id" : "foaz"
+						  }
+						},
+						{
+						  url         = "https://example.com/documents/{project_id}"
+						  http_method = "delete"
+						  resource    = "document"
+						  action      = "delete"
+						}
+					  ]
+					}
+				}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Proxy Config tests
+					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "key", "foaz"),
+					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "name", "Boaz"),
+					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "auth_mechanism", "Basic"),
+					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "auth_secret.basic", "hello:world"),
+					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "mapping_rules.#", "4"),
+				),
+			},
 		},
 	})
 }
