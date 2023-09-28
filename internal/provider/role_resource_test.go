@@ -204,7 +204,6 @@ func TestResources(t *testing.T) {
 						  action      = "delete"
 						}
 					  ]
-					}
 				}`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Proxy Config tests
