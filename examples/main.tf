@@ -15,7 +15,7 @@ resource "permitio_resource" "document" {
   key         = "document"
   name        = "document"
   description = "a new document"
-  actions     = {
+  actions = {
     "read" = {
       "name" = "read"
     }
@@ -40,7 +40,7 @@ resource "permitio_role" "writer" {
   name        = "writer"
   description = "a new admin"
   permissions = ["document:read", "document:write", "document:delete"]
-  depends_on  = [
+  depends_on = [
     "permitio_resource.document"
   ]
 }
@@ -50,15 +50,15 @@ resource "permitio_role" "admin" {
   description = "a new admin"
   permissions = ["document:read", "document:write"]
   extends     = []
-  depends_on  = [
+  depends_on = [
     "permitio_resource.document",
     "permitio_role.writer"
   ]
 }
 
 resource "permitio_user_set" "privileged_users" {
-  key        = "privileged_users"
-  name       = "Privileged Users"
+  key  = "privileged_users"
+  name = "Privileged Users"
   conditions = jsonencode({
     "allOf" : [
       {
@@ -75,8 +75,8 @@ resource "permitio_user_set" "privileged_users" {
 }
 
 resource "permitio_user_set" "unprivileged_users" {
-  key        = "unprivileged_users"
-  name       = "Unprivileged Users"
+  key  = "unprivileged_users"
+  name = "Unprivileged Users"
   conditions = jsonencode({
     "allOf" : [
       {
@@ -93,9 +93,9 @@ resource "permitio_user_set" "unprivileged_users" {
 }
 
 resource "permitio_resource_set" "secret_docs" {
-  key        = "secret_docs"
-  name       = "Secret Docs"
-  resource   = permitio_resource.document.key
+  key      = "secret_docs"
+  name     = "Secret Docs"
+  resource = permitio_resource.document.key
   conditions = jsonencode({
     "allOf" : [
       {
@@ -121,7 +121,7 @@ resource "permitio_proxy_config" "foaz" {
   key            = "foaz"
   name           = "Boaz"
   auth_mechanism = "Basic"
-  auth_secret    = {
+  auth_secret = {
     basic = "hello:world"
   }
   mapping_rules = [
@@ -142,7 +142,7 @@ resource "permitio_proxy_config" "foaz" {
       http_method = "put"
       resource    = "document"
       action      = "update"
-      headers     = {
+      headers = {
         "x-update-id" : "foaz"
       }
     },
