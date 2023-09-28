@@ -3,9 +3,17 @@ package proxy_configs
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"strings"
 )
 
 var (
@@ -18,8 +26,7 @@ func NewProxyConfigResource() resource.Resource {
 }
 
 type proxyConfigResource struct {
-	client          ProxyConfigClient
-	proxyConfigType models.ProxyConfigType
+	client proxyConfigClient
 }
 
 func (c *proxyConfigResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -40,70 +47,225 @@ func (c *proxyConfigResource) Configure(_ context.Context, request resource.Conf
 		)
 	}
 
-	c.client = ProxyConfigClient{client: permitClient}
+	c.client = proxyConfigClient{client: permitClient}
 
 	return
 }
 
-func (c *proxyConfigResource) Schema() *schema.Resource {
-	return &schema.Resource{
-		Schema: map[string]*schema.Schema{
-			"": {},
+func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"organization_id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"project_id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"environment_id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"key": schema.StringAttribute{
+				Required: true,
+			},
+			"name": schema.StringAttribute{
+				Required: true,
+			},
+			"auth_mechanism": schema.StringAttribute{
+				Required: true,
+				Validators: []validator.String{
+					authMechanismValidator{},
+				},
+			},
+			"auth_secret": schema.SingleNestedAttribute{
+				Required: true,
+				Attributes: map[string]schema.Attribute{
+					"bearer": schema.StringAttribute{
+						Optional: true,
+					},
+					"basic": schema.StringAttribute{
+						Optional: true,
+					},
+					"headers": schema.MapAttribute{
+						Optional:    true,
+						ElementType: types.StringType,
+					},
+				},
+			},
+			"mapping_rules": schema.ListNestedAttribute{
+				Required: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"url": schema.StringAttribute{
+							Required: true,
+						},
+						"http_method": schema.StringAttribute{
+							Required: true,
+						},
+						"resource": schema.StringAttribute{
+							Required: true,
+						},
+						"action": schema.StringAttribute{
+							Optional: true,
+						},
+						"priority": schema.Int64Attribute{
+							Optional: true,
+						},
+						"headers": schema.MapAttribute{
+							Optional:    true,
+							ElementType: types.StringType,
+						},
+					},
+				},
+			},
 		},
 	}
 }
 
-func (c *proxyConfigResource) Read(_ context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
-	proxyConfig, err := c.client.ReadProxyConfig(request.ID)
-
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error reading proxy config",
-			fmt.Sprintf("Error reading proxy config: %s", err),
-		)
-		return
+func (c *proxyConfigResource) ConfigValidators(context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		resourcevalidator.Conflicting(
+			path.MatchRoot("auth_secret").AtName("basic"),
+			path.MatchRoot("auth_secret").AtName("bearer"),
+			path.MatchRoot("auth_secret").AtName("headers"),
+		),
 	}
-
-	response.State = proxyConfig
 }
 
-func (c *proxyConfigResource) Create(_ context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
-	proxyConfig, err := c.client.CreateProxyConfig(request.Config)
+func (c *proxyConfigResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data proxyConfigModel
 
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error creating proxy config",
-			fmt.Sprintf("Error creating proxy config: %s", err),
-		)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	response.State = proxyConfig
+	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.BASIC)) && data.AuthSecret.Basic.IsNull() {
+		resp.Diagnostics.AddError("auth_mechanism was set to `basic` but auth_secret.basic is not set", "")
+		return
+	}
+
+	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.BEARER)) && data.AuthSecret.Basic.IsNull() {
+		resp.Diagnostics.AddError("auth_mechanism was set to `bearer` but auth_secret.bearer is not set", "")
+		return
+	}
+
+	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.HEADERS)) && data.AuthSecret.Basic.IsNull() {
+		resp.Diagnostics.AddError("auth_mechanism was set to `headers` but auth_secret.headers is not set", "")
+		return
+	}
 }
 
-func (c *proxyConfigResource) Update(_ context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	proxyConfig, err := c.client.UpdateProxyConfig(request.ID, request.Patch)
+func (c *proxyConfigResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
+	var (
+		model proxyConfigModel
+	)
+
+	response.Diagnostics.Append(request.Plan.Get(ctx, &model)...)
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	created, err := c.client.create(ctx, model)
 
 	if err != nil {
 		response.Diagnostics.AddError(
-			"Error updating proxy config",
-			fmt.Sprintf("Error updating proxy config: %s", err),
+			"Unable to create proxy config",
+			fmt.Sprintf("Unable to create resource: %s", err),
 		)
 		return
 	}
 
-	response.State = proxyConfig
+	// Set state to fully populated data
+	response.Diagnostics.Append(response.State.Set(ctx, created)...)
+
+	if response.Diagnostics.HasError() {
+		return
+	}
 }
 
-func (c *proxyConfigResource) Delete(_ context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
-	err := c.client.DeleteProxyConfig(request.ID)
+func (c *proxyConfigResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+	var model proxyConfigModel
+
+	response.Diagnostics.Append(request.State.Get(ctx, &model)...)
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	read, err := c.client.read(ctx, model)
 
 	if err != nil {
 		response.Diagnostics.AddError(
-			"Error deleting proxy config",
-			fmt.Sprintf("Error deleting proxy config: %s", err),
+			"Unable to Read Condition Set",
+			fmt.Sprintf("Unable to read condition set: %s, Error: %s", read.Id.String(), err.Error()),
 		)
 		return
 	}
 
+	// Set state
+	response.Diagnostics.Append(response.State.Set(ctx, &read)...)
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+}
+
+func (c *proxyConfigResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
+	var model proxyConfigModel
+
+	response.Diagnostics.Append(request.Plan.Get(ctx, &model)...)
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	proxyConfig, err := c.client.update(ctx, model)
+
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Unable to update resource",
+			fmt.Sprintf("Unable to update resource: %s", err),
+		)
+		return
+	}
+	response.Diagnostics.Append(response.State.Set(ctx, proxyConfig)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+}
+
+func (c *proxyConfigResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
+	var model proxyConfigModel
+	response.Diagnostics.Append(request.State.Get(ctx, &model)...)
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	err := c.client.delete(ctx, model)
+
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Error deleting Proxy Config",
+			fmt.Sprintf("Could not delete Proxy Config, unexpected error: %s", err.Error()),
+		)
+		return
+	}
 }
