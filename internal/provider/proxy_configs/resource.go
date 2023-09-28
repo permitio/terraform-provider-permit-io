@@ -45,11 +45,11 @@ func (c *proxyConfigResource) Configure(_ context.Context, request resource.Conf
 			"Unexpected Resource Configure Type",
 			fmt.Sprintf("Expected *permit.Client, got: %T. Please report this issue to the provider developers.", request.ProviderData),
 		)
+		return
 	}
 
 	c.client = proxyConfigClient{client: permitClient}
 
-	return
 }
 
 func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
