@@ -27,6 +27,7 @@ resource "permitio_resource" "file" {
       "name" = "delete"
     }
   }
+  attributes = {}
 }
 
 resource "permitio_resource" "folder" {
@@ -46,4 +47,12 @@ resource "permitio_resource" "folder" {
       "name" = "modify"
     }
   }
+  attributes = {}
+}
+
+resource "permitio_relation" "parent" {
+  key = "parent"
+  name = "parent of"
+  subject_resource = permitio_resource.folder.key
+  object_resource = permitio_resource.file.key
 }
