@@ -13,6 +13,8 @@ type relationModel struct {
 	EnvironmentId  types.String `tfsdk:"environment_id"`
 	ProjectId      types.String `tfsdk:"project_id"`
 	OrganizationId types.String `tfsdk:"organization_id"`
+	CreatedAt      types.String `tfsdk:"created_at"`
+	UpdatedAt      types.String `tfsdk:"updated_at"`
 
 	SubjectResource   types.String `tfsdk:"subject_resource"`
 	ObjectResource    types.String `tfsdk:"object_resource"`
@@ -35,6 +37,8 @@ func tfModelFromSDK(m models.RelationRead) relationModel {
 	r.EnvironmentId = types.StringValue(m.EnvironmentId)
 	r.ProjectId = types.StringValue(m.ProjectId)
 	r.OrganizationId = types.StringValue(m.OrganizationId)
+	r.CreatedAt = types.StringValue(m.CreatedAt.String())
+	r.UpdatedAt = types.StringValue(m.UpdatedAt.String())
 
 	return r
 }

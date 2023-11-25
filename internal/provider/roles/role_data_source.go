@@ -20,20 +20,7 @@ func NewRoleDataSource() datasource.DataSource {
 }
 
 type RoleDataSource struct {
-	RoleClient
-}
-type RoleModel struct {
-	Id             types.String `tfsdk:"id"`
-	OrganizationId types.String `tfsdk:"organization_id"`
-	ProjectId      types.String `tfsdk:"project_id"`
-	EnvironmentId  types.String `tfsdk:"environment_id"`
-	CreatedAt      types.String `tfsdk:"created_at"`
-	UpdatedAt      types.String `tfsdk:"updated_at"`
-	Key            types.String `tfsdk:"key"`
-	Name           types.String `tfsdk:"name"`
-	Description    types.String `tfsdk:"description"`
-	Permissions    types.List   `tfsdk:"permissions"`
-	Extends        types.List   `tfsdk:"extends"`
+	client roleClient
 }
 
 func (d *RoleDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
@@ -48,7 +35,7 @@ func (d *RoleDataSource) Configure(ctx context.Context, request datasource.Confi
 		)
 		return
 	}
-	d.client = client
+	d.client.client = client
 }
 
 func (d *RoleDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -102,28 +89,24 @@ func (d *RoleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 
 // Read refreshes the Terraform state with the latest data.
 func (d *RoleDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
-	var data RoleModel
+	var data roleModel
 
 	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	state, err, diags := d.RoleRead(ctx, data)
-	if err != nil || diags.HasError() {
-		if err != nil {
-			response.Diagnostics.AddError(
-				"Unable to read role",
-				fmt.Sprintf("Unable to read role: %s", err),
-			)
-		} else {
-			response.Diagnostics.Append(diags...)
-		}
-		return
+	roleRead, err := d.client.Read(ctx, data.Key.ValueString(), data.Resource.ValueStringPointer())
+
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Unable to read role",
+			fmt.Errorf("Unable to read role %s: %w", roleRead, err).Error(),
+		)
 	}
 
 	// Set state
-	diags = response.State.Set(ctx, &state)
+	diags := response.State.Set(ctx, &roleRead)
 	response.Diagnostics.Append(diags...)
 	if response.Diagnostics.HasError() {
 		return

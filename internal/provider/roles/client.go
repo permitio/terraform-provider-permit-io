@@ -2,194 +2,145 @@ package roles
 
 import (
 	"context"
-	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
-type RoleClient struct {
+type roleClient struct {
 	client *permit.Client
 }
 
-type RoleMethods interface {
-	RoleRead(ctx context.Context, data RoleModel) (RoleModel, error)
-	RoleCreate(ctx context.Context, actions map[string]models.ActionBlockEditable, resourcePlan *RoleModel) error
-	RoleUpdate(ctx context.Context, resourcePlan *RoleModel) error
-}
+func (c *roleClient) Create(ctx context.Context, plan roleModel) (roleModel, error) {
+	permissions, err := common.ConvertElementsToSlice[string](ctx, plan.Permissions.Elements())
 
-func (d *RoleClient) RoleRead(ctx context.Context, data RoleModel) (RoleModel, error, diag.Diagnostics) {
-	var (
-		resourceKeyOrId string
-		diags           diag.Diagnostics
-	)
-	if data.Key.IsNull() {
-		resourceKeyOrId = data.Id.ValueString()
-	} else {
-		resourceKeyOrId = data.Key.ValueString()
-	}
-	role, err := d.client.Api.Roles.Get(ctx, resourceKeyOrId)
 	if err != nil {
-		return RoleModel{}, err, diags
-	}
-	// Converting lists from data input to compare with the role read from the API
-	permissionsData := make([]string, 0)
-	for _, permission := range data.Permissions.Elements() {
-		permissionsData = append(permissionsData, RemoveDoubleQuotes(permission.String()))
+		return roleModel{}, err
 	}
 
-	extendsData := make([]string, 0)
-	for _, extend := range data.Extends.Elements() {
-		extendsData = append(extendsData, RemoveDoubleQuotes(extend.String()))
+	extends, err := common.ConvertElementsToSlice[string](ctx, plan.Extends.Elements())
+
+	if err != nil {
+		return roleModel{}, err
 	}
 
-	if !compareSlicesValues(role.Permissions, permissionsData) || !compareSlicesValues(role.Extends, extendsData) {
-		diags.AddError(
-			"Permissions or extends mismatch to the created role",
-			fmt.Sprintf("Permissions from data: %v, Permissions from api: %v, Extends from data: %v, Extends from api: %v ", permissionsData, role.Permissions, extendsData, role.Extends),
-		)
-	}
-	state := RoleModel{
-		Id:             types.StringValue(role.Id),
-		OrganizationId: types.StringValue(role.OrganizationId),
-		ProjectId:      types.StringValue(role.ProjectId),
-		EnvironmentId:  types.StringValue(role.EnvironmentId),
-		CreatedAt:      types.StringValue(role.CreatedAt.String()),
-		UpdatedAt:      types.StringValue(role.UpdatedAt.String()),
-		Key:            types.StringValue(role.Key),
-		Name:           types.StringValue(role.Name),
-		Description:    types.StringPointerValue(role.Description),
-		Permissions:    data.Permissions,
-		Extends:        data.Extends,
-	}
-	return state, nil, diags
-}
-
-func compareSlicesValues(a []string, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for _, aVal := range a {
-		found := false
-		for _, bVal := range b {
-			if aVal == bVal {
-				found = true
-				break
-			}
+	var createdModel roleModel
+	if plan.isResourceRole() {
+		roleCreate := models.ResourceRoleCreate{
+			Key:         plan.Key.ValueString(),
+			Name:        plan.Name.ValueString(),
+			Description: plan.Description.ValueStringPointer(),
+			Permissions: permissions,
+			Extends:     extends,
 		}
-		if !found {
-			return false
+
+		createdRole, err := c.client.Api.ResourceRoles.Create(ctx, plan.Resource.ValueString(), roleCreate)
+
+		if err != nil {
+			return roleModel{}, err
 		}
-	}
-	return true
-}
-func (r *RoleClient) RoleCreate(ctx context.Context, rolePlan *RoleModel) (error, diag.Diagnostics) {
-	var diags diag.Diagnostics
 
-	permissions := make([]string, 0)
-	for _, permission := range rolePlan.Permissions.Elements() {
-		permissions = append(permissions, RemoveDoubleQuotes(permission.String()))
-	}
-	extends := make([]string, 0)
-	for _, extend := range rolePlan.Extends.Elements() {
-		extends = append(extends, RemoveDoubleQuotes(extend.String()))
+		createdModel = tfModelFromResourceRoleRead(plan.Resource.ValueString(), *createdRole)
+	} else {
+		roleCreate := models.RoleCreate{
+			Key:         plan.Key.ValueString(),
+			Name:        plan.Name.ValueString(),
+			Description: plan.Description.ValueStringPointer(),
+			Permissions: permissions,
+			Extends:     extends,
+		}
 
-	}
-	roleCreate := models.RoleCreate{
-		Key:         rolePlan.Key.ValueString(),
-		Name:        rolePlan.Name.ValueString(),
-		Description: rolePlan.Description.ValueStringPointer(),
-		Permissions: permissions,
-		Extends:     extends,
-		Attributes:  nil, // TODO: Add attributes
-	}
-	roleRead, err := r.client.Api.Roles.Create(ctx, roleCreate)
-	if err != nil {
-		return err, diags
-	}
-	rolePlan.Description = types.StringPointerValue(roleRead.Description)
-	rolePlan.CreatedAt = types.StringValue(roleRead.CreatedAt.String())
-	rolePlan.UpdatedAt = types.StringValue(roleRead.UpdatedAt.String())
-	rolePlan.Id = types.StringValue(roleRead.Id)
-	rolePlan.OrganizationId = types.StringValue(roleRead.OrganizationId)
-	rolePlan.ProjectId = types.StringValue(roleRead.ProjectId)
-	rolePlan.EnvironmentId = types.StringValue(roleRead.EnvironmentId)
-	if !compareSlicesValues(permissions, roleRead.Permissions) || !compareSlicesValues(extends, roleRead.Extends) {
-		diags.AddError(
-			"Permissions or extends mismatch to the created role",
-			fmt.Sprintf("Permissions from data: %v, Permissions from api: %v, Extends from data: %v, Extends from api: %v ", permissions, roleRead.Permissions, extends, roleRead.Extends),
-		)
-	}
-	permissionsPlan, diagsAddition := types.ListValueFrom(ctx, types.StringType, permissions)
-	diags.Append(diagsAddition...)
-	extendsPlan, diagsAddition := types.ListValueFrom(ctx, types.StringType, extends)
-	diags.Append(diagsAddition...)
-	tflog.Info(ctx, fmt.Sprintf("permissions: %v", permissionsPlan))
-	rolePlan.Extends = extendsPlan
-	rolePlan.Permissions = permissionsPlan
+		createdRole, err := c.client.Api.Roles.Create(ctx, roleCreate)
 
-	return nil, diags
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		createdModel = tfModelFromRoleRead(*createdRole)
+	}
+
+	return createdModel, nil
 }
 
-func (r *RoleClient) RoleUpdate(ctx context.Context, rolePlan *RoleModel) (error, diag.Diagnostics) {
-	var (
-		diags diag.Diagnostics
-	)
-	extendsAsGoType := make([]string, 0)
-	permissionsAsGoType := make([]string, 0)
-	for _, extend := range rolePlan.Extends.Elements() {
-		extendsAsGoType = append(extendsAsGoType, RemoveDoubleQuotes(extend.String()))
+func (c *roleClient) Read(ctx context.Context, key string, resourceKey *string) (roleModel, error) {
+	var createdModel roleModel
+
+	if resourceKey != nil {
+		roleRead, err := c.client.Api.ResourceRoles.Get(ctx, *resourceKey, key)
+
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		createdModel = tfModelFromResourceRoleRead(*resourceKey, *roleRead)
+	} else {
+		roleRead, err := c.client.Api.Roles.Get(ctx, key)
+
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		createdModel = tfModelFromRoleRead(*roleRead)
 	}
 
-	for _, permission := range rolePlan.Permissions.Elements() {
-		permissionsAsGoType = append(permissionsAsGoType, RemoveDoubleQuotes(permission.String()))
-	}
+	return createdModel, nil
+}
 
-	roleUpdate := models.RoleUpdate{
-		Name:        rolePlan.Name.ValueStringPointer(),
-		Description: rolePlan.Description.ValueStringPointer(),
-		Permissions: permissionsAsGoType,
-		Extends:     extendsAsGoType,
-	}
-	tflog.Info(ctx, fmt.Sprintf("Updating role: %v", permissionsAsGoType))
+func (c *roleClient) Update(ctx context.Context, plan roleModel) (roleModel, error) {
+	permissions, err := common.ConvertElementsToSlice[string](ctx, plan.Permissions.Elements())
 
-	roleRead, err := r.client.Api.Roles.Update(ctx, rolePlan.Key.ValueString(), roleUpdate)
 	if err != nil {
-		return err, diags
-	}
-	rolePlan.Description = types.StringPointerValue(roleRead.Description)
-	rolePlan.Name = types.StringValue(roleRead.Name)
-	rolePlan.UpdatedAt = types.StringValue(roleRead.UpdatedAt.String())
-	rolePlan.CreatedAt = types.StringValue(roleRead.CreatedAt.String())
-	rolePlan.EnvironmentId = types.StringValue(roleRead.EnvironmentId)
-	rolePlan.ProjectId = types.StringValue(roleRead.ProjectId)
-	rolePlan.Id = types.StringValue(roleRead.Id)
-	rolePlan.OrganizationId = types.StringValue(roleRead.OrganizationId)
-	if !compareSlicesValues(permissionsAsGoType, roleRead.Permissions) || !compareSlicesValues(extendsAsGoType, roleRead.Extends) {
-		diags.AddError(
-			"Permissions or extends mismatch to the created role",
-			fmt.Sprintf("Permissions from data: %v, Permissions from api: %v, Extends from data: %v, Extends from api: %v ", permissionsAsGoType, roleRead.Permissions, extendsAsGoType, roleRead.Extends),
-		)
-	}
-	extends, diagsAddition := types.ListValueFrom(ctx, types.StringType, extendsAsGoType)
-	diags.Append(diagsAddition...)
-	permissions, diagsAddition := types.ListValueFrom(ctx, types.StringType, permissionsAsGoType)
-	diags.Append(diagsAddition...)
-
-	// The framework can't handle empty lists, so we need to set them manually
-	if len(extendsAsGoType) > 0 {
-		rolePlan.Extends = extends
-	} else {
-		rolePlan.Extends, diags = types.ListValue(types.StringType, []attr.Value{})
-	}
-	if len(permissionsAsGoType) > 0 {
-		rolePlan.Permissions = permissions
-	} else {
-		rolePlan.Permissions, diags = types.ListValue(types.StringType, []attr.Value{})
+		return roleModel{}, err
 	}
 
-	return nil, diags
+	extends, err := common.ConvertElementsToSlice[string](ctx, plan.Extends.Elements())
+
+	if err != nil {
+		return roleModel{}, err
+	}
+
+	var createdModel roleModel
+	if plan.isResourceRole() {
+		roleCreate := models.ResourceRoleCreate{
+			Key:         plan.Key.ValueString(),
+			Name:        plan.Name.ValueString(),
+			Description: plan.Description.ValueStringPointer(),
+			Permissions: permissions,
+			Extends:     extends,
+		}
+
+		createdRole, err := c.client.Api.ResourceRoles.Create(ctx, plan.Resource.ValueString(), roleCreate)
+
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		createdModel = tfModelFromResourceRoleRead(plan.Resource.ValueString(), *createdRole)
+	} else {
+		roleCreate := models.RoleCreate{
+			Key:         plan.Key.ValueString(),
+			Name:        plan.Name.ValueString(),
+			Description: plan.Description.ValueStringPointer(),
+			Permissions: permissions,
+			Extends:     extends,
+		}
+
+		createdRole, err := c.client.Api.Roles.Create(ctx, roleCreate)
+
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		createdModel = tfModelFromRoleRead(*createdRole)
+	}
+
+	return createdModel, nil
+}
+
+func (c *roleClient) Delete(ctx context.Context, key string, resourceKey *string) error {
+	if resourceKey != nil {
+		return c.client.Api.ResourceRoles.Delete(ctx, *resourceKey, key)
+	} else {
+		return c.client.Api.Roles.Delete(ctx, key)
+	}
 }

@@ -11,48 +11,72 @@ provider "permitio" {
 }
 
 resource "permitio_resource" "file" {
-  key  = "document"
-  name = "document"
+  key     = "file"
+  name    = "file"
   actions = {
     "create" = {
-      "name" = "create"
+      "name" = "Create"
     }
     "read" = {
-      "name" = "read"
+      "name" = "Read"
     }
     "update" = {
-      "name" = "update"
+      "name" = "Update"
     }
     "delete" = {
-      "name" = "delete"
+      "name" = "Delete"
     }
   }
   attributes = {}
 }
 
 resource "permitio_resource" "folder" {
-  key  = "folder"
-  name = "folder"
+  key     = "folder"
+  name    = "folder"
   actions = {
     "create" = {
-      "name" = "create"
+      "name" = "Create"
     }
-    "read" = {
-      "name" = "read"
-    }
-    "update" = {
-      "name" = "update"
+    "list" = {
+      "name" = "List"
     }
     "modify" = {
-      "name" = "modify"
+      "name" = "Modify"
+    }
+    "delete" = {
+      "name" = "Delete"
     }
   }
   attributes = {}
 }
 
 resource "permitio_relation" "parent" {
-  key = "parent"
-  name = "parent of"
+  key              = "parent"
+  name             = "parent of"
   subject_resource = permitio_resource.folder.key
-  object_resource = permitio_resource.file.key
+  object_resource  = permitio_resource.file.key
+}
+
+resource "permitio_role" "fileAdmin" {
+  key         = "admin"
+  name        = "Administrator"
+  description = "Administrator access to files"
+  permissions = ["read", "create", "update", "delete"]
+  extends     = []
+  resource    = permitio_resource.file.key
+  depends_on  = [
+    permitio_resource.file,
+  ]
+}
+
+resource "permitio_role" "folderAdmin" {
+  key         = "admin"
+  name        = "Administrator"
+  description = "Administrator access to folders"
+  permissions = ["create", "list", "modify", "delete"]
+  extends     = []
+  resource    = permitio_resource.folder.key
+  depends_on  = [
+    permitio_resource.folder,
+  ]
 }
