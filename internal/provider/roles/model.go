@@ -28,11 +28,6 @@ func (m *roleModel) isResourceRole() bool {
 	return !m.Resource.IsNull()
 }
 
-type SomeRoleRead struct {
-	role models.RoleRead
-	resourceRole models.ResourceRoleRead
-}
-
 func tfModelFromRoleRead(m models.RoleRead) roleModel {
 	r := roleModel{}
 	r.Id = types.StringValue(m.Id)

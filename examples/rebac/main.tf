@@ -80,3 +80,11 @@ resource "permitio_role" "folderAdmin" {
     permitio_resource.folder,
   ]
 }
+
+resource "permitio_role_derivation" "folderFileAdmin" {
+  resource    = permitio_resource.file.key
+  role        = permitio_role.fileAdmin.key
+  on_resource = permitio_resource.folder.key
+  to_role     = permitio_role.folderAdmin.key
+  linked_by   = permitio_relation.parent.key
+}
