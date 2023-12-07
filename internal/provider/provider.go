@@ -110,6 +110,7 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 
 	debug := os.Getenv("PERMITIO_DEBUG") == "true"
 	apiKey, apiKeyExist := os.LookupEnv("PERMITIO_API_KEY")
+	tflog.Debug(ctx, "API Key exists in env var 'PERMITIO_API_KEY': "+strconv.FormatBool(apiKeyExist))
 	if !apiKeyExist {
 		if config.ApiKey.IsNull() {
 			resp.Diagnostics.AddError(
@@ -117,7 +118,7 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 				"The provider cannot create the Permit.io API client as there is an unknown configuration value for the Permit.io API Key."+
 					"Either target apply the source of the value first, set the value statically in the configuration, or use the PERMITIO_API_KEY environment variable.")
 		} else {
-			apiKey = config.ApiKey.String()
+			apiKey = config.ApiKey.ValueString()
 		}
 	}
 
@@ -126,7 +127,7 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		if config.ApiUrl.IsNull() {
 			apiUrl = DefaultApiUrl
 		} else {
-			apiUrl = config.ApiUrl.String()
+			apiUrl = config.ApiUrl.ValueString()
 		}
 	}
 
