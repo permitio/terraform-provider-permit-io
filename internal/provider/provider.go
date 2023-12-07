@@ -15,6 +15,8 @@ import (
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -24,8 +26,9 @@ import (
 )
 
 const (
-	DefaultApiUrl = "https://api.permit.io"
-	PDPApiUrl     = "https://localhost:3000"
+	DefaultApiUrl  = "https://api.permit.io"
+	PDPApiUrl      = "https://localhost:3000"
+	DefaultTimeout = 10 * time.Second
 )
 
 // Ensure PermitProvider satisfies various provider interfaces.
@@ -41,8 +44,9 @@ type PermitProvider struct {
 
 // PermitProviderModel describes the provider data model.
 type PermitProviderModel struct {
-	ApiUrl types.String `tfsdk:"api_url"`
-	ApiKey types.String `tfsdk:"api_key"`
+	ApiUrl  types.String `tfsdk:"api_url"`
+	ApiKey  types.String `tfsdk:"api_key"`
+	Timeout types.Int64  `tfsdk:"timeout"`
 }
 
 func (p *PermitProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -63,6 +67,10 @@ func (p *PermitProvider) Schema(ctx context.Context, req provider.SchemaRequest,
 				Sensitive: true,
 				// TODO: Add support in more API key levels
 				MarkdownDescription: "The API key for Permit.io API (Required)",
+			},
+			"timeout": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Timeout for the requests to Permit.io API - default is 30 seconds",
 			},
 		},
 	}
@@ -122,16 +130,39 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		}
 	}
 
+	var timeout int64
+	timeoutStr, timeoutExist := os.LookupEnv("PERMITIO_TIMEOUT")
+	if timeoutExist {
+		timeoutInt, err := strconv.ParseInt(timeoutStr, 10, 64)
+		if err != nil {
+			tflog.Debug(ctx, "Error parsing timeout from env var 'PERMITIO_TIMEOUT': "+err.Error())
+			resp.Diagnostics.AddAttributeError(
+				path.Root("timeout"),
+				"Timeout is not a valid integer",
+				"The provider cannot create the Permit.io API client as the timeout value is not a valid integer.",
+			)
+			return
+		}
+		timeout = timeoutInt * int64(time.Second)
+	} else {
+		if config.Timeout.IsNull() {
+			timeout = int64(DefaultTimeout)
+		} else {
+			timeout = config.Timeout.ValueInt64() * int64(time.Second)
+		}
+	}
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	ctx = tflog.SetField(ctx, "permitio_api_url", apiUrl)
 	ctx = tflog.SetField(ctx, "permitio_api_key", apiKey)
+	ctx = tflog.SetField(ctx, "permitio_timeout", timeout)
 	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "permitio_api_key")
 
 	tflog.Debug(ctx, "Instantiating Permit.io client")
-	clientConfig := permitConfig.NewConfigBuilder(apiKey).WithApiUrl(apiUrl).WithDebug(debug).Build()
+	clientConfig := permitConfig.NewConfigBuilder(apiKey).WithApiUrl(apiUrl).WithDebug(debug).WithTimeout(time.Duration(timeout)).Build()
 	permitClient := permit.NewPermit(clientConfig)
 
 	resp.DataSourceData = permitClient
