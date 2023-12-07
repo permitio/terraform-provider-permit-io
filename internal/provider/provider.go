@@ -70,7 +70,7 @@ func (p *PermitProvider) Schema(ctx context.Context, req provider.SchemaRequest,
 			},
 			"timeout": schema.Int64Attribute{
 				Optional:            true,
-				MarkdownDescription: "Timeout for the requests to Permit.io API - default is 30 seconds",
+				MarkdownDescription: "Timeout for the requests to Permit.io API - default is 10 seconds",
 			},
 		},
 	}
