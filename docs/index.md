@@ -19,3 +19,4 @@ description: |-
 
 - `api_key` (String, Sensitive) The API key for Permit.io API (Required)
 - `api_url` (String) The URL of Permit.io API
+- `timeout` (Number) Timeout for the requests to Permit.io API - default is 10 seconds
