@@ -99,42 +99,40 @@ func (c *roleClient) Update(ctx context.Context, plan roleModel) (roleModel, err
 		return roleModel{}, err
 	}
 
-	var createdModel roleModel
+	var updatedModel roleModel
 	if plan.isResourceRole() {
-		roleCreate := models.ResourceRoleCreate{
-			Key:         plan.Key.ValueString(),
-			Name:        plan.Name.ValueString(),
+		roleUpdate := models.ResourceRoleUpdate{
+			Name:        plan.Name.ValueStringPointer(),
 			Description: plan.Description.ValueStringPointer(),
 			Permissions: permissions,
 			Extends:     extends,
 		}
 
-		createdRole, err := c.client.Api.ResourceRoles.Create(ctx, plan.Resource.ValueString(), roleCreate)
+		updatedRole, err := c.client.Api.ResourceRoles.Update(ctx, plan.Resource.ValueString(), plan.Key.ValueString(), roleUpdate)
 
 		if err != nil {
 			return roleModel{}, err
 		}
 
-		createdModel = tfModelFromResourceRoleRead(plan.Resource.ValueString(), *createdRole)
+		updatedModel = tfModelFromResourceRoleRead(plan.Resource.ValueString(), *updatedRole)
 	} else {
-		roleCreate := models.RoleCreate{
-			Key:         plan.Key.ValueString(),
-			Name:        plan.Name.ValueString(),
+		roleUpdate := models.RoleUpdate{
+			Name:        plan.Name.ValueStringPointer(),
 			Description: plan.Description.ValueStringPointer(),
 			Permissions: permissions,
 			Extends:     extends,
 		}
 
-		createdRole, err := c.client.Api.Roles.Create(ctx, roleCreate)
+		updatedRole, err := c.client.Api.Roles.Update(ctx, plan.Key.ValueString(), roleUpdate)
 
 		if err != nil {
 			return roleModel{}, err
 		}
 
-		createdModel = tfModelFromRoleRead(*createdRole)
+		updatedModel = tfModelFromRoleRead(*updatedRole)
 	}
 
-	return createdModel, nil
+	return updatedModel, nil
 }
 
 func (c *roleClient) Delete(ctx context.Context, key string, resourceKey *string) error {
