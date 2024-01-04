@@ -22,7 +22,7 @@ func (c *apiClient) Create(ctx context.Context, plan roleDerivationModel) (roleD
 	createdGrant, err := c.client.Api.ImplicitGrants.Create(
 		ctx,
 		plan.Resource.ValueString(),
-		plan.Role.ValueString(),
+		plan.ToRole.ValueString(),
 		derivedRuleCreate,
 	)
 
