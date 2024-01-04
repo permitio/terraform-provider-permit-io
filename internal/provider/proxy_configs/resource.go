@@ -54,45 +54,54 @@ func (c *proxyConfigResource) Configure(_ context.Context, request resource.Conf
 
 func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config) for more information about proxy configs.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Unique id of the proxy config",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"organization_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Unique id of the organization that owns the proxy config",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"project_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Unique id of the project that owns the proxy config",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"environment_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Unique id of the environment that owns the proxy config",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"key": schema.StringAttribute{
-				Required: true,
+				MarkdownDescription: "Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.\n\n",
+				Required:            true,
 			},
 			"name": schema.StringAttribute{
-				Required: true,
+				MarkdownDescription: "The name of the proxy config, for example: 'Stripe API",
+				Required:            true,
 			},
 			"auth_mechanism": schema.StringAttribute{
-				Required: true,
+				MarkdownDescription: "Default: \"Bearer\"\nEnum: \"Bearer\" \"Basic\" \"Headers\"\nProxy config auth mechanism will define the authentication mechanism that will be used to authenticate the request.\n\nBearer injects the secret into the Authorization header as a Bearer token,\n\nBasic injects the secret into the Authorization header as a Basic user:password,\n\nHeaders injects plain headers into the request.",
+				Required:            true,
 				Validators: []validator.String{
 					authMechanismValidator{},
 				},
 			},
 			"auth_secret": schema.SingleNestedAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service.",
 				Attributes: map[string]schema.Attribute{
 					"bearer": schema.StringAttribute{
 						Optional: true,
@@ -107,7 +116,8 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"mapping_rules": schema.ListNestedAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"url": schema.StringAttribute{
