@@ -36,11 +36,11 @@ func (c *apiClient) Create(ctx context.Context, plan roleDerivationModel) (roleD
 
 func (c *apiClient) Read(ctx context.Context, plan roleDerivationModel) (roleDerivationModel, error) {
 	targetRoleRead, err := c.client.Api.ResourceRoles.Get(
-		ctx, plan.Resource.ValueString(), plan.Role.String())
+		ctx, plan.Resource.ValueString(), plan.ToRole.ValueString())
 
 	if err != nil {
 		return roleDerivationModel{},
-			fmt.Errorf("failed getting target role %s/%s: %w", plan.Resource.ValueString(), plan.Role.ValueString(), err)
+			fmt.Errorf("failed getting target role %s/%s: %w", plan.Resource.ValueString(), plan.ToRole.ValueString(), err)
 	}
 
 	if targetRoleRead.GrantedTo == nil {
@@ -49,7 +49,7 @@ func (c *apiClient) Read(ctx context.Context, plan roleDerivationModel) (roleDer
 
 	derivation, found := lo.Find(targetRoleRead.GrantedTo.UsersWithRole, func(item models.DerivedRoleRuleRead) bool {
 		return item.OnResource == plan.OnResource.ValueString() &&
-			item.Role == plan.ToRole.ValueString() &&
+			item.Role == plan.Role.ValueString() &&
 			item.LinkedByRelation == plan.LinkedByRelation.ValueString()
 	})
 
