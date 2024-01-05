@@ -36,38 +36,44 @@ func (r *RoleDerivationResource) Metadata(_ context.Context, request resource.Me
 func (r *RoleDerivationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := make(map[string]schema.Attribute)
 	attributes["resource"] = schema.StringAttribute{
-		Required: true,
+		MarkdownDescription: "Either the unique id of the resource, or the URL-friendly key of the resource that you want to create role derivation for.",
+		Required:            true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["role"] = schema.StringAttribute{
-		Required: true,
+		MarkdownDescription: "The role that the user will derive.",
+		Required:            true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["on_resource"] = schema.StringAttribute{
-		Required: true,
+		MarkdownDescription: "The resource that the user will derive the role on.",
+		Required:            true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["to_role"] = schema.StringAttribute{
-		Required: true,
+		MarkdownDescription: "The role that you want to create role derivation for.",
+		Required:            true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["linked_by"] = schema.StringAttribute{
-		Required: true,
+		MarkdownDescription: "The relation that links the resource to the role.",
+		Required:            true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 
 	resp.Schema = schema.Schema{
-		Attributes: attributes,
+		Attributes:          attributes,
+		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Implicit-Grants/operation/create_implicit_grant) for more information on role derivations.",
 	}
 }
 

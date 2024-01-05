@@ -38,16 +38,17 @@ func (r *RoleResource) Metadata(_ context.Context, request resource.MetadataRequ
 func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := common.CreateBaseResourceSchema()
 	attributes["permissions"] = schema.SetAttribute{
-		ElementType: types.StringType,
-
-		Computed: true,
-		Optional: true,
+		ElementType:         types.StringType,
+		MarkdownDescription: "list of action keys that define what actions this resource role is permitted to do",
+		Computed:            true,
+		Optional:            true,
 		PlanModifiers: []planmodifier.Set{
 			setplanmodifier.UseStateForUnknown(),
 		},
 	}
 	attributes["extends"] = schema.SetAttribute{
-		ElementType: types.StringType,
+		MarkdownDescription: "list of role keys that define what roles this role extends. In other words: this role will automatically inherit all the permissions of the given roles in this list.",
+		ElementType:         types.StringType,
 		PlanModifiers: []planmodifier.Set{
 			setplanmodifier.UseStateForUnknown(),
 		},
@@ -55,17 +56,20 @@ func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		Optional: true,
 	}
 	attributes["resource"] = schema.StringAttribute{
-		Optional: true,
+		MarkdownDescription: "The unique resource key that the role belongs to.",
+		Optional:            true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["resource_id"] = schema.StringAttribute{
-		Computed: true,
+		MarkdownDescription: "The unique resource ID that the role belongs to.",
+		Computed:            true,
 	}
 
 	resp.Schema = schema.Schema{
-		Attributes: attributes,
+		Attributes:          attributes,
+		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource) for more information about roles.\n You can also read about Resource Roles [here](https://api.permit.io/v2/redoc#tag/Resource-Roles/operation/create_resource_role).",
 	}
 }
 

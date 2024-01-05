@@ -49,45 +49,53 @@ func (c *ConditionSetRuleResource) Metadata(_ context.Context, req resource.Meta
 
 func (c *ConditionSetRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "See [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Set-Rules) for more information on condition sets rules.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Unique id of the condition set rule",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"organization_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Unique id of the organization that owns the condition set rule",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"project_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Unique id of the project that owns the condition set rule",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"environment_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Unique id of the environment that owns the condition set rule",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"user_set": schema.StringAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "The userset that will be given permission, i.e: all the users matching this rule will be given the specified permission",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"permission": schema.StringAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "The permission that will be granted to the userset on the resourceset. The permission can be either a resource action id, or {resource_key}:{action_key}, i.e: the \"permission name\".",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"resource_set": schema.StringAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "The resourceset that represents the resources that are granted for access, i.e: all the resources matching this rule can be accessed by the userset to perform the granted permission",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

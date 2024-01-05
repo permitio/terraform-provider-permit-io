@@ -37,27 +37,32 @@ func (c *RelationResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 	attributes := common.CreateBaseResourceSchema()
 
 	attributes["subject_resource"] = schema.StringAttribute{
-		Required: true,
+		Required:            true,
+		MarkdownDescription: "The subject resource ID or key",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["object_resource"] = schema.StringAttribute{
-		Required: true,
+		Required:            true,
+		MarkdownDescription: "The object resource ID or key",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 
 	attributes["subject_resource_id"] = schema.StringAttribute{
-		Computed: true,
+		MarkdownDescription: "The subject resource ID",
+		Computed:            true,
 	}
 	attributes["object_resource_id"] = schema.StringAttribute{
-		Computed: true,
+		MarkdownDescription: "The object resource ID",
+		Computed:            true,
 	}
 
 	response.Schema = schema.Schema{
-		Attributes: attributes,
+		Attributes:          attributes,
+		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Resource-Relations/operation/create_resource_relation) for more information about Relations",
 	}
 }
 

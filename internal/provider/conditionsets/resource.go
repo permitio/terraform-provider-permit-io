@@ -76,7 +76,8 @@ func (c *ResourceSetResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 
 	resp.Schema = schema.Schema{
-		Attributes: attributes,
+		MarkdownDescription: "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
+		Attributes:          attributes,
 	}
 }
 
@@ -84,7 +85,8 @@ func (c *UserSetResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	attributes := c.baseAttributes()
 
 	resp.Schema = schema.Schema{
-		Attributes: attributes,
+		MarkdownDescription: "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
+		Attributes:          attributes,
 	}
 }
 
@@ -95,44 +97,53 @@ func (c *conditionSetResource) Schema(_ context.Context, _ resource.SchemaReques
 func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"id": schema.StringAttribute{
-			Computed: true,
+			Computed:            true,
+			MarkdownDescription: "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.\n\n",
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseStateForUnknown(),
 			},
 		},
 		"organization_id": schema.StringAttribute{
-			Computed: true,
+			Computed:            true,
+			MarkdownDescription: "The id of the organization to which the condition set belongs.",
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseStateForUnknown(),
 			},
 		},
 		"project_id": schema.StringAttribute{
-			Computed: true,
+			MarkdownDescription: "The id of the project to which the condition set belongs.",
+			Computed:            true,
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseStateForUnknown(),
 			},
 		},
 		"environment_id": schema.StringAttribute{
-			Computed: true,
+			MarkdownDescription: "The id of the environment to which the condition set belongs.",
+			Computed:            true,
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseStateForUnknown(),
 			},
 		},
 		"key": schema.StringAttribute{
-			Required: true,
+			MarkdownDescription: "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.",
+			Required:            true,
 		},
 		"name": schema.StringAttribute{
-			Required: true,
+			MarkdownDescription: "A descriptive name for the set, i.e: 'US based employees' or 'Users behind VPN'",
+			Required:            true,
 		},
 		"description": schema.StringAttribute{
-			Optional: true,
-			Computed: true,
+			MarkdownDescription: "an optional longer description of the set",
+			Optional:            true,
+			Computed:            true,
 		},
 		"conditions": schema.StringAttribute{
-			Required: true,
+			MarkdownDescription: "a boolean expression that consists of multiple conditions, with and/or logic.",
+			Required:            true,
 		},
 		"resource": schema.StringAttribute{
-			Optional: true,
+			MarkdownDescription: "The resource id to which the condition set applies. This is only required for resource sets.",
+			Optional:            true,
 		},
 	}
 }
