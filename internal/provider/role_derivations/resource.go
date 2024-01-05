@@ -93,6 +93,7 @@ func (r *RoleDerivationResource) Create(ctx context.Context, request resource.Cr
 			"Unable to create role derivation",
 			fmt.Errorf("unable to create role derivation: %w", err).Error(),
 		)
+		return
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, roleRead)...)
@@ -110,7 +111,10 @@ func (r *RoleDerivationResource) Read(ctx context.Context, request resource.Read
 	reality, err := r.client.Read(ctx, model)
 
 	if err != nil {
-		response.State.RemoveResource(ctx)
+		response.Diagnostics.AddError(
+			"Unable to read role derivation",
+			fmt.Errorf("unable to read role derivation: %w", err).Error(),
+		)
 		return
 	}
 
