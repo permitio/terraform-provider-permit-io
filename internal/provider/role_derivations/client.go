@@ -63,7 +63,7 @@ func (c *apiClient) Read(ctx context.Context, plan roleDerivationModel) (roleDer
 
 func (c *apiClient) Delete(ctx context.Context, plan roleDerivationModel) error {
 	derivedRuleDelete := models.DerivedRoleRuleDelete{
-		Role:             plan.ToRole.ValueString(),
+		Role:             plan.Role.ValueString(),
 		OnResource:       plan.OnResource.ValueString(),
 		LinkedByRelation: plan.LinkedByRelation.ValueString(),
 	}
@@ -71,6 +71,6 @@ func (c *apiClient) Delete(ctx context.Context, plan roleDerivationModel) error 
 	return c.client.Api.ImplicitGrants.Delete(
 		ctx,
 		plan.Resource.ValueString(),
-		plan.Role.ValueString(),
+		plan.ToRole.ValueString(),
 		derivedRuleDelete)
 }
