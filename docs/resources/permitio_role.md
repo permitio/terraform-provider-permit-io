@@ -3,12 +3,14 @@
 page_title: "permitio_role Resource - terraform-provider-permit-io"
 subcategory: ""
 description: |-
-  
+  See the documentation https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource for more information about roles.
+   You can also read about Resource Roles here https://api.permit.io/v2/redoc#tag/Resource-Roles/operation/create_resource_role.
 ---
 
 # permitio_role (Resource)
 
-
+See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource) for more information about roles.
+ You can also read about Resource Roles [here](https://api.permit.io/v2/redoc#tag/Resource-Roles/operation/create_resource_role).
 
 
 
@@ -17,22 +19,22 @@ description: |-
 
 ### Required
 
-- `key` (String)
-- `name` (String)
+- `key` (String) The key. This is a unique identifier.
+- `name` (String) The name. This is a human-readable name for the object.
 
 ### Optional
 
-- `description` (String)
-- `extends` (Set of String)
-- `permissions` (Set of String)
-- `resource` (String)
-- `updated_at` (String)
+- `description` (String) The description. This is a human-readable description for the object.
+- `extends` (Set of String) list of role keys that define what roles this role extends. In other words: this role will automatically inherit all the permissions of the given roles in this list.
+- `permissions` (Set of String) list of action keys that define what actions this resource role is permitted to do
+- `resource` (String) The unique resource key that the role belongs to.
+- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ### Read-Only
 
-- `created_at` (String)
-- `environment_id` (String)
-- `id` (String) The ID of this resource.
-- `organization_id` (String)
-- `project_id` (String)
-- `resource_id` (String)
+- `created_at` (String) The creation timestamp. This is a timestamp for when the object was created.
+- `environment_id` (String) The environment ID. This is a unique identifier for the environment.
+- `id` (String) The resource ID. This is a unique identifier for the resource.
+- `organization_id` (String) The organization ID. This is a unique identifier for the organization.
+- `project_id` (String) The project ID. This is a unique identifier for the project.
+- `resource_id` (String) The unique resource ID that the role belongs to.
