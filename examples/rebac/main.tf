@@ -11,8 +11,8 @@ provider "permitio" {
 }
 
 resource "permitio_resource" "file" {
-  key  = "file"
-  name = "file"
+  key     = "file"
+  name    = "file"
   actions = {
     "create" = {
       "name" = "Create"
@@ -31,8 +31,8 @@ resource "permitio_resource" "file" {
 }
 
 resource "permitio_resource" "folder" {
-  key  = "folder"
-  name = "folder"
+  key     = "folder"
+  name    = "folder"
   actions = {
     "create" = {
       "name" = "Create"
@@ -64,7 +64,7 @@ resource "permitio_role" "fileAdmin" {
   permissions = ["read", "create", "update", "delete"]
   extends     = []
   resource    = permitio_resource.file.key
-  depends_on = [
+  depends_on  = [
     permitio_resource.file,
   ]
 }
@@ -76,7 +76,7 @@ resource "permitio_role" "folderAdmin" {
   permissions = ["create", "list", "modify", "delete"]
   extends     = []
   resource    = permitio_resource.folder.key
-  depends_on = [
+  depends_on  = [
     permitio_resource.folder,
   ]
 }
