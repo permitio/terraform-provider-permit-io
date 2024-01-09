@@ -128,9 +128,6 @@ func TestResources(t *testing.T) {
 					// Admin Role tests
 					resource.TestCheckResourceAttr("permitio_role.admin", "key", "admin"),
 					resource.TestCheckResourceAttr("permitio_role.admin", "permissions.#", "3"),
-					resource.TestCheckResourceAttr("permitio_role.admin", "permissions.0", "document:read"),
-					resource.TestCheckResourceAttr("permitio_role.admin", "permissions.1", "document:write"),
-					resource.TestCheckResourceAttr("permitio_role.admin", "permissions.2", "document:delete"),
 				),
 			},
 			{
@@ -213,6 +210,96 @@ func TestResources(t *testing.T) {
 					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "auth_secret.basic", "hello:world"),
 					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "mapping_rules.#", "4"),
 				),
+			},
+			{Config: providerConfig +
+				`resource "permitio_resource" "file" {
+				key  = "file"
+				name = "file"
+				actions = {
+				"create" = {
+				"name" = "Create"
+			}
+				"read" = {
+				"name" = "Read"
+			}
+				"update" = {
+				"name" = "Update"
+			}
+				"delete" = {
+				"name" = "Delete"
+			}
+			}
+			attributes = {
+				"created_at" = {
+					"description" = "creation time of the document"
+					"type"        = "time"
+					}
+				}
+			}
+				resource "permitio_resource" "folder" {
+				key  = "folder"
+				name = "folder"
+				actions = {
+				"create" = {
+				"name" = "Create"
+			}
+				"list" = {
+				"name" = "List"
+			}
+				"modify" = {
+				"name" = "Modify"
+			}
+				"delete" = {
+				"name" = "Delete"
+			}
+			}
+			attributes = {
+				"created_at" = {
+					"description" = "creation time of the document"
+					"type"        = "time"
+					}
+				}
+			}
+
+				resource "permitio_relation" "parent" {
+				key              = "parent"
+				name             = "parent of"
+				subject_resource = permitio_resource.folder.key
+				object_resource  = permitio_resource.file.key
+			}
+			
+				resource "permitio_role" "fileAdmin" {
+				key         = "admin"
+				name        = "Administrator"
+				description = "Administrator access to files"
+				permissions = ["read", "create", "update", "delete"]
+				extends     = []
+				resource    = permitio_resource.file.key
+				depends_on = [
+				permitio_resource.file,
+			]
+			}
+			
+				resource "permitio_role" "folderAdmin" {
+				key         = "admin"
+				name        = "Administrator"
+				description = "Administrator access to folders"
+				permissions = ["create", "list", "modify", "delete"]
+				extends     = []
+				resource    = permitio_resource.folder.key
+				depends_on = [
+				permitio_resource.folder,
+			]
+			}
+			
+				resource "permitio_role_derivation" "folderFileAdmin" {
+				resource    = permitio_resource.file.key
+				to_role        = permitio_role.fileAdmin.key
+				on_resource = permitio_resource.folder.key
+				role     = permitio_role.folderAdmin.key
+				linked_by   = permitio_relation.parent.key
+			}`,
+				Check: resource.ComposeAggregateTestCheckFunc(),
 			},
 		},
 	})

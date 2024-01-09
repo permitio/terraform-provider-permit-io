@@ -3,12 +3,12 @@
 page_title: "permitio_condition_set_rule Resource - terraform-provider-permit-io"
 subcategory: ""
 description: |-
-  
+  See our documentation https://api.permit.io/v2/redoc#tag/Condition-Set-Rules for more information on condition sets rules.
 ---
 
 # permitio_condition_set_rule (Resource)
 
-
+See [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Set-Rules) for more information on condition sets rules.
 
 
 
@@ -17,13 +17,13 @@ description: |-
 
 ### Required
 
-- `permission` (String)
-- `resource_set` (String)
-- `user_set` (String)
+- `permission` (String) The permission that will be granted to the userset on the resourceset. The permission can be either a resource action id, or {resource_key}:{action_key}, i.e: the "permission name".
+- `resource_set` (String) The resourceset that represents the resources that are granted for access, i.e: all the resources matching this rule can be accessed by the userset to perform the granted permission
+- `user_set` (String) The userset that will be given permission, i.e: all the users matching this rule will be given the specified permission
 
 ### Read-Only
 
-- `environment_id` (String)
-- `id` (String) The ID of this resource.
-- `organization_id` (String)
-- `project_id` (String)
+- `environment_id` (String) Unique id of the environment that owns the condition set rule
+- `id` (String) Unique id of the condition set rule
+- `organization_id` (String) Unique id of the organization that owns the condition set rule
+- `project_id` (String) Unique id of the project that owns the condition set rule
