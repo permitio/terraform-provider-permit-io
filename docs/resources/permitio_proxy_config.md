@@ -3,12 +3,12 @@
 page_title: "permitio_proxy_config Resource - terraform-provider-permit-io"
 subcategory: ""
 description: |-
-  
+  See the documentation https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config for more information about proxy configs.
 ---
 
 # permitio_proxy_config (Resource)
 
-
+See [the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config) for more information about proxy configs.
 
 
 
@@ -17,18 +17,26 @@ description: |-
 
 ### Required
 
-- `auth_mechanism` (String)
-- `auth_secret` (Attributes) (see [below for nested schema](#nestedatt--auth_secret))
-- `key` (String)
-- `mapping_rules` (Attributes List) (see [below for nested schema](#nestedatt--mapping_rules))
-- `name` (String)
+- `auth_mechanism` (String) Default: "Bearer"
+Enum: "Bearer" "Basic" "Headers"
+Proxy config auth mechanism will define the authentication mechanism that will be used to authenticate the request.
+
+Bearer injects the secret into the Authorization header as a Bearer token,
+
+Basic injects the secret into the Authorization header as a Basic user:password,
+
+Headers injects plain headers into the request.
+- `auth_secret` (Attributes) Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service. (see [below for nested schema](#nestedatt--auth_secret))
+- `key` (String) Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.
+- `mapping_rules` (Attributes List) Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method. (see [below for nested schema](#nestedatt--mapping_rules))
+- `name` (String) The name of the proxy config, for example: 'Stripe API
 
 ### Read-Only
 
-- `environment_id` (String)
-- `id` (String) The ID of this resource.
-- `organization_id` (String)
-- `project_id` (String)
+- `environment_id` (String) Unique id of the environment that owns the proxy config
+- `id` (String) Unique id of the proxy config
+- `organization_id` (String) Unique id of the organization that owns the proxy config
+- `project_id` (String) Unique id of the project that owns the proxy config
 
 <a id="nestedatt--auth_secret"></a>
 ### Nested Schema for `auth_secret`

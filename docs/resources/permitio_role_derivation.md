@@ -3,12 +3,12 @@
 page_title: "permitio_role_derivation Resource - terraform-provider-permit-io"
 subcategory: ""
 description: |-
-  
+  See the documentation https://api.permit.io/v2/redoc#tag/Implicit-Grants/operation/create_implicit_grant for more information on role derivations.
 ---
 
 # permitio_role_derivation (Resource)
 
-
+See [the documentation](https://api.permit.io/v2/redoc#tag/Implicit-Grants/operation/create_implicit_grant) for more information on role derivations.
 
 
 
@@ -17,8 +17,8 @@ description: |-
 
 ### Required
 
-- `linked_by` (String)
-- `on_resource` (String)
-- `resource` (String)
-- `role` (String)
-- `to_role` (String)
+- `linked_by` (String) The relation that links the resource to the role.
+- `on_resource` (String) The resource that the user will derive the role on.
+- `resource` (String) Either the unique id of the resource, or the URL-friendly key of the resource that you want to create role derivation for.
+- `role` (String) The role that the user will derive.
+- `to_role` (String) The role that you want to create role derivation for.
