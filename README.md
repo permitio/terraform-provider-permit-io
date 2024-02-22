@@ -53,6 +53,7 @@ resource "permitio_resource" "document" {
       "description" : "Write a document",
     }
   }
+  attributes = {}
 }
 ```
 
