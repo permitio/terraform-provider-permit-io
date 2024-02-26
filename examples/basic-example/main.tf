@@ -23,7 +23,7 @@ resource "permitio_resource" "document" {
       "name" = "write"
     }
     "delete" = {
-      "name"        = "write"
+      "name"        = "delete"
       "description" = "delete a document"
     }
   }
