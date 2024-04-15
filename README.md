@@ -1,6 +1,5 @@
+![TF.png](imgs/TF.png)
 # Permit.io Terraform Provider
-
-![tf.png](imgs/tf-0.png)
 
 Permit.io is a cloud-based authorization service that allows you to define and manage permissions for your application.
 In order to make it easier and safer to manage your objects and policies in Permit.io, we have created a Terraform provider.
