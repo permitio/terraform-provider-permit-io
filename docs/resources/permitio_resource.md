@@ -3,12 +3,12 @@
 page_title: "permitio_resource Resource - terraform-provider-permit-io"
 subcategory: ""
 description: |-
-  
+  See the documentation https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource for more information about resources.
 ---
 
 # permitio_resource (Resource)
 
-
+See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource) for more information about resources.
 
 
 
@@ -17,24 +17,25 @@ description: |-
 
 ### Required
 
-- `actions` (Attributes Map) (see [below for nested schema](#nestedatt--actions))
-- `key` (String)
-- `name` (String)
+- `actions` (Attributes Map) A actions definition block, typically contained within a resource type definition block.
+    The actions represents the ways you can interact with a protected resource. (see [below for nested schema](#nestedatt--actions))
+- `key` (String) A URL-friendly name of the resource (i.e: slug). You will be able to query later using this key instead of the id (UUID) of the resource.
+- `name` (String) The name of the resource
 
 ### Optional
 
-- `attributes` (Attributes Map) (see [below for nested schema](#nestedatt--attributes))
-- `description` (String)
-- `updated_at` (String)
-- `urn` (String)
+- `attributes` (Attributes Map) Attributes that each resource of this type defines, and can be used in your ABAC policies. (see [below for nested schema](#nestedatt--attributes))
+- `description` (String) An optional longer description of what this resource respresents in your system
+- `updated_at` (String) Timestamp when the resource was last updated
+- `urn` (String) The URN (Uniform Resource Name) of the resource
 
 ### Read-Only
 
-- `created_at` (String)
-- `environment_id` (String)
-- `id` (String) The ID of this resource.
-- `organization_id` (String)
-- `project_id` (String)
+- `created_at` (String) Timestamp when the resource was created
+- `environment_id` (String) Unique id of the environment that owns the resource
+- `id` (String) Unique id of the resource
+- `organization_id` (String) Unique id of the organization that owns the resource
+- `project_id` (String) Unique id of the project that owns the resource
 
 <a id="nestedatt--actions"></a>
 ### Nested Schema for `actions`

@@ -3,12 +3,12 @@
 page_title: "permitio_user_set Resource - terraform-provider-permit-io"
 subcategory: ""
 description: |-
-  
+  See the our documentation https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set for more information on condition sets.
 ---
 
 # permitio_user_set (Resource)
 
-
+See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.
 
 
 
@@ -17,18 +17,18 @@ description: |-
 
 ### Required
 
-- `conditions` (String)
-- `key` (String)
-- `name` (String)
+- `conditions` (String) a boolean expression that consists of multiple conditions, with and/or logic.
+- `key` (String) A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.
+- `name` (String) A descriptive name for the set, i.e: 'US based employees' or 'Users behind VPN'
 
 ### Optional
 
-- `description` (String)
-- `resource` (String)
+- `description` (String) an optional longer description of the set
+- `resource` (String) The resource id to which the condition set applies. This is only required for resource sets.
 
 ### Read-Only
 
-- `environment_id` (String)
-- `id` (String) The ID of this resource.
-- `organization_id` (String)
-- `project_id` (String)
+- `environment_id` (String) The id of the environment to which the condition set belongs.
+- `id` (String) A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.
+- `organization_id` (String) The id of the organization to which the condition set belongs.
+- `project_id` (String) The id of the project to which the condition set belongs.
