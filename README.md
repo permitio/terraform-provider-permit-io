@@ -4,12 +4,10 @@
 
 Permit.io is a cloud-based authorization service that allows you to define and manage permissions for your application.
 In order to make it easier and safer to manage your objects and policies in Permit.io, we have created a Terraform provider.
- 
-
 
 _This provider repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
 
-## Usage 
+## Usage
 
 The [examples directory](./examples) contains a number of examples of how to use the provider.
 
@@ -26,8 +24,8 @@ terraform {
 }
 ```
 
-
 ### Configure the Provider
+
 ```hcl
 provider "permitio" {
     api_url = "https://api.permit.io" # Defaults to - "https://api.permit.io - Can be set as an environment variable PERMITIO_API_URL
@@ -38,6 +36,7 @@ provider "permitio" {
 ### Creating Objects in Permitio
 
 #### Create a Resource
+
 ```hcl
 resource "permitio_resource" "document" {
   key         = "document"
@@ -74,6 +73,15 @@ resource "permitio_role" "reader" {
 }
 ```
 
+#### Create a User Attribute
+
+```hcl
+resource "permitio_user_attribute" "department" {
+  key         = "department"
+  description = "The department of the user"
+  type        = "string"
+}
+```
 
 ## Requirements
 
@@ -118,7 +126,7 @@ To generate or update documentation, run `go generate`.
 
 In order to run the full suite of Acceptance tests, run `make testacc`.
 
-*Note:* Acceptance tests create real resources, and often cost money to run.
+_Note:_ Acceptance tests create real resources, and often cost money to run.
 
 ```shell
 make testacc
