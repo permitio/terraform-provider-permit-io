@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
@@ -55,6 +56,9 @@ func (c *UserAttributeResource) Schema(_ context.Context, _ resource.SchemaReque
 	attributes["type"] = schema.StringAttribute{
 		Required:            true,
 		MarkdownDescription: "The type of the attribute",
+		Validators: []validator.String{
+			common.AttributeTypeValidator{},
+		},
 	}
 	attributes["description"] = schema.StringAttribute{
 		Required:            true,

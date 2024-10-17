@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -10,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -141,7 +143,7 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 						"type": schema.StringAttribute{
 							Required: true,
 							Validators: []validator.String{
-								attributeTypeValidator{},
+								common.AttributeTypeValidator{},
 							},
 						},
 						"description": schema.StringAttribute{
