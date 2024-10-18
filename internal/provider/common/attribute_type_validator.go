@@ -35,7 +35,7 @@ func (a AttributeTypeValidator) ValidateString(ctx context.Context, request vali
 	value := request.ConfigValue.ValueString()
 	if !models.AttributeType(value).IsValid() {
 		response.Diagnostics.AddError("Invalid resource attribute type",
-			fmt.Sprintf("Invalid resource attribute type: %s", value),
+			fmt.Sprintf("Invalid resource attribute type: %s. Valid types are: %v", value, models.AllowedAttributeTypeEnumValues),
 		)
 		return
 	}
