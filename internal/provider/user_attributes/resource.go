@@ -2,12 +2,10 @@ package user_attributes
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
@@ -80,8 +78,6 @@ func (c *UserAttributeResource) Create(ctx context.Context, request resource.Cre
 		return
 	}
 
-	tflog.Warn(ctx, fmt.Sprintf("SVANTE: model: %v", model.Type))
-
 	reality, err := c.client.Create(ctx, model)
 
 	if err != nil {
@@ -121,8 +117,6 @@ func (c *UserAttributeResource) Update(ctx context.Context, request resource.Upd
 	var model userAttributeModel
 
 	response.Diagnostics.Append(request.Plan.Get(ctx, &model)...)
-
-	tflog.Warn(ctx, fmt.Sprintf("SVANTE: model: %v", model.Type))
 
 	if response.Diagnostics.HasError() {
 		return
