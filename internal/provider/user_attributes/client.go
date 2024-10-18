@@ -20,9 +20,9 @@ func (c *userAttributesClient) Create(ctx context.Context, plan userAttributeMod
 	}
 
 	attributeCreate := models.ResourceAttributeCreate{}
-	attributeCreate.Key = plan.Key.ValueString()
-	attributeCreate.Type = *attributeType
-	attributeCreate.Description = plan.Description.ValueStringPointer()
+	attributeCreate.SetKey(plan.Key.ValueString())
+	attributeCreate.SetType(*attributeType)
+	attributeCreate.SetDescription(plan.Description.ValueString())
 
 	createdAttribute, err := c.client.Api.ResourceAttributes.Create(ctx, UserKey, attributeCreate)
 
@@ -48,9 +48,15 @@ func (c *userAttributesClient) Delete(ctx context.Context, key string) error {
 }
 
 func (c *userAttributesClient) Update(ctx context.Context, key string, plan userAttributeModel) (userAttributeModel, error) {
+	attributeType, err := models.NewAttributeTypeFromValue(plan.Type.ValueString())
+
+	if err != nil {
+		return userAttributeModel{}, err
+	}
+
 	attributeUpdate := models.ResourceAttributeUpdate{}
-	attributeUpdate.SetType(models.AttributeType(plan.Type.String()))
-	attributeUpdate.Description = plan.Description.ValueStringPointer()
+	attributeUpdate.SetType(*attributeType)
+	attributeUpdate.SetDescription(plan.Description.ValueString())
 
 	updatedAttribute, err := c.client.Api.ResourceAttributes.Update(ctx, UserKey, key, attributeUpdate)
 

@@ -122,21 +122,10 @@ func (c *UserAttributeResource) Update(ctx context.Context, request resource.Upd
 		return
 	}
 
-	// First, delete the existing user attribute
-	err := c.client.Delete(ctx, model.Key.ValueString())
+	reality, err := c.client.Update(ctx, model.Id.ValueString(), model)
 	if err != nil {
 		response.Diagnostics.AddError(
-			"Failed deleting user attribute",
-			err.Error(),
-		)
-		return
-	}
-
-	// Then, create the user attribute with the updated information
-	reality, err := c.client.Create(ctx, model)
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Failed creating user attribute",
+			"Failed updating user attribute",
 			err.Error(),
 		)
 		return
