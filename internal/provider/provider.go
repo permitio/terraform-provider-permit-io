@@ -5,6 +5,10 @@ package provider
 
 import (
 	"context"
+	"os"
+	"strconv"
+	"time"
+
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
@@ -16,9 +20,7 @@ import (
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/role_derivations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
-	"os"
-	"strconv"
-	"time"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/user_attributes"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -184,6 +186,7 @@ func (p *PermitProvider) Resources(_ context.Context) []func() resource.Resource
 		proxy_configs.NewProxyConfigResource,
 		relations.NewRelationResource,
 		role_derivations.NewRoleDerivationResource,
+		user_attributes.NewUserAttributeResource,
 	}
 }
 
