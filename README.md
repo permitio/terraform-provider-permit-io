@@ -7,6 +7,12 @@ In order to make it easier and safer to manage your objects and policies in Perm
 
 _This provider repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
 
+## Documentation
+
+- Use our public docs site for more info - https://docs.permit.io
+- This Terraform provider has an auto-generated documentation site - https://registry.terraform.io/providers/permitio/permit-io/latest/docs
+
+
 ## Usage
 
 The [examples directory](./examples) contains a number of examples of how to use the provider.
