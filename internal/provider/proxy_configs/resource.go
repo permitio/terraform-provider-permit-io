@@ -170,12 +170,12 @@ func (c *proxyConfigResource) ValidateConfig(ctx context.Context, req resource.V
 		return
 	}
 
-	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.BEARER)) && data.AuthSecret.Basic.IsNull() {
+	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.BEARER)) && data.AuthSecret.Bearer.IsNull() {
 		resp.Diagnostics.AddError("auth_mechanism was set to `bearer` but auth_secret.bearer is not set", "")
 		return
 	}
 
-	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.HEADERS)) && data.AuthSecret.Basic.IsNull() {
+	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.HEADERS)) && data.AuthSecret.Headers.IsNull() {
 		resp.Diagnostics.AddError("auth_mechanism was set to `headers` but auth_secret.headers is not set", "")
 		return
 	}
