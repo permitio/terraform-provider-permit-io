@@ -175,7 +175,7 @@ func (c *proxyConfigResource) ValidateConfig(ctx context.Context, req resource.V
 		return
 	}
 
-	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.HEADERS)) && data.AuthSecret.Headers.IsNull() {
+	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.HEADERS)) && len(data.AuthSecret.Headers) == 0 {
 		resp.Diagnostics.AddError("auth_mechanism was set to `headers` but auth_secret.headers is not set", "")
 		return
 	}
