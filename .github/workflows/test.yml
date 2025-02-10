@@ -81,5 +81,5 @@ jobs:
           TF_LOG: "DEBUG"
           PERMITIO_API_KEY: ${{ fromJson(secrets.PERMITIO_API_KEY)[matrix.terraform] }}
           PERMITIO_TIMEOUT: 40
-        run: go test -v -cover ./internal/provider/
+        run: go test -v -count=3 -cover ./internal/provider/
         timeout-minutes: 10
