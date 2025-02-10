@@ -56,7 +56,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       fail-fast: false
-      max-parallel: 1 # Run tests in parallel cause to 500 internal error on Delete resource part
+      max-parallel: 1
       matrix:
         # list whatever Terraform versions here you would like to support
         terraform:
