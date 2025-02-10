@@ -78,6 +78,7 @@ jobs:
 
       - env:
           TF_ACC: "1"
+          TF_LOG: "DEBUG"
           PERMITIO_API_KEY: ${{ fromJson(secrets.PERMITIO_API_KEY)[matrix.terraform] }}
           PERMITIO_TIMEOUT: 20
         run: go test -v -cover ./internal/provider/
