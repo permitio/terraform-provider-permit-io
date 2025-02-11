@@ -76,9 +76,10 @@ jobs:
           terraform_wrapper: false
       - run: go mod download
 
-      - env:
+      - name: Run Tests
+        env:
           TF_ACC: "1"
-          PERMITIO_API_KEY: ${{ fromJson(secrets.PERMITIO_API_KEY)[matrix.terraform] }}
+          PERMITIO_API_KEY: ${{ secrets['PERMITIO_API_KEY_' + matrix.terraform.replace('.', '_')] }}
           PERMITIO_TIMEOUT: 20
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 10
