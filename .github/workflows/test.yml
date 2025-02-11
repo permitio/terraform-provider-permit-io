@@ -82,3 +82,4 @@ jobs:
           PERMITIO_TIMEOUT: 20
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 10
+
