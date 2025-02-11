@@ -79,7 +79,7 @@ jobs:
       - name: Run Tests
         env:
           TF_ACC: "1"
-          PERMITIO_API_KEY: ${{ secrets['PERMITIO_API_KEY_' + matrix.terraform.replace('.', '_')] }}
+          PERMITIO_API_KEY: ${{ secrets['PERMITIO_API_KEY_' + matrix.terraform] }}
           PERMITIO_TIMEOUT: 20
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 10
