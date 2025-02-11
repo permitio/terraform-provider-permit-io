@@ -32,7 +32,7 @@ jobs:
       - run: go mod download
       - uses: golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc # v3.7.0
         with:
-          cache: false
+          version: latest
 
   generate:
     runs-on: ubuntu-latest
