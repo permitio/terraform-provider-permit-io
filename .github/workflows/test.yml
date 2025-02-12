@@ -24,18 +24,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      - uses: actions/checkout@v4.1.1
+      - uses: actions/setup-go@v5.0.0
         with:
           go-version-file: 'go.mod'
       - run: go mod download
-      - uses: golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc # v3.7.0
+      - uses: golangci/golangci-lint-action@v6.3.2
 
   generate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      - uses: actions/checkout@v4.1.1
+      - uses: actions/setup-go@v5.0.0
         with:
           go-version-file: 'go.mod'
           cache: true
@@ -65,20 +65,56 @@ jobs:
           - '1.3.*'
           - '1.4.*'
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      - uses: actions/checkout@v4.1.1
+      - uses: actions/setup-go@v5.0.0
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2.0.3
+      - uses: hashicorp/setup-terraform@v2.0.3
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
 
-      - env:
+      - name: Run tests with Terraform 1.0
+        if: matrix.terraform == '1.0.*'
+        env:
           TF_ACC: "1"
-          PERMITIO_API_KEY: ${{ fromJson(secrets.PERMITIO_API_KEY)[matrix.terraform] }}
+          PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_0 }}
           PERMITIO_TIMEOUT: 20
         run: go test -v -cover ./internal/provider/
-        timeout-minutes: 10
+
+      - name: Run tests with Terraform 1.1
+        if: matrix.terraform == '1.1.*'
+        env:
+          TF_ACC: "1"
+          PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_1 }}
+          PERMITIO_TIMEOUT: 20
+        run: go test -v -cover ./internal/provider/
+
+      - name: Run tests with Terraform 1.2
+        if: matrix.terraform == '1.2.*'
+        env:
+          TF_ACC: "1"
+          PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_2 }}
+          PERMITIO_TIMEOUT: 20
+        run: go test -v -cover ./internal/provider/
+
+      - name: Run tests with Terraform 1.3
+        if: matrix.terraform == '1.3.*'
+        env:
+          TF_ACC: "1"
+          PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_3 }}
+          PERMITIO_TIMEOUT: 20
+        run: go test -v -cover ./internal/provider/
+
+      - name: Run tests with Terraform 1.4
+        if: matrix.terraform == '1.4.*'
+        env:
+          TF_ACC: "1"
+          PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_4 }}
+          PERMITIO_TIMEOUT: 20
+        run: go test -v -cover ./internal/provider/
+
+        
+
