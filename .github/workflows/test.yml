@@ -24,18 +24,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4.2.2
-      - uses: actions/setup-go@v5.3.0
+      - uses: actions/checkout@v4.1.1
+      - uses: actions/setup-go@v5.0.0
         with:
           go-version-file: 'go.mod'
       - run: go mod download
-      - uses: golangci/golangci-lint-action@v6.3.2
+      - uses: golangci/golangci-lint-action@v3.7.0
 
   generate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
-      - uses: actions/setup-go@v5.3.0
+      - uses: actions/checkout@v4.1.1
+      - uses: actions/setup-go@v5.0.0
         with:
           go-version-file: 'go.mod'
           cache: true
