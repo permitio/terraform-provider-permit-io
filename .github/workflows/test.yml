@@ -29,7 +29,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - run: go mod download
-      - uses: golangci/golangci-lint-action@v4.0.1
+      - uses: golangci/golangci-lint-action@v6.1.1
 
   generate:
     runs-on: ubuntu-latest
