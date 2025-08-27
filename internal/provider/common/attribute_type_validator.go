@@ -23,7 +23,7 @@ func (a AttributeTypeValidator) ValidateString(ctx context.Context, request vali
 	if request.ConfigValue.IsUnknown() {
 		return
 	}
-	
+
 	if request.ConfigValue.IsNull() {
 		response.Diagnostics.AddError("Invalid resource attribute type",
 			fmt.Sprintf("Invalid null resource attribute type: %s", request.Path.String()),
