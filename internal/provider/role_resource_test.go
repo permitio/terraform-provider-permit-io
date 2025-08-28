@@ -180,6 +180,12 @@ func TestResources(t *testing.T) {
 						},
 						{
 						  url         = "https://example.com/documents/{project_id}"
+						  http_method = "delete"
+						  resource    = "document-%s"
+						  action      = "delete"
+						},
+						{
+						  url         = "https://example.com/documents/{project_id}"
 						  http_method = "get"
 						  resource    = "document-%s"
 						  action      = "read"
@@ -192,16 +198,7 @@ func TestResources(t *testing.T) {
 						  headers = {
 							"x-update-id" : "foaz"
 						  }
-						},
-						{
-						  url         = "https://example.com/documents/{project_id}"
-						  http_method = "delete"
-						  resource    = "document-%s"
-						  action      = "delete"
 						}
-					  ]
-					  depends_on = [
-						permitio_resource.document
 					  ]
 				}`, testID, testID, testID, testID, testID),
 				Check: resource.ComposeAggregateTestCheckFunc(
