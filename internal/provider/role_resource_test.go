@@ -153,9 +153,6 @@ func TestResources(t *testing.T) {
 					  action      = "delete"
 					}
 				  ]
-				  depends_on = [
-					permitio_resource.document
-				  ]
 				}`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Proxy Config tests
