@@ -135,11 +135,15 @@ func (model *proxyConfigModel) fromProxyConfigRead(sdkModel *models.ProxyConfigR
 
 		if rule.Action != nil {
 			resultRules[i].Action = types.StringPointerValue(rule.Action)
+		} else {
+			resultRules[i].Action = types.StringNull()
 		}
 
 		if rule.Priority != nil {
 			priority := int64(*rule.Priority)
 			resultRules[i].Priority = types.Int64Value(priority)
+		} else {
+			resultRules[i].Priority = types.Int64Null()
 		}
 
 		if rule.Headers != nil && len(*rule.Headers) > 0 {

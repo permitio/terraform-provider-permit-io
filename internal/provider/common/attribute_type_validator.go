@@ -19,12 +19,11 @@ func (a AttributeTypeValidator) MarkdownDescription(ctx context.Context) string 
 }
 
 func (a AttributeTypeValidator) ValidateString(ctx context.Context, request validator.StringRequest, response *validator.StringResponse) {
+	// Skip validation for unknown values (e.g., during plan phase with variables)
 	if request.ConfigValue.IsUnknown() {
-		response.Diagnostics.AddError("Unable to read resource attribute type",
-			fmt.Sprintf("Unable to read resource attribute type: %s", request.Path.String()),
-		)
 		return
 	}
+
 	if request.ConfigValue.IsNull() {
 		response.Diagnostics.AddError("Invalid resource attribute type",
 			fmt.Sprintf("Invalid null resource attribute type: %s", request.Path.String()),
