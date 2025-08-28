@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 )
 
 func TestResources(t *testing.T) {
-	testID := fmt.Sprintf("test-%d", time.Now().Unix())
+	testID := fmt.Sprintf("test-%d-%d", time.Now().Unix(), rand.Intn(10000))
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
