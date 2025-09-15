@@ -136,6 +136,9 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			MarkdownDescription: "an optional longer description of the set",
 			Optional:            true,
 			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
 		},
 		"conditions": schema.StringAttribute{
 			MarkdownDescription: "a boolean expression that consists of multiple conditions, with and/or logic.",
