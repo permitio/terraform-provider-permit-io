@@ -75,10 +75,11 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 	}
 
 	conditionSetCreate := models.ConditionSetCreate{
-		Key:        conditionSetPlan.Key.ValueString(),
-		Name:       conditionSetPlan.Name.ValueString(),
-		Type:       &conditionSetType,
-		Conditions: conditions,
+		Key:         conditionSetPlan.Key.ValueString(),
+		Name:        conditionSetPlan.Name.ValueString(),
+		Description: conditionSetPlan.Description.ValueStringPointer(),
+		Type:        &conditionSetType,
+		Conditions:  conditions,
 	}
 
 	if !conditionSetPlan.Resource.IsNull() {
