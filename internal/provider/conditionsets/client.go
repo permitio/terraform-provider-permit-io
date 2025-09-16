@@ -100,7 +100,10 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 		return err
 	}
 
-	conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
+	// Only update description if API returns one, otherwise preserve the plan value
+	if conditionSetRead.Description != nil {
+		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
+	}
 	conditionSetPlan.Id = types.StringValue(conditionSetRead.Id)
 	conditionSetPlan.OrganizationId = types.StringValue(conditionSetRead.OrganizationId)
 	conditionSetPlan.ProjectId = types.StringValue(conditionSetRead.ProjectId)
@@ -136,7 +139,10 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 	}
 
 	conditionSetPlan.Name = types.StringValue(conditionSetRead.Name)
-	conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
+	// Only update description if API returns one, otherwise preserve the plan value
+	if conditionSetRead.Description != nil {
+		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
+	}
 	conditionSetPlan.EnvironmentId = types.StringValue(conditionSetRead.EnvironmentId)
 	conditionSetPlan.ProjectId = types.StringValue(conditionSetRead.ProjectId)
 	conditionSetPlan.Id = types.StringValue(conditionSetRead.Id)
