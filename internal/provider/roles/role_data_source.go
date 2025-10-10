@@ -75,13 +75,22 @@ func (d *RoleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 				Optional: true,
 				Computed: true,
 			},
-			"permissions": schema.ListAttribute{
+			"permissions": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
+				Computed:    true,
 			},
-			"extends": schema.ListAttribute{
+			"extends": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
+				Computed:    true,
+			},
+			"resource": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"resource_id": schema.StringAttribute{
+				Computed: true,
 			},
 		},
 	}
