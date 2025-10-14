@@ -34,7 +34,7 @@ func tfModelFromTenantRead(m models.TenantRead) tenantModel {
 	r.LastActionAt = types.StringValue(m.LastActionAt.String())
 
 	// Convert attributes map to JSON string
-	if m.Attributes != nil && len(m.Attributes) > 0 {
+	if len(m.Attributes) > 0 {
 		attributesJSON, err := json.Marshal(m.Attributes)
 		if err == nil {
 			r.Attributes = types.StringValue(string(attributesJSON))
