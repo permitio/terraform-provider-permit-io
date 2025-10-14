@@ -89,6 +89,20 @@ resource "permitio_user_attribute" "department" {
 }
 ```
 
+#### Create a Tenant
+
+```hcl
+resource "permitio_tenant" "acme_corp" {
+  key         = "acme-corp"
+  name        = "Acme Corporation"
+  description = "Main tenant for Acme Corporation"
+  attributes  = jsonencode({
+    region = "us-west"
+    tier   = "enterprise"
+  })
+}
+```
+
 ## Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
