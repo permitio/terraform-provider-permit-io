@@ -20,6 +20,7 @@ import (
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/role_derivations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/tenants"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/user_attributes"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -186,6 +187,7 @@ func (p *PermitProvider) Resources(_ context.Context) []func() resource.Resource
 		proxy_configs.NewProxyConfigResource,
 		relations.NewRelationResource,
 		role_derivations.NewRoleDerivationResource,
+		tenants.NewTenantResource,
 		user_attributes.NewUserAttributeResource,
 	}
 }
