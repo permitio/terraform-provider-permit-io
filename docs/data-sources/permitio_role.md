@@ -23,8 +23,9 @@ description: |-
 ### Optional
 
 - `description` (String)
-- `extends` (List of String)
-- `permissions` (List of String)
+- `extends` (Set of String)
+- `permissions` (Set of String)
+- `resource` (String)
 - `updated_at` (String)
 
 ### Read-Only
@@ -34,3 +35,4 @@ description: |-
 - `id` (String) The ID of this resource.
 - `organization_id` (String)
 - `project_id` (String)
+- `resource_id` (String)
