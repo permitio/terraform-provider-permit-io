@@ -148,6 +148,14 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			MarkdownDescription: "The resource id to which the condition set applies. This is only required for resource sets.",
 			Optional:            true,
 		},
+		"parent_id": schema.StringAttribute{
+			MarkdownDescription: "The parent condition set id. Allows creating a nested condition set hierarchy.",
+			Optional:            true,
+			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
 	}
 }
 

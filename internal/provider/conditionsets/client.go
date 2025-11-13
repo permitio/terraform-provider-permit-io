@@ -3,6 +3,7 @@ package conditionsets
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
@@ -18,6 +19,7 @@ type ConditionSetModel struct {
 	Description    types.String `tfsdk:"description"`
 	Conditions     types.String `tfsdk:"conditions"`
 	Resource       types.String `tfsdk:"resource"`
+	ParentId       types.String `tfsdk:"parent_id"`
 }
 
 type ConditionSetClient struct {
@@ -63,6 +65,23 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 		description = types.StringPointerValue(nil)
 	}
 
+	// Handle parent_id: if API returns null, keep it null to maintain consistency
+	var parentId types.String
+	if conditionSet.ParentId != nil {
+		parentIdBytes, err := json.Marshal(conditionSet.ParentId)
+		if err != nil {
+			return ConditionSetModel{}, err
+		}
+		var parentIdStr string
+		err = json.Unmarshal(parentIdBytes, &parentIdStr)
+		if err != nil {
+			return ConditionSetModel{}, err
+		}
+		parentId = types.StringValue(parentIdStr)
+	} else {
+		parentId = types.StringPointerValue(nil)
+	}
+
 	state := ConditionSetModel{
 		Id:             types.StringValue(conditionSet.Id),
 		OrganizationId: types.StringValue(conditionSet.OrganizationId),
@@ -72,6 +91,7 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 		Name:           types.StringValue(conditionSet.Name),
 		Description:    description,
 		Resource:       resource,
+		ParentId:       parentId,
 		Conditions:     types.StringValue(string(conditionsMarshalled)),
 	}
 
@@ -106,6 +126,18 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 		conditionSetCreate.ResourceId = &resourceId
 	}
 
+	if !conditionSetPlan.ParentId.IsNull() {
+		var parentId models.ParentId
+		parentIdStr := conditionSetPlan.ParentId.ValueString()
+		err = json.Unmarshal([]byte(fmt.Sprintf("\"%s\"", parentIdStr)), &parentId)
+
+		if err != nil {
+			return err
+		}
+
+		conditionSetCreate.ParentId = &parentId
+	}
+
 	conditionSetRead, err := c.client.Api.ConditionSets.Create(ctx, conditionSetCreate)
 
 	if err != nil {
@@ -115,6 +147,21 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 	// Only update description if API returns one, otherwise preserve the plan value
 	if conditionSetRead.Description != nil {
 		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
+	}
+	// Handle parent_id from API response
+	if conditionSetRead.ParentId != nil {
+		parentIdBytes, err := json.Marshal(conditionSetRead.ParentId)
+		if err != nil {
+			return err
+		}
+		var parentIdStr string
+		err = json.Unmarshal(parentIdBytes, &parentIdStr)
+		if err != nil {
+			return err
+		}
+		conditionSetPlan.ParentId = types.StringValue(parentIdStr)
+	} else {
+		conditionSetPlan.ParentId = types.StringPointerValue(nil)
 	}
 	conditionSetPlan.Id = types.StringValue(conditionSetRead.Id)
 	conditionSetPlan.OrganizationId = types.StringValue(conditionSetRead.OrganizationId)
@@ -138,6 +185,18 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 		Conditions:  conditions,
 	}
 
+	if !conditionSetPlan.ParentId.IsNull() {
+		var parentId models.ParentId
+		parentIdStr := conditionSetPlan.ParentId.ValueString()
+		err = json.Unmarshal([]byte(fmt.Sprintf("\"%s\"", parentIdStr)), &parentId)
+
+		if err != nil {
+			return err
+		}
+
+		csUpdate.ParentId = &parentId
+	}
+
 	conditionSetRead, err := c.client.Api.ConditionSets.Update(ctx, conditionSetPlan.Key.ValueString(), csUpdate)
 
 	if err != nil {
@@ -154,6 +213,21 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 	// Only update description if API returns one, otherwise preserve the plan value
 	if conditionSetRead.Description != nil {
 		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
+	}
+	// Handle parent_id from API response
+	if conditionSetRead.ParentId != nil {
+		parentIdBytes, err := json.Marshal(conditionSetRead.ParentId)
+		if err != nil {
+			return err
+		}
+		var parentIdStr string
+		err = json.Unmarshal(parentIdBytes, &parentIdStr)
+		if err != nil {
+			return err
+		}
+		conditionSetPlan.ParentId = types.StringValue(parentIdStr)
+	} else {
+		conditionSetPlan.ParentId = types.StringPointerValue(nil)
 	}
 	conditionSetPlan.EnvironmentId = types.StringValue(conditionSetRead.EnvironmentId)
 	conditionSetPlan.ProjectId = types.StringValue(conditionSetRead.ProjectId)
