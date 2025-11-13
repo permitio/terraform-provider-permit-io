@@ -6,7 +6,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-// TestUserSetWithContains tests that the contains operator in conditions is correctly preserved
+// TestUserSetWithContains tests that the contains operator in conditions is correctly preserved.
 func TestUserSetWithContains(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -68,7 +68,7 @@ func TestUserSetWithContains(t *testing.T) {
 	})
 }
 
-// TestUserSetWithParentId tests that parent_id field is correctly handled
+// TestUserSetWithParentId tests that parent_id field is correctly handled.
 func TestUserSetWithParentId(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -125,7 +125,7 @@ func TestUserSetWithParentId(t *testing.T) {
 	})
 }
 
-// TestResourceSetWithContains tests that the contains operator works for resource sets
+// TestResourceSetWithContains tests that the contains operator works for resource sets.
 func TestResourceSetWithContains(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -172,7 +172,7 @@ func TestResourceSetWithContains(t *testing.T) {
 	})
 }
 
-// TestUserSetMultipleOperators tests complex conditions with multiple operators
+// TestUserSetMultipleOperators tests complex conditions with multiple operators.
 func TestUserSetMultipleOperators(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
