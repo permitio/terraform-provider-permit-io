@@ -107,11 +107,15 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 	}
 
 	conditionSetCreate := models.ConditionSetCreate{
-		Key:         conditionSetPlan.Key.ValueString(),
-		Name:        conditionSetPlan.Name.ValueString(),
-		Description: conditionSetPlan.Description.ValueStringPointer(),
-		Type:        &conditionSetType,
-		Conditions:  conditions,
+		Key:        conditionSetPlan.Key.ValueString(),
+		Name:       conditionSetPlan.Name.ValueString(),
+		Type:       &conditionSetType,
+		Conditions: conditions,
+	}
+
+	// Only set description if it's not null and not empty
+	if !conditionSetPlan.Description.IsNull() && conditionSetPlan.Description.ValueString() != "" {
+		conditionSetCreate.Description = conditionSetPlan.Description.ValueStringPointer()
 	}
 
 	if !conditionSetPlan.Resource.IsNull() {
@@ -126,7 +130,8 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 		conditionSetCreate.ResourceId = &resourceId
 	}
 
-	if !conditionSetPlan.ParentId.IsNull() {
+	// Only set parent_id if it's not null and not empty
+	if !conditionSetPlan.ParentId.IsNull() && conditionSetPlan.ParentId.ValueString() != "" {
 		var parentId models.ParentId
 		parentIdStr := conditionSetPlan.ParentId.ValueString()
 		err = json.Unmarshal([]byte(fmt.Sprintf("\"%s\"", parentIdStr)), &parentId)
@@ -144,9 +149,11 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 		return err
 	}
 
-	// Only update description if API returns one, otherwise preserve the plan value
+	// Set description from API response, or null if API returns null
 	if conditionSetRead.Description != nil {
 		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
+	} else {
+		conditionSetPlan.Description = types.StringPointerValue(nil)
 	}
 	// Handle parent_id from API response
 	if conditionSetRead.ParentId != nil {
@@ -185,7 +192,8 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 		Conditions:  conditions,
 	}
 
-	if !conditionSetPlan.ParentId.IsNull() {
+	// Only set parent_id if it's not null and not empty
+	if !conditionSetPlan.ParentId.IsNull() && conditionSetPlan.ParentId.ValueString() != "" {
 		var parentId models.ParentId
 		parentIdStr := conditionSetPlan.ParentId.ValueString()
 		err = json.Unmarshal([]byte(fmt.Sprintf("\"%s\"", parentIdStr)), &parentId)
@@ -210,9 +218,11 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 	}
 
 	conditionSetPlan.Name = types.StringValue(conditionSetRead.Name)
-	// Only update description if API returns one, otherwise preserve the plan value
+	// Set description from API response, or null if API returns null
 	if conditionSetRead.Description != nil {
 		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
+	} else {
+		conditionSetPlan.Description = types.StringPointerValue(nil)
 	}
 	// Handle parent_id from API response
 	if conditionSetRead.ParentId != nil {
