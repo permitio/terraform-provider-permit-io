@@ -18,10 +18,13 @@ import (
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/proxy_configs"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/relations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
+	role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/role_assignments"
+	resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instance_role_assignments"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/role_derivations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/tenants"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/user_attributes"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/users"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -189,6 +192,8 @@ func (p *PermitProvider) Resources(_ context.Context) []func() resource.Resource
 		role_derivations.NewRoleDerivationResource,
 		tenants.NewTenantResource,
 		user_attributes.NewUserAttributeResource,
+		role_assignments.NewRoleAssignmentResource,
+		resource_instance_role_assignments.NewResourceInstanceRoleAssignmentResource,
 	}
 }
 
@@ -197,6 +202,7 @@ func (p *PermitProvider) DataSources(_ context.Context) []func() datasource.Data
 		resources.NewResourceDataSource,
 		roles.NewRoleDataSource,
 		conditionsets.NewConditionSetDataSource,
+		users.NewUserDataSource,
 	}
 }
 
