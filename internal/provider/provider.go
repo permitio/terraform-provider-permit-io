@@ -14,7 +14,9 @@ import (
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/permit"
 	conditionsetrules "github.com/permitio/terraform-provider-permit-io/internal/provider/conditionset_rules"
+	globalconfig "github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/conditionsets"
+	group_resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/group_resource_instance_role_assignments"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/proxy_configs"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/relations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
@@ -56,6 +58,7 @@ type PermitProviderModel struct {
 	ApiKey  types.String `tfsdk:"api_key"`
 	Timeout types.Int64  `tfsdk:"timeout"`
 }
+
 
 func (p *PermitProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "permitio"
@@ -174,6 +177,9 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	clientConfig := permitConfig.NewConfigBuilder(apiKey).WithApiUrl(apiUrl).WithDebug(debug).WithTimeout(time.Duration(timeout)).Build()
 	permitClient := permit.NewPermit(clientConfig)
 
+	// Store config globally for resources that need direct HTTP access
+	globalconfig.SetGlobalConfig(apiUrl, apiKey)
+
 	resp.DataSourceData = permitClient
 	resp.ResourceData = permitClient
 
@@ -194,6 +200,7 @@ func (p *PermitProvider) Resources(_ context.Context) []func() resource.Resource
 		user_attributes.NewUserAttributeResource,
 		role_assignments.NewRoleAssignmentResource,
 		resource_instance_role_assignments.NewResourceInstanceRoleAssignmentResource,
+		group_resource_instance_role_assignments.NewGroupResourceInstanceRoleAssignmentResource,
 	}
 }
 
