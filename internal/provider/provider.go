@@ -22,6 +22,7 @@ import (
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
 	role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/role_assignments"
 	resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instance_role_assignments"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instances"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/role_derivations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/tenants"
@@ -199,6 +200,7 @@ func (p *PermitProvider) Resources(_ context.Context) []func() resource.Resource
 		tenants.NewTenantResource,
 		user_attributes.NewUserAttributeResource,
 		role_assignments.NewRoleAssignmentResource,
+		resource_instances.NewResourceInstanceResource,
 		resource_instance_role_assignments.NewResourceInstanceRoleAssignmentResource,
 		group_resource_instance_role_assignments.NewGroupResourceInstanceRoleAssignmentResource,
 	}
