@@ -3,6 +3,8 @@ package conditionsetrules
 import (
 	"context"
 	"fmt"
+	"strings"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -12,8 +14,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &ConditionSetRuleResource{}
-	_ resource.ResourceWithConfigure = &ConditionSetRuleResource{}
+	_ resource.Resource                = &ConditionSetRuleResource{}
+	_ resource.ResourceWithConfigure   = &ConditionSetRuleResource{}
+	_ resource.ResourceWithImportState = &ConditionSetRuleResource{}
 )
 
 func NewConditionSetRuleResource() resource.Resource {
@@ -185,4 +188,39 @@ func (c *ConditionSetRuleResource) Delete(ctx context.Context, req resource.Dele
 		)
 		return
 	}
+}
+
+// ImportState implements resource.ResourceWithImportState.
+func (c *ConditionSetRuleResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Expected format: user_set,permission,resource_set
+	idParts := strings.Split(req.ID, ",")
+
+	if len(idParts) != 3 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID Format",
+			fmt.Sprintf("Expected import ID format: 'user_set,permission,resource_set'. Got %d parts, expected 3.\n\n"+
+				"Example: terraform import permitio_condition_set_rule.example \"admins,document:read,sensitive-docs\"",
+				len(idParts)),
+		)
+		return
+	}
+
+	userSet := strings.TrimSpace(idParts[0])
+	permission := strings.TrimSpace(idParts[1])
+	resourceSet := strings.TrimSpace(idParts[2])
+
+	if userSet == "" || permission == "" || resourceSet == "" {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID Format",
+			"Import ID contains empty values. All three parts must be non-empty.\n\n"+
+				fmt.Sprintf("Got: user_set='%s', permission='%s', resource_set='%s'\n\n"+
+					"Example: terraform import permitio_condition_set_rule.example \"admins,document:read,sensitive-docs\"",
+					userSet, permission, resourceSet),
+		)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user_set"), userSet)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("permission"), permission)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_set"), resourceSet)...)
 }

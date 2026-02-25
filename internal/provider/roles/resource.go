@@ -3,6 +3,8 @@ package roles
 import (
 	"context"
 	"fmt"
+	"strings"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -14,8 +16,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &RoleResource{}
-	_ resource.ResourceWithConfigure = &RoleResource{}
+	_ resource.Resource                = &RoleResource{}
+	_ resource.ResourceWithConfigure   = &RoleResource{}
+	_ resource.ResourceWithImportState = &RoleResource{}
 )
 
 func NewRoleResource() resource.Resource {
@@ -153,6 +156,62 @@ func (r *RoleResource) Delete(ctx context.Context, request resource.DeleteReques
 		response.Diagnostics.AddError(
 			"Failed deleting relation",
 			fmt.Errorf("unable to delete role %s: %w", model.Key.ValueString(), err).Error(),
+		)
+		return
+	}
+}
+
+// ImportState implements resource.ResourceWithImportState.
+func (r *RoleResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Import format:
+	// - Top-level role: "role_key"
+	// - Resource-level role: "resource_key:role_key"
+
+	idParts := strings.Split(req.ID, ":")
+
+	switch len(idParts) {
+	case 1:
+		// Top-level role
+		roleKey := strings.TrimSpace(idParts[0])
+		if roleKey == "" {
+			resp.Diagnostics.AddError(
+				"Invalid Import ID Format",
+				"Role key cannot be empty.\n\n"+
+					"Examples:\n"+
+					"  Top-level role:     terraform import permitio_role.admin \"admin\"\n"+
+					"  Resource-level role: terraform import permitio_role.editor \"document:editor\"",
+			)
+			return
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("key"), roleKey)...)
+
+	case 2:
+		// Resource-level role
+		resourceKey := strings.TrimSpace(idParts[0])
+		roleKey := strings.TrimSpace(idParts[1])
+
+		if resourceKey == "" || roleKey == "" {
+			resp.Diagnostics.AddError(
+				"Invalid Import ID Format",
+				fmt.Sprintf("Both resource_key and role_key must be non-empty.\n\n"+
+					"Got: resource_key='%s', role_key='%s'\n\n"+
+					"Example: terraform import permitio_role.editor \"document:editor\"",
+					resourceKey, roleKey),
+			)
+			return
+		}
+
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource"), resourceKey)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("key"), roleKey)...)
+
+	default:
+		resp.Diagnostics.AddError(
+			"Invalid Import ID Format",
+			fmt.Sprintf("Expected format: 'role_key' for top-level roles or 'resource_key:role_key' for resource-level roles. Got %d colons, expected 0 or 1.\n\n"+
+				"Examples:\n"+
+				"  Top-level role:     terraform import permitio_role.admin \"admin\"\n"+
+				"  Resource-level role: terraform import permitio_role.editor \"document:editor\"",
+				len(idParts)-1),
 		)
 		return
 	}

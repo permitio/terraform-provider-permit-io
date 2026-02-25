@@ -38,3 +38,32 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/c
 - `organization_id` (String) The organization ID. This is a unique identifier for the organization.
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `resource_id` (String) The unique resource ID that the role belongs to.
+
+## Import
+
+Import roles using either a simple role key (for top-level roles) or `resource_key:role_key` format (for resource-level roles):
+
+```shell
+# Import a top-level role
+terraform import permitio_role.admin "admin"
+
+# Import a resource-level role
+terraform import permitio_role.editor "document:editor"
+```
+
+Import examples:
+
+```shell
+# Import top-level roles
+terraform import permitio_role.admin "admin"
+terraform import permitio_role.viewer "viewer"
+
+# Import resource-level roles
+terraform import permitio_role.doc_editor "document:editor"
+terraform import permitio_role.proj_owner "project:owner"
+terraform import permitio_role.file_viewer "file:viewer"
+```
+
+**Note:** The format depends on whether the role is a top-level role or a resource-specific role:
+- **Top-level roles**: Use just the role key (e.g., `"admin"`)
+- **Resource-level roles**: Use `resource_key:role_key` format (e.g., `"document:editor"`)

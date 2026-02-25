@@ -14,14 +14,20 @@ import (
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/permit"
 	conditionsetrules "github.com/permitio/terraform-provider-permit-io/internal/provider/conditionset_rules"
+	globalconfig "github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/conditionsets"
+	group_resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/group_resource_instance_role_assignments"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/proxy_configs"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/relations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
+	role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/role_assignments"
+	resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instance_role_assignments"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instances"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/role_derivations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/tenants"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/user_attributes"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/users"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -53,6 +59,7 @@ type PermitProviderModel struct {
 	ApiKey  types.String `tfsdk:"api_key"`
 	Timeout types.Int64  `tfsdk:"timeout"`
 }
+
 
 func (p *PermitProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "permitio"
@@ -171,6 +178,9 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	clientConfig := permitConfig.NewConfigBuilder(apiKey).WithApiUrl(apiUrl).WithDebug(debug).WithTimeout(time.Duration(timeout)).Build()
 	permitClient := permit.NewPermit(clientConfig)
 
+	// Store config globally for resources that need direct HTTP access
+	globalconfig.SetGlobalConfig(apiUrl, apiKey)
+
 	resp.DataSourceData = permitClient
 	resp.ResourceData = permitClient
 
@@ -189,6 +199,10 @@ func (p *PermitProvider) Resources(_ context.Context) []func() resource.Resource
 		role_derivations.NewRoleDerivationResource,
 		tenants.NewTenantResource,
 		user_attributes.NewUserAttributeResource,
+		role_assignments.NewRoleAssignmentResource,
+		resource_instances.NewResourceInstanceResource,
+		resource_instance_role_assignments.NewResourceInstanceRoleAssignmentResource,
+		group_resource_instance_role_assignments.NewGroupResourceInstanceRoleAssignmentResource,
 	}
 }
 
@@ -197,6 +211,7 @@ func (p *PermitProvider) DataSources(_ context.Context) []func() datasource.Data
 		resources.NewResourceDataSource,
 		roles.NewRoleDataSource,
 		conditionsets.NewConditionSetDataSource,
+		users.NewUserDataSource,
 	}
 }
 

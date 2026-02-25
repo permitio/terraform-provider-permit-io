@@ -27,3 +27,31 @@ See [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Set-Rules) 
 - `id` (String) Unique id of the condition set rule
 - `organization_id` (String) Unique id of the organization that owns the condition set rule
 - `project_id` (String) Unique id of the project that owns the condition set rule
+
+## Import
+
+Import condition set rules using the format `user_set,permission,resource_set` (comma-separated):
+
+```shell
+terraform import permitio_condition_set_rule.example "admins,document:read,sensitive-docs"
+```
+
+Import examples:
+
+```shell
+# Import a rule granting document:read permission to admins on sensitive docs
+terraform import permitio_condition_set_rule.admin_read "admins,document:read,sensitive-docs"
+
+# Import a rule granting document:write permission to editors on all docs
+terraform import permitio_condition_set_rule.editor_write "editors,document:write,all-documents"
+
+# Import a rule granting project:delete permission to owners on production projects
+terraform import permitio_condition_set_rule.owner_delete "owners,project:delete,production-projects"
+```
+
+**Note:** The import format uses commas to separate the three components:
+1. **user_set**: The condition set key representing the users
+2. **permission**: The permission in `resource:action` format
+3. **resource_set**: The condition set key representing the resources
+
+All three parts are required and must be non-empty.
