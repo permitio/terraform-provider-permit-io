@@ -3,7 +3,7 @@ package resource_instance_role_assignments
 import (
 	"context"
 	"fmt"
-	"github.com/permitio/permit-golang/pkg/models"
+
 	"github.com/permitio/permit-golang/pkg/permit"
 )
 
@@ -12,54 +12,57 @@ type resourceInstanceRoleAssignmentClient struct {
 }
 
 func (c *resourceInstanceRoleAssignmentClient) Create(ctx context.Context, plan *ResourceInstanceRoleAssignmentModel) error {
-	subject := fmt.Sprintf("__user:%s", plan.User.ValueString())
-	object := fmt.Sprintf("%s:%s", plan.Resource.ValueString(), plan.ResourceInstance.ValueString())
+	resourceInstance := fmt.Sprintf("%s:%s", plan.Resource.ValueString(), plan.ResourceInstance.ValueString())
 
-	tupleCreate := models.NewRelationshipTupleCreate(
-		subject,
+	assignment, err := c.client.Api.Users.AssignResourceRole(
+		ctx,
+		plan.User.ValueString(),
 		plan.Role.ValueString(),
-		object,
+		plan.Tenant.ValueString(),
+		resourceInstance,
 	)
-	tupleCreate.SetTenant(plan.Tenant.ValueString())
-
-	tuple, err := c.client.Api.RelationshipTuples.Create(ctx, *tupleCreate)
 	if err != nil {
 		return err
 	}
-	*plan = tfModelFromRelationshipTupleRead(*tuple)
+	*plan = tfModelFromRoleAssignmentRead(*assignment)
 	return nil
 }
 
 func (c *resourceInstanceRoleAssignmentClient) Read(ctx context.Context, data ResourceInstanceRoleAssignmentModel) (ResourceInstanceRoleAssignmentModel, error) {
-	subject := fmt.Sprintf("__user:%s", data.User.ValueString())
-	object := fmt.Sprintf("%s:%s", data.Resource.ValueString(), data.ResourceInstance.ValueString())
+	resourceInstance := fmt.Sprintf("%s:%s", data.Resource.ValueString(), data.ResourceInstance.ValueString())
 
-	tuples, err := c.client.Api.RelationshipTuples.List(
+	assignments, err := c.client.Api.RoleAssignments.List(
 		ctx,
-		1, 1, // page, perPage
-		data.Tenant.ValueString(),
-		subject,
+		1, 100, // page, perPage
+		data.User.ValueString(),
 		data.Role.ValueString(),
-		object,
+		data.Tenant.ValueString(),
 	)
 	if err != nil {
 		return ResourceInstanceRoleAssignmentModel{}, err
 	}
-	if tuples == nil || len(*tuples) == 0 {
+	if assignments == nil {
 		return ResourceInstanceRoleAssignmentModel{}, fmt.Errorf("resource instance role assignment not found")
 	}
-	return tfModelFromRelationshipTupleRead((*tuples)[0]), nil
+
+	for _, a := range *assignments {
+		if a.ResourceInstance != nil && *a.ResourceInstance == resourceInstance {
+			return tfModelFromRoleAssignmentRead(a), nil
+		}
+	}
+
+	return ResourceInstanceRoleAssignmentModel{}, fmt.Errorf("resource instance role assignment not found")
 }
 
 func (c *resourceInstanceRoleAssignmentClient) Delete(ctx context.Context, plan *ResourceInstanceRoleAssignmentModel) error {
-	subject := fmt.Sprintf("__user:%s", plan.User.ValueString())
-	object := fmt.Sprintf("%s:%s", plan.Resource.ValueString(), plan.ResourceInstance.ValueString())
+	resourceInstance := fmt.Sprintf("%s:%s", plan.Resource.ValueString(), plan.ResourceInstance.ValueString())
 
-	tupleDelete := models.RelationshipTupleDelete{
-		Subject:  subject,
-		Relation: plan.Role.ValueString(),
-		Object:   object,
-	}
-
-	return c.client.Api.RelationshipTuples.Delete(ctx, tupleDelete)
+	_, err := c.client.Api.Users.UnassignResourceRole(
+		ctx,
+		plan.User.ValueString(),
+		plan.Role.ValueString(),
+		plan.Tenant.ValueString(),
+		resourceInstance,
+	)
+	return err
 }

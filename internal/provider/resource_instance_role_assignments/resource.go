@@ -117,9 +117,6 @@ func (r *ResourceInstanceRoleAssignmentResource) Schema(_ context.Context, _ res
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"updated_at": schema.StringAttribute{
-				Computed: true,
-			},
 		},
 	}
 }

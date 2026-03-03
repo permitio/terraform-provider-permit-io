@@ -18,30 +18,28 @@ type ResourceInstanceRoleAssignmentModel struct {
 	Resource         types.String `tfsdk:"resource"`
 	ResourceInstance types.String `tfsdk:"resource_instance"`
 	CreatedAt        types.String `tfsdk:"created_at"`
-	UpdatedAt        types.String `tfsdk:"updated_at"`
 }
 
-func tfModelFromRelationshipTupleRead(tuple models.RelationshipTupleRead) ResourceInstanceRoleAssignmentModel {
-	user := strings.TrimPrefix(tuple.Subject, "__user:")
-
-	resource := tuple.Object
+func tfModelFromRoleAssignmentRead(assignment models.RoleAssignmentRead) ResourceInstanceRoleAssignmentModel {
+	resource := ""
 	resourceInstance := ""
-	if parts := strings.SplitN(tuple.Object, ":", 2); len(parts) == 2 {
-		resource = parts[0]
-		resourceInstance = parts[1]
+	if assignment.ResourceInstance != nil {
+		if parts := strings.SplitN(*assignment.ResourceInstance, ":", 2); len(parts) == 2 {
+			resource = parts[0]
+			resourceInstance = parts[1]
+		}
 	}
 
 	return ResourceInstanceRoleAssignmentModel{
-		Id:               types.StringValue(tuple.Id),
-		OrganizationId:   types.StringValue(tuple.OrganizationId),
-		ProjectId:        types.StringValue(tuple.ProjectId),
-		EnvironmentId:    types.StringValue(tuple.EnvironmentId),
-		User:             types.StringValue(user),
-		Role:             types.StringValue(tuple.Relation),
-		Tenant:           types.StringValue(tuple.Tenant),
+		Id:               types.StringValue(assignment.Id),
+		OrganizationId:   types.StringValue(assignment.OrganizationId),
+		ProjectId:        types.StringValue(assignment.ProjectId),
+		EnvironmentId:    types.StringValue(assignment.EnvironmentId),
+		User:             types.StringValue(assignment.User),
+		Role:             types.StringValue(assignment.Role),
+		Tenant:           types.StringValue(assignment.Tenant),
 		Resource:         types.StringValue(resource),
 		ResourceInstance: types.StringValue(resourceInstance),
-		CreatedAt:        types.StringValue(tuple.CreatedAt.String()),
-		UpdatedAt:        types.StringValue(tuple.UpdatedAt.String()),
+		CreatedAt:        types.StringValue(assignment.CreatedAt.String()),
 	}
 }
