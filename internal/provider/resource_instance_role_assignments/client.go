@@ -12,16 +12,15 @@ type resourceInstanceRoleAssignmentClient struct {
 }
 
 func (c *resourceInstanceRoleAssignmentClient) Create(ctx context.Context, plan *ResourceInstanceRoleAssignmentModel) error {
-	// Format: subject is __user:user_key, object is resource_key:instance_key
 	subject := fmt.Sprintf("__user:%s", plan.User.ValueString())
-	tenant := plan.Tenant.ValueString()
+	object := fmt.Sprintf("%s:%s", plan.Resource.ValueString(), plan.ResourceInstance.ValueString())
 
 	tupleCreate := models.NewRelationshipTupleCreate(
 		subject,
 		plan.Role.ValueString(),
-		plan.ResourceInstance.ValueString(),
+		object,
 	)
-	tupleCreate.SetTenant(tenant)
+	tupleCreate.SetTenant(plan.Tenant.ValueString())
 
 	tuple, err := c.client.Api.RelationshipTuples.Create(ctx, *tupleCreate)
 	if err != nil {
@@ -33,6 +32,7 @@ func (c *resourceInstanceRoleAssignmentClient) Create(ctx context.Context, plan 
 
 func (c *resourceInstanceRoleAssignmentClient) Read(ctx context.Context, data ResourceInstanceRoleAssignmentModel) (ResourceInstanceRoleAssignmentModel, error) {
 	subject := fmt.Sprintf("__user:%s", data.User.ValueString())
+	object := fmt.Sprintf("%s:%s", data.Resource.ValueString(), data.ResourceInstance.ValueString())
 
 	tuples, err := c.client.Api.RelationshipTuples.List(
 		ctx,
@@ -40,7 +40,7 @@ func (c *resourceInstanceRoleAssignmentClient) Read(ctx context.Context, data Re
 		data.Tenant.ValueString(),
 		subject,
 		data.Role.ValueString(),
-		data.ResourceInstance.ValueString(),
+		object,
 	)
 	if err != nil {
 		return ResourceInstanceRoleAssignmentModel{}, err
@@ -53,11 +53,12 @@ func (c *resourceInstanceRoleAssignmentClient) Read(ctx context.Context, data Re
 
 func (c *resourceInstanceRoleAssignmentClient) Delete(ctx context.Context, plan *ResourceInstanceRoleAssignmentModel) error {
 	subject := fmt.Sprintf("__user:%s", plan.User.ValueString())
+	object := fmt.Sprintf("%s:%s", plan.Resource.ValueString(), plan.ResourceInstance.ValueString())
 
 	tupleDelete := models.RelationshipTupleDelete{
 		Subject:  subject,
 		Relation: plan.Role.ValueString(),
-		Object:   plan.ResourceInstance.ValueString(),
+		Object:   object,
 	}
 
 	return c.client.Api.RelationshipTuples.Delete(ctx, tupleDelete)

@@ -17,7 +17,8 @@ Assigns a role to a user on a specific resource instance within a tenant. This i
 
 ### Required
 
-- `resource_instance` (String) Resource instance identifier (e.g., 'document:doc-123' or 'project:proj-456')
+- `resource` (String) Resource type (e.g., 'workspace', 'document')
+- `resource_instance` (String) Resource instance key (e.g., 'ws-123', 'doc-456')
 - `role` (String) Role key to assign
 - `tenant` (String) Tenant key for scoped assignment
 - `user` (String) User key to assign the role to
@@ -29,4 +30,3 @@ Assigns a role to a user on a specific resource instance within a tenant. This i
 - `id` (String) Unique identifier of the role assignment
 - `organization_id` (String)
 - `project_id` (String)
-- `updated_at` (String)
