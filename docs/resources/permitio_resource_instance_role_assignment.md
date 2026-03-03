@@ -20,7 +20,8 @@ resource "permitio_resource_instance_role_assignment" "doc_editor" {
   user              = "user@example.com"
   role              = "editor"
   tenant            = "default"
-  resource_instance = "document:doc-123"
+  resource          = "document"
+  resource_instance = "doc-123"
 }
 
 # Grant admin access to a specific project
@@ -28,7 +29,8 @@ resource "permitio_resource_instance_role_assignment" "project_admin" {
   user              = "admin@example.com"
   role              = "admin"
   tenant            = "default"
-  resource_instance = "project:proj-456"
+  resource          = "project"
+  resource_instance = "proj-456"
 }
 
 # Grant multiple instance-level permissions using for_each
@@ -41,7 +43,8 @@ resource "permitio_resource_instance_role_assignment" "document_permissions" {
   user              = each.value.user
   role              = "editor"
   tenant            = "default"
-  resource_instance = "document:${each.value.doc}"
+  resource          = "document"
+  resource_instance = each.value.doc
 }
 
 # Use with data source
@@ -53,7 +56,8 @@ resource "permitio_resource_instance_role_assignment" "viewer" {
   user              = data.permitio_user.example.key
   role              = "viewer"
   tenant            = "production"
-  resource_instance = "report:report-789"
+  resource          = "report"
+  resource_instance = "report-789"
 }
 ```
 
@@ -62,7 +66,8 @@ resource "permitio_resource_instance_role_assignment" "viewer" {
 
 ### Required
 
-- `resource_instance` (String) Resource instance identifier (e.g., 'document:doc-123' or 'project:proj-456')
+- `resource` (String) Resource type (e.g., 'workspace', 'document')
+- `resource_instance` (String) Resource instance key (e.g., 'ws-123', 'doc-456')
 - `role` (String) Role key to assign
 - `tenant` (String) Tenant key for scoped assignment
 - `user` (String) User key to assign the role to
@@ -78,23 +83,18 @@ resource "permitio_resource_instance_role_assignment" "viewer" {
 
 ## Import
 
-Import resource instance role assignments using the format `user:role:tenant:resource_instance`:
+Import resource instance role assignments using the format `user:role:resource:resource_instance:tenant`:
 
 ```shell
-terraform import permitio_resource_instance_role_assignment.example "user@example.com:editor:default:document:doc-123"
+terraform import permitio_resource_instance_role_assignment.example "user@example.com:editor:document:doc-123:default"
 ```
 
 Import examples:
 
 ```shell
 # Import editor access to a document
-terraform import permitio_resource_instance_role_assignment.doc_editor "user@example.com:editor:default:document:doc-123"
+terraform import permitio_resource_instance_role_assignment.doc_editor "user@example.com:editor:document:doc-123:default"
 
 # Import admin access to a project
-terraform import permitio_resource_instance_role_assignment.project_admin "admin@example.com:admin:production:project:proj-456"
-
-# Import viewer access to a report (resource_instance contains colon)
-terraform import permitio_resource_instance_role_assignment.report_viewer "viewer@example.com:viewer:default:report:yearly:2024"
+terraform import permitio_resource_instance_role_assignment.project_admin "admin@example.com:admin:project:proj-456:production"
 ```
-
-**Note:** The resource_instance part can contain colons. The import parser will correctly handle this by treating everything after the third colon as part of the resource_instance identifier.
