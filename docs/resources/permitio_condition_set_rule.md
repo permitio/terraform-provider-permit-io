@@ -27,3 +27,12 @@ See [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Set-Rules) 
 - `id` (String) Unique id of the condition set rule
 - `organization_id` (String) Unique id of the organization that owns the condition set rule
 - `project_id` (String) Unique id of the project that owns the condition set rule
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a condition set rule using the format: user_set,permission,resource_set
+terraform import permitio_condition_set_rule.example admins,document:read,sensitive-docs
+```

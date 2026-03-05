@@ -28,3 +28,12 @@ Assigns a role to a user within a specific tenant.
 - `id` (String) Unique identifier of the role assignment
 - `organization_id` (String)
 - `project_id` (String)
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a role assignment using the format: user:role:tenant
+terraform import permitio_role_assignment.example john@example.com:admin:default
+```

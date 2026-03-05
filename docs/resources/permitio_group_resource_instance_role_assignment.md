@@ -26,3 +26,12 @@ Assigns a role to a group on a specific resource instance within a tenant. This 
 ### Read-Only
 
 - `id` (String) Unique identifier of the role assignment
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a group resource instance role assignment using the format: group:role:resource:resource_instance:tenant
+terraform import permitio_group_resource_instance_role_assignment.example engineering:viewer:document:doc-1:default
+```

@@ -34,3 +34,12 @@ Manages a Permit.io resource instance. Resource instances represent specific obj
 - `organization_id` (String) The organization ID. This is a unique identifier for the organization.
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `resource_id` (String) The unique resource type ID.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a resource instance using the format: resource_key:instance_key
+terraform import permitio_resource_instance.example document:doc-1
+```
