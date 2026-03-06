@@ -14,15 +14,15 @@ import (
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/permit"
 	conditionsetrules "github.com/permitio/terraform-provider-permit-io/internal/provider/conditionset_rules"
-	globalconfig "github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/conditionsets"
+	globalconfig "github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 	group_resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/group_resource_instance_role_assignments"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/proxy_configs"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/relations"
-	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
-	role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/role_assignments"
 	resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instance_role_assignments"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instances"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/resources"
+	role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/role_assignments"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/role_derivations"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/roles"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/tenants"
@@ -59,7 +59,6 @@ type PermitProviderModel struct {
 	ApiKey  types.String `tfsdk:"api_key"`
 	Timeout types.Int64  `tfsdk:"timeout"`
 }
-
 
 func (p *PermitProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "permitio"

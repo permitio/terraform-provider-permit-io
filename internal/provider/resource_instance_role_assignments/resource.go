@@ -3,13 +3,13 @@ package resource_instance_role_assignments
 import (
 	"context"
 	"fmt"
-	"strings"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"strings"
 )
 
 var (
@@ -97,9 +97,16 @@ func (r *ResourceInstanceRoleAssignmentResource) Schema(_ context.Context, _ res
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"resource": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "Resource type (e.g., 'workspace', 'document')",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"resource_instance": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Resource instance identifier (e.g., 'document:doc-123' or 'project:proj-456')",
+				MarkdownDescription: "Resource instance key (e.g., 'ws-123', 'doc-456')",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -109,9 +116,6 @@ func (r *ResourceInstanceRoleAssignmentResource) Schema(_ context.Context, _ res
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
-			},
-			"updated_at": schema.StringAttribute{
-				Computed: true,
 			},
 		},
 	}
@@ -127,8 +131,8 @@ func (r *ResourceInstanceRoleAssignmentResource) Create(ctx context.Context, req
 	if err := r.client.Create(ctx, &plan); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create resource instance role assignment",
-			fmt.Sprintf("Unable to assign role %s to user %s on resource instance %s in tenant %s: %s",
-				plan.Role.ValueString(), plan.User.ValueString(), plan.ResourceInstance.ValueString(), plan.Tenant.ValueString(), err),
+			fmt.Sprintf("Unable to assign role %s to user %s on resource %s instance %s in tenant %s: %s",
+				plan.Role.ValueString(), plan.User.ValueString(), plan.Resource.ValueString(), plan.ResourceInstance.ValueString(), plan.Tenant.ValueString(), err),
 		)
 		return
 	}
@@ -174,28 +178,27 @@ func (r *ResourceInstanceRoleAssignmentResource) Delete(ctx context.Context, req
 	if err := r.client.Delete(ctx, &state); err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting resource instance role assignment",
-			fmt.Sprintf("Could not unassign role %s from user %s on resource instance %s in tenant %s: %s",
-				state.Role.ValueString(), state.User.ValueString(), state.ResourceInstance.ValueString(), state.Tenant.ValueString(), err.Error()),
+			fmt.Sprintf("Could not unassign role %s from user %s on resource %s instance %s in tenant %s: %s",
+				state.Role.ValueString(), state.User.ValueString(), state.Resource.ValueString(), state.ResourceInstance.ValueString(), state.Tenant.ValueString(), err.Error()),
 		)
 	}
 }
 
 func (r *ResourceInstanceRoleAssignmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Format: user:role:tenant:resource_instance
+	// Format: user:role:resource:resource_instance:tenant
 	parts := strings.Split(req.ID, ":")
-	if len(parts) != 4 {
+	if len(parts) != 5 {
 		resp.Diagnostics.AddError(
 			"Invalid import ID format",
-			"Expected format: user:role:tenant:resource_instance\n\n"+
-				"Example: terraform import permitio_resource_instance_role_assignment.example \"user@example.com:editor:default:document:doc-123\"",
+			"Expected format: user:role:resource:resource_instance:tenant\n\n"+
+				"Example: terraform import permitio_resource_instance_role_assignment.example \"user@example.com:editor:document:doc-123:default\"",
 		)
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user"), parts[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), parts[2])...)
-	// Join the remaining parts back together for resource_instance (in case it contains colons)
-	resourceInstance := strings.Join(parts[3:], ":")
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_instance"), resourceInstance)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource"), parts[2])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_instance"), parts[3])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), parts[4])...)
 }

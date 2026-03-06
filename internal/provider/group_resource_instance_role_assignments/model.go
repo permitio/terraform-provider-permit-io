@@ -13,7 +13,7 @@ type GroupResourceInstanceRoleAssignmentModel struct {
 	Tenant           types.String `tfsdk:"tenant"`
 }
 
-// GroupAddRole represents the API request body
+// GroupAddRole represents the API request body.
 type GroupAddRole struct {
 	Role             string `json:"role"`
 	Resource         string `json:"resource"`

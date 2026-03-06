@@ -3,13 +3,13 @@ package resource_instances
 import (
 	"context"
 	"fmt"
-	"strings"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
+	"strings"
 )
 
 // Ensure the implementation satisfies the expected interfaces.

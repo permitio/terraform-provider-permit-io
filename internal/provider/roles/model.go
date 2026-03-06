@@ -41,7 +41,7 @@ func tfModelFromRoleRead(m models.RoleRead) roleModel {
 	r.UpdatedAt = types.StringValue(m.UpdatedAt.String())
 
 	// Handle permissions - ensure proper typing even for empty sets
-	if m.Permissions != nil && len(m.Permissions) > 0 {
+	if len(m.Permissions) > 0 {
 		permissionValues := lo.Map(m.Permissions, func(item string, index int) attr.Value {
 			return types.StringValue(item)
 		})
@@ -51,7 +51,7 @@ func tfModelFromRoleRead(m models.RoleRead) roleModel {
 	}
 
 	// Handle extends - ensure proper typing even for empty sets
-	if m.Extends != nil && len(m.Extends) > 0 {
+	if len(m.Extends) > 0 {
 		extendValues := lo.Map(m.Extends, func(item string, index int) attr.Value {
 			return types.StringValue(item)
 		})
@@ -76,7 +76,7 @@ func tfModelFromResourceRoleRead(resourceKey string, m models.ResourceRoleRead) 
 	r.UpdatedAt = types.StringValue(m.UpdatedAt.String())
 
 	// Handle permissions - ensure proper typing even for empty sets
-	if m.Permissions != nil && len(m.Permissions) > 0 {
+	if len(m.Permissions) > 0 {
 		permissionValues := lo.Map(m.Permissions, func(item string, index int) attr.Value {
 			return types.StringValue(item)
 		})
@@ -86,7 +86,7 @@ func tfModelFromResourceRoleRead(resourceKey string, m models.ResourceRoleRead) 
 	}
 
 	// Handle extends - ensure proper typing even for empty sets
-	if m.Extends != nil && len(m.Extends) > 0 {
+	if len(m.Extends) > 0 {
 		extendValues := lo.Map(m.Extends, func(item string, index int) attr.Value {
 			return types.StringValue(item)
 		})
