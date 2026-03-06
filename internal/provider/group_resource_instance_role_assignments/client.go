@@ -22,7 +22,7 @@ type groupResourceInstanceRoleAssignmentClient struct {
 	cachedToken     string
 }
 
-// getContextInfo extracts project and environment IDs from a tenant API call
+// getContextInfo extracts project and environment IDs from a tenant API call.
 func (c *groupResourceInstanceRoleAssignmentClient) getContextInfo(ctx context.Context) (projectId, envId, apiUrl, token string, err error) {
 	// Return cached values if available
 	if c.cachedProjectId != "" && c.cachedEnvId != "" {
@@ -36,7 +36,7 @@ func (c *groupResourceInstanceRoleAssignmentClient) getContextInfo(ctx context.C
 		return
 	}
 
-	if tenants == nil || len(tenants) == 0 {
+	if len(tenants) == 0 {
 		err = fmt.Errorf("no tenants found - cannot determine project_id and environment_id. Make sure at least one tenant exists in your Permit environment")
 		return
 	}
@@ -72,7 +72,7 @@ func (c *groupResourceInstanceRoleAssignmentClient) getContextInfo(ctx context.C
 	return
 }
 
-// getTokenFromEnv gets the API token from environment variables
+// getTokenFromEnv gets the API token from environment variables.
 func getTokenFromEnv() string {
 	// Check the same environment variable the provider uses
 	if token := getEnv("PERMITIO_API_KEY"); token != "" {

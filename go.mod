@@ -1,6 +1,6 @@
 module github.com/permitio/terraform-provider-permit-io
 
-go 1.20
+go 1.24
 
 require (
 	github.com/hashicorp/terraform-plugin-docs v0.16.0
