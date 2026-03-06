@@ -38,3 +38,15 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/c
 - `organization_id` (String) The organization ID. This is a unique identifier for the organization.
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `resource_id` (String) The unique resource ID that the role belongs to.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a top-level role using the format: role_key
+terraform import permitio_role.example admin
+
+# Import a resource-level role using the format: resource_key:role_key
+terraform import permitio_role.example document:editor
+```

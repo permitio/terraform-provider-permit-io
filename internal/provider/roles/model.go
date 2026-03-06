@@ -40,15 +40,25 @@ func tfModelFromRoleRead(m models.RoleRead) roleModel {
 	r.CreatedAt = types.StringValue(m.CreatedAt.String())
 	r.UpdatedAt = types.StringValue(m.UpdatedAt.String())
 
-	permissionValues := lo.Map(m.Permissions, func(item string, index int) attr.Value {
-		return types.StringValue(item)
-	})
-	r.Permissions = types.SetValueMust(types.StringType, permissionValues)
+	// Handle permissions - ensure proper typing even for empty sets
+	if len(m.Permissions) > 0 {
+		permissionValues := lo.Map(m.Permissions, func(item string, index int) attr.Value {
+			return types.StringValue(item)
+		})
+		r.Permissions = types.SetValueMust(types.StringType, permissionValues)
+	} else {
+		r.Permissions, _ = types.SetValue(types.StringType, []attr.Value{})
+	}
 
-	extendValues := lo.Map(m.Extends, func(item string, index int) attr.Value {
-		return types.StringValue(item)
-	})
-	r.Extends = types.SetValueMust(types.StringType, extendValues)
+	// Handle extends - ensure proper typing even for empty sets
+	if len(m.Extends) > 0 {
+		extendValues := lo.Map(m.Extends, func(item string, index int) attr.Value {
+			return types.StringValue(item)
+		})
+		r.Extends = types.SetValueMust(types.StringType, extendValues)
+	} else {
+		r.Extends, _ = types.SetValue(types.StringType, []attr.Value{})
+	}
 
 	return r
 }
@@ -65,15 +75,25 @@ func tfModelFromResourceRoleRead(resourceKey string, m models.ResourceRoleRead) 
 	r.CreatedAt = types.StringValue(m.CreatedAt.String())
 	r.UpdatedAt = types.StringValue(m.UpdatedAt.String())
 
-	permissionValues := lo.Map(m.Permissions, func(item string, index int) attr.Value {
-		return types.StringValue(item)
-	})
-	r.Permissions = types.SetValueMust(types.StringType, permissionValues)
+	// Handle permissions - ensure proper typing even for empty sets
+	if len(m.Permissions) > 0 {
+		permissionValues := lo.Map(m.Permissions, func(item string, index int) attr.Value {
+			return types.StringValue(item)
+		})
+		r.Permissions = types.SetValueMust(types.StringType, permissionValues)
+	} else {
+		r.Permissions, _ = types.SetValue(types.StringType, []attr.Value{})
+	}
 
-	extendValues := lo.Map(m.Extends, func(item string, index int) attr.Value {
-		return types.StringValue(item)
-	})
-	r.Extends = types.SetValueMust(types.StringType, extendValues)
+	// Handle extends - ensure proper typing even for empty sets
+	if len(m.Extends) > 0 {
+		extendValues := lo.Map(m.Extends, func(item string, index int) attr.Value {
+			return types.StringValue(item)
+		})
+		r.Extends = types.SetValueMust(types.StringType, extendValues)
+	} else {
+		r.Extends, _ = types.SetValue(types.StringType, []attr.Value{})
+	}
 
 	r.Resource = types.StringValue(resourceKey)
 	r.ResourceId = types.StringValue(m.ResourceId)
