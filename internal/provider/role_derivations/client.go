@@ -14,7 +14,7 @@ type apiClient struct {
 
 func (c *apiClient) Create(ctx context.Context, plan roleDerivationModel) (roleDerivationModel, error) {
 	derivedRuleCreate := models.DerivedRoleRuleCreate{
-		Role:             plan.Role.ValueString(),
+		Role:             plan.ToRole.ValueString(),
 		OnResource:       plan.OnResource.ValueString(),
 		LinkedByRelation: plan.LinkedByRelation.ValueString(),
 	}
@@ -22,7 +22,7 @@ func (c *apiClient) Create(ctx context.Context, plan roleDerivationModel) (roleD
 	createdGrant, err := c.client.Api.ImplicitGrants.Create(
 		ctx,
 		plan.Resource.ValueString(),
-		plan.ToRole.ValueString(),
+		plan.Role.ValueString(),
 		derivedRuleCreate,
 	)
 
@@ -36,11 +36,11 @@ func (c *apiClient) Create(ctx context.Context, plan roleDerivationModel) (roleD
 
 func (c *apiClient) Read(ctx context.Context, plan roleDerivationModel) (roleDerivationModel, error) {
 	targetRoleRead, err := c.client.Api.ResourceRoles.Get(
-		ctx, plan.Resource.ValueString(), plan.ToRole.ValueString())
+		ctx, plan.Resource.ValueString(), plan.Role.ValueString())
 
 	if err != nil {
 		return roleDerivationModel{},
-			fmt.Errorf("failed getting target role %s/%s: %w", plan.Resource.ValueString(), plan.ToRole.ValueString(), err)
+			fmt.Errorf("failed getting target role %s/%s: %w", plan.Resource.ValueString(), plan.Role.ValueString(), err)
 	}
 
 	if targetRoleRead.GrantedTo == nil {
@@ -49,7 +49,7 @@ func (c *apiClient) Read(ctx context.Context, plan roleDerivationModel) (roleDer
 
 	derivation, found := lo.Find(targetRoleRead.GrantedTo.UsersWithRole, func(item models.DerivedRoleRuleRead) bool {
 		return item.OnResource == plan.OnResource.ValueString() &&
-			item.Role == plan.Role.ValueString() &&
+			item.Role == plan.ToRole.ValueString() &&
 			item.LinkedByRelation == plan.LinkedByRelation.ValueString()
 	})
 
@@ -63,7 +63,7 @@ func (c *apiClient) Read(ctx context.Context, plan roleDerivationModel) (roleDer
 
 func (c *apiClient) Delete(ctx context.Context, plan roleDerivationModel) error {
 	derivedRuleDelete := models.DerivedRoleRuleDelete{
-		Role:             plan.Role.ValueString(),
+		Role:             plan.ToRole.ValueString(),
 		OnResource:       plan.OnResource.ValueString(),
 		LinkedByRelation: plan.LinkedByRelation.ValueString(),
 	}
@@ -71,6 +71,6 @@ func (c *apiClient) Delete(ctx context.Context, plan roleDerivationModel) error 
 	return c.client.Api.ImplicitGrants.Delete(
 		ctx,
 		plan.Resource.ValueString(),
-		plan.ToRole.ValueString(),
+		plan.Role.ValueString(),
 		derivedRuleDelete)
 }
