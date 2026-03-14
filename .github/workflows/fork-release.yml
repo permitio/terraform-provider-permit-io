@@ -1,0 +1,56 @@
+# Simple release workflow for fork builds.
+# Builds linux/amd64 binary and publishes as GitHub Release.
+# Used by ProjectOmniCore CI to download the fork provider with role derivation fix.
+name: Fork Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g., v0.0.22-fork.1)'
+        required: true
+        type: string
+      branch:
+        description: 'Branch to build from'
+        required: true
+        default: 'fix/role-derivation-swapped-role-to-role'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build linux/amd64 binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -trimpath \
+            -ldflags="-s -w -X main.version=${{ inputs.version }}" \
+            -o terraform-provider-permit-io
+          chmod +x terraform-provider-permit-io
+          echo "Binary size: $(du -h terraform-provider-permit-io | cut -f1)"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ inputs.version }}" \
+            --title "${{ inputs.version }}: Role derivation fix (fork)" \
+            --notes "Fork build from branch \`${{ inputs.branch }}\` with role derivation swap fix (upstream PR #57).
+
+          **Purpose:** Used by ProjectOmniCore CI via \`dev_overrides\` until upstream merges the fix.
+
+          **Platform:** linux/amd64 only (GitHub Actions runner target)." \
+            --target "${{ inputs.branch }}" \
+            terraform-provider-permit-io
