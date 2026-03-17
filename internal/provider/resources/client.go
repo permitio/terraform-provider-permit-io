@@ -54,7 +54,7 @@ func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (
 			actions[key] = actionNew
 		}
 	}
-	attributes = newAttributesModelsFromSDK(resource.Attributes)
+	attributes = newAttributesModelsFromSDKWithPlan(resource.Attributes, data.Attributes)
 
 	state := ResourceModel{
 		Id:             types.StringValue(resource.Id),
@@ -111,7 +111,7 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 			Description: types.StringPointerValue(action.Description),
 		}
 	}
-	resourcePlan.Attributes = newAttributesModelsFromSDK(resourceRead.Attributes)
+	resourcePlan.Attributes = newAttributesModelsFromSDKWithPlan(resourceRead.Attributes, resourcePlan.Attributes)
 	resourcePlan.Actions = actionsRead
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
@@ -149,7 +149,7 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 		return err
 	}
 
-	resourcePlan.Attributes = newAttributesModelsFromSDK(resourceRead.Attributes)
+	resourcePlan.Attributes = newAttributesModelsFromSDKWithPlan(resourceRead.Attributes, resourcePlan.Attributes)
 	resourcePlan.Name = types.StringValue(resourceRead.Name)
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
