@@ -5,6 +5,7 @@ import (
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
+	"github.com/samber/lo"
 )
 
 type roleClient struct {
@@ -87,7 +88,7 @@ func (c *roleClient) Read(ctx context.Context, key string, resourceKey *string) 
 }
 
 func (c *roleClient) Update(ctx context.Context, plan roleModel) (roleModel, error) {
-	permissions, err := common.ConvertElementsToSlice[string](ctx, plan.Permissions.Elements())
+	desiredPermissions, err := common.ConvertElementsToSlice[string](ctx, plan.Permissions.Elements())
 
 	if err != nil {
 		return roleModel{}, err
@@ -101,35 +102,104 @@ func (c *roleClient) Update(ctx context.Context, plan roleModel) (roleModel, err
 
 	var updatedModel roleModel
 	if plan.isResourceRole() {
+		resourceKey := plan.Resource.ValueString()
+		roleKey := plan.Key.ValueString()
+
+		// Read current role to get current permissions for diff calculation
+		currentRole, err := c.client.Api.ResourceRoles.Get(ctx, resourceKey, roleKey)
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		// PATCH only name/description/extends — permissions are handled separately
+		// via dedicated endpoints to avoid server-side errors with large permission sets.
 		roleUpdate := models.ResourceRoleUpdate{
 			Name:        plan.Name.ValueStringPointer(),
 			Description: plan.Description.ValueStringPointer(),
-			Permissions: permissions,
 			Extends:     extends,
 		}
 
-		updatedRole, err := c.client.Api.ResourceRoles.Update(ctx, plan.Resource.ValueString(), plan.Key.ValueString(), roleUpdate)
-
+		_, err = c.client.Api.ResourceRoles.Update(ctx, resourceKey, roleKey, roleUpdate)
 		if err != nil {
 			return roleModel{}, err
 		}
 
-		updatedModel = tfModelFromResourceRoleRead(plan.Resource.ValueString(), *updatedRole)
+		// Compute permission diff and apply incrementally
+		toRemove, toAdd := lo.Difference(currentRole.Permissions, desiredPermissions)
+
+		if len(toRemove) > 0 {
+			_, err = c.client.Api.ResourceRoles.RemovePermissions(
+				ctx, resourceKey, roleKey,
+				*models.NewRemoveRolePermissions(toRemove),
+			)
+			if err != nil {
+				return roleModel{}, err
+			}
+		}
+
+		if len(toAdd) > 0 {
+			_, err = c.client.Api.ResourceRoles.AssignPermissions(
+				ctx, resourceKey, roleKey,
+				*models.NewAddRolePermissions(toAdd),
+			)
+			if err != nil {
+				return roleModel{}, err
+			}
+		}
+
+		// Read final state
+		finalRole, err := c.client.Api.ResourceRoles.Get(ctx, resourceKey, roleKey)
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		updatedModel = tfModelFromResourceRoleRead(resourceKey, *finalRole)
 	} else {
+		roleKey := plan.Key.ValueString()
+
+		// Read current role to get current permissions for diff calculation
+		currentRole, err := c.client.Api.Roles.Get(ctx, roleKey)
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		// PATCH only name/description/extends — permissions are handled separately
+		// via dedicated endpoints to avoid server-side errors with large permission sets.
 		roleUpdate := models.RoleUpdate{
 			Name:        plan.Name.ValueStringPointer(),
 			Description: plan.Description.ValueStringPointer(),
-			Permissions: permissions,
 			Extends:     extends,
 		}
 
-		updatedRole, err := c.client.Api.Roles.Update(ctx, plan.Key.ValueString(), roleUpdate)
-
+		_, err = c.client.Api.Roles.Update(ctx, roleKey, roleUpdate)
 		if err != nil {
 			return roleModel{}, err
 		}
 
-		updatedModel = tfModelFromRoleRead(*updatedRole)
+		// Compute permission diff and apply incrementally
+		toRemove, toAdd := lo.Difference(currentRole.Permissions, desiredPermissions)
+
+		if len(toRemove) > 0 {
+			err = c.client.Api.Roles.RemovePermissions(ctx, roleKey, toRemove)
+			if err != nil {
+				return roleModel{}, err
+			}
+		}
+
+		if len(toAdd) > 0 {
+			err = c.client.Api.Roles.AssignPermissions(ctx, roleKey, toAdd)
+			if err != nil {
+				return roleModel{}, err
+			}
+		}
+
+		// Read final state
+		finalRole, err := c.client.Api.Roles.Get(ctx, roleKey)
+		if err != nil {
+			return roleModel{}, err
+		}
+
+		updatedModel = tfModelFromRoleRead(*finalRole)
 	}
 
 	return updatedModel, nil
