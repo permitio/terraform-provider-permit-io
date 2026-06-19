@@ -2,6 +2,7 @@ package conditionsetrules
 
 import (
 	"context"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/permit"
 )
@@ -21,7 +22,7 @@ type ConditionSetRuleClient struct {
 }
 
 func (c *ConditionSetRuleClient) Read(ctx context.Context, data ConditionSetRuleModel) (ConditionSetRuleModel, error) {
-	_, err := c.client.Api.ConditionSets.ListSetPermissions(
+	rules, err := c.client.Api.ConditionSets.ListSetPermissions(
 		ctx,
 		data.UserSet.ValueString(),
 		data.Permission.ValueString(),
@@ -31,6 +32,18 @@ func (c *ConditionSetRuleClient) Read(ctx context.Context, data ConditionSetRule
 	if err != nil {
 		return ConditionSetRuleModel{}, err
 	}
+
+	// The list is filtered server-side by user_set/permission/resource_set, so an
+	// empty result means the rule was removed outside of Terraform.
+	if len(rules) == 0 {
+		return ConditionSetRuleModel{}, fmt.Errorf("condition set rule not found")
+	}
+
+	rule := rules[0]
+	data.Id = types.StringValue(rule.Id)
+	data.OrganizationId = types.StringValue(rule.OrganizationId)
+	data.ProjectId = types.StringValue(rule.ProjectId)
+	data.EnvironmentId = types.StringValue(rule.EnvironmentId)
 
 	return data, nil
 }
