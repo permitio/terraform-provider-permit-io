@@ -3,6 +3,8 @@ package conditionsetrules
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/permit"
 )
@@ -25,7 +27,7 @@ func (c *ConditionSetRuleClient) Read(ctx context.Context, data ConditionSetRule
 	rules, err := c.client.Api.ConditionSets.ListSetPermissions(
 		ctx,
 		data.UserSet.ValueString(),
-		data.Permission.ValueString(),
+		permissionFilterValue(data.Permission.ValueString()),
 		data.ResourceSet.ValueString(),
 	)
 
@@ -74,4 +76,15 @@ func (c *ConditionSetRuleClient) Delete(ctx context.Context, rulePlan *Condition
 		rulePlan.Permission.ValueString(),
 		rulePlan.ResourceSet.ValueString(),
 	)
+}
+
+// permissionFilterValue normalizes a permission for the ListSetPermissions
+// filter, which matches on the action key or the resource-action id but not the
+// "{resource_key}:{action_key}" form. Strip the resource prefix so live rules
+// aren't read as deleted; ids and bare action keys pass through unchanged.
+func permissionFilterValue(permission string) string {
+	if _, action, found := strings.Cut(permission, ":"); found {
+		return action
+	}
+	return permission
 }
