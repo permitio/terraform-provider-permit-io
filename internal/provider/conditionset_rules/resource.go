@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"strings"
 )
 
@@ -147,6 +148,11 @@ func (c *ConditionSetRuleResource) Read(ctx context.Context, req resource.ReadRe
 	state, err := c.client.Read(ctx, data)
 
 	if err != nil {
+		// If the rule no longer exists in Permit, drop it from state so it is recreated.
+		if common.IsNotFoundErr(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Unable to Read Condition Set Rule",
 			fmt.Sprintf("Unable to read condition set rule: %s, Error: %s", data.Id.String(), err.Error()),

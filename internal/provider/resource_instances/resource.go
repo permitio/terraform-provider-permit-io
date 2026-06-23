@@ -108,7 +108,7 @@ func (r *ResourceInstanceResource) Read(ctx context.Context, request resource.Re
 	instanceRead, err := r.client.Read(ctx, model.Key.ValueString(), model.Resource.ValueString())
 
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if common.IsNotFoundErr(err) {
 			response.State.RemoveResource(ctx)
 			return
 		}
