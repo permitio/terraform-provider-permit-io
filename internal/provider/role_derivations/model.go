@@ -17,9 +17,9 @@ func tfModelFromDerivedRoleRuleRead(plan roleDerivationModel, m models.DerivedRo
 	r := roleDerivationModel{}
 
 	r.Resource = plan.Resource
-	r.ToRole = plan.ToRole
+	r.Role = plan.Role
 	r.OnResource = types.StringValue(m.OnResource)
-	r.Role = types.StringValue(m.Role)
+	r.ToRole = types.StringValue(m.Role)
 	r.LinkedByRelation = types.StringValue(m.LinkedByRelation)
 
 	return r

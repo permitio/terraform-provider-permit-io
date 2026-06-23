@@ -303,3 +303,69 @@ func TestResources(t *testing.T) {
 		},
 	})
 }
+
+// TestRoleDerivation is a focused regression test for issue #30: applying a
+// permitio_role_derivation must succeed when the role and to_role keys differ
+// between the two resources. It mirrors the reported scenario (an admin role on
+// "file" deriving a distinctly-keyed admin role on the parent "folder"). With the
+// role/to_role mapping reversed (the pre-fix behaviour) the Permit API returns a
+// 404, so this test fails if the fix in role_derivations/client.go is reverted.
+func TestRoleDerivation(t *testing.T) {
+	testID := fmt.Sprintf("test-%d-%d", time.Now().Unix(), rand.Intn(10000))
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig + fmt.Sprintf(`
+				resource "permitio_resource" "file" {
+					key  = "file-%s"
+					name = "file-%s"
+					actions = {
+						"read" = { "name" = "Read" }
+					}
+					attributes = {}
+				}
+				resource "permitio_resource" "folder" {
+					key  = "folder-%s"
+					name = "folder-%s"
+					actions = {
+						"read" = { "name" = "Read" }
+					}
+					attributes = {}
+				}
+				resource "permitio_relation" "parent" {
+					key              = "parent-%s"
+					name             = "parent of"
+					subject_resource = permitio_resource.folder.key
+					object_resource  = permitio_resource.file.key
+				}
+				resource "permitio_role" "fileAdmin" {
+					key         = "admin-%s"
+					name        = "File Administrator"
+					permissions = ["read"]
+					resource    = permitio_resource.file.key
+				}
+				resource "permitio_role" "folderAdmin" {
+					key         = "folder-admin-%s"
+					name        = "Folder Administrator"
+					permissions = ["read"]
+					resource    = permitio_resource.folder.key
+				}
+				resource "permitio_role_derivation" "folderFileAdmin" {
+					resource    = permitio_resource.file.key
+					role        = permitio_role.fileAdmin.key
+					on_resource = permitio_resource.folder.key
+					to_role     = permitio_role.folderAdmin.key
+					linked_by   = permitio_relation.parent.key
+				}`, testID, testID, testID, testID, testID, testID, testID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "role", fmt.Sprintf("admin-%s", testID)),
+					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "to_role", fmt.Sprintf("folder-admin-%s", testID)),
+					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "resource", fmt.Sprintf("file-%s", testID)),
+					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "on_resource", fmt.Sprintf("folder-%s", testID)),
+					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "linked_by", fmt.Sprintf("parent-%s", testID)),
+				),
+			},
+		},
+	})
+}
