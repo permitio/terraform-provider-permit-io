@@ -39,6 +39,6 @@ func tfModelFromSDK(m models.ResourceAttributeRead) userAttributeModel {
 
 		Type:        types.StringValue(string(m.Type)),
 		Key:         types.StringValue(m.Key),
-		Description: types.StringValue(*m.Description),
+		Description: types.StringPointerValue(m.Description),
 	}
 }

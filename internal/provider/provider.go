@@ -211,6 +211,7 @@ func (p *PermitProvider) DataSources(_ context.Context) []func() datasource.Data
 		roles.NewRoleDataSource,
 		conditionsets.NewConditionSetDataSource,
 		users.NewUserDataSource,
+		user_attributes.NewUserAttributeDataSource,
 	}
 }
 
