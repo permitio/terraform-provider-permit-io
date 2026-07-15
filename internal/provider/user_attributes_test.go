@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -36,37 +37,46 @@ func TestUserAttributes(t *testing.T) {
 					resource.TestCheckResourceAttr("permitio_user_attribute.test", "description", "an updated test"),
 				),
 			},
+			{
+				// Pins the API behavior for empty descriptions: "" round-trips
+				// as "" (not null) on both update and read.
+				Config: providerConfig +
+					`resource "permitio_user_attribute" "test" {
+						key         = "test"
+						type        = "number"
+						description = ""
+					}`,
+				Check: resource.TestCheckResourceAttr("permitio_user_attribute.test", "description", ""),
+			},
 		},
 	})
 }
 
 func TestUserAttributeAllTypes(t *testing.T) {
-	config := providerConfig
-	checks := make([]resource.TestCheckFunc, 0)
-
 	for _, attributeType := range []string{"bool", "number", "string", "time", "array", "json"} {
-		config += `
-			resource "permitio_user_attribute" "test_` + attributeType + `" {
-				key         = "tf_acc_type_` + attributeType + `"
-				type        = "` + attributeType + `"
-				description = "acceptance test for type ` + attributeType + `"
-			}`
-		checks = append(checks,
-			resource.TestCheckResourceAttr("permitio_user_attribute.test_"+attributeType, "type", attributeType),
-			resource.TestCheckResourceAttr("permitio_user_attribute.test_"+attributeType, "resource_key", "__user"),
-			resource.TestCheckResourceAttrSet("permitio_user_attribute.test_"+attributeType, "id"),
-		)
+		t.Run(attributeType, func(t *testing.T) {
+			resourceName := "permitio_user_attribute.test_" + attributeType
+			resource.Test(t, resource.TestCase{
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps: []resource.TestStep{
+					{
+						Config: providerConfig + `
+							resource "permitio_user_attribute" "test_` + attributeType + `" {
+								key         = "tf_acc_type_` + attributeType + `"
+								type        = "` + attributeType + `"
+								description = "acceptance test for type ` + attributeType + `"
+							}`,
+						Check: resource.ComposeAggregateTestCheckFunc(
+							resource.TestCheckResourceAttr(resourceName, "type", attributeType),
+							resource.TestCheckResourceAttr(resourceName, "description", "acceptance test for type "+attributeType),
+							resource.TestCheckResourceAttrSet(resourceName, "id"),
+							resource.TestCheckResourceAttrSet(resourceName, "resource_id"),
+						),
+					},
+				},
+			})
+		})
 	}
-
-	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: config,
-				Check:  resource.ComposeAggregateTestCheckFunc(checks...),
-			},
-		},
-	})
 }
 
 func TestUserAttributeDataSource(t *testing.T) {
@@ -88,14 +98,31 @@ func TestUserAttributeDataSource(t *testing.T) {
 					resource.TestCheckResourceAttr("data.permitio_user_attribute.by_key", "key", "tf_acc_ds_test"),
 					resource.TestCheckResourceAttr("data.permitio_user_attribute.by_key", "type", "number"),
 					resource.TestCheckResourceAttr("data.permitio_user_attribute.by_key", "description", "data source acceptance test"),
-					resource.TestCheckResourceAttr("data.permitio_user_attribute.by_key", "resource_key", "__user"),
-					resource.TestCheckResourceAttrSet("data.permitio_user_attribute.by_key", "id"),
 					resource.TestCheckResourceAttrSet("data.permitio_user_attribute.by_key", "environment_id"),
 					resource.TestCheckResourceAttrPair(
 						"data.permitio_user_attribute.by_key", "id",
 						"permitio_user_attribute.source", "id",
 					),
+					resource.TestCheckResourceAttrPair(
+						"data.permitio_user_attribute.by_key", "resource_id",
+						"permitio_user_attribute.source", "resource_id",
+					),
 				),
+			},
+		},
+	})
+}
+
+func TestUserAttributeDataSourceNotFound(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig +
+					`data "permitio_user_attribute" "missing" {
+						key = "tf_acc_does_not_exist"
+					}`,
+				ExpectError: regexp.MustCompile("Unable to read user attribute"),
 			},
 		},
 	})
