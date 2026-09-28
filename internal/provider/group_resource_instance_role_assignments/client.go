@@ -194,7 +194,7 @@ func findRole(ctx context.Context, rolesURL, token string,
 		}
 
 		seen += len(result.Data)
-		if len(result.Data) == 0 || seen >= result.TotalCount {
+		if len(result.Data) == 0 || seen >= *result.TotalCount {
 			return false, page, nil
 		}
 	}
@@ -213,7 +213,7 @@ type groupRolesPage struct {
 			Key string `json:"key"`
 		} `json:"resource"`
 	} `json:"data"`
-	TotalCount int `json:"total_count"`
+	TotalCount *int `json:"total_count"`
 }
 
 func listRolesPage(ctx context.Context, rolesURL, token string, page int) (groupRolesPage, error) {
@@ -254,6 +254,10 @@ func listRolesPage(ctx context.Context, rolesURL, token string, page int) (group
 	var result groupRolesPage
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to parse response: %w", err)
+	}
+	// Paging stops on total_count, so a zero stand-in would turn a miss into a deletion.
+	if result.TotalCount == nil {
+		return groupRolesPage{}, fmt.Errorf("failed to parse response: missing total_count")
 	}
 
 	return result, nil

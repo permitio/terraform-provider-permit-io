@@ -37,6 +37,7 @@ func TestRead(t *testing.T) {
 		errStatus int    // status of the errOn response; 0 means 500
 		badBodyOn int    // request number that returns a malformed body
 		totalBias int    // added to the total_count the stub reports
+		omitTotal bool   // the stub leaves total_count out of the response
 		deleteR0  bool   // another client deletes r0 after the first request
 		cancelCtx bool   // Read runs with an already cancelled context
 		wantErr   string // "" means found
@@ -109,6 +110,15 @@ func TestRead(t *testing.T) {
 			badBodyOn: 2,
 			wantErr:   "failed to parse response",
 			wantPages: []int{1, 2},
+		},
+		// Without total_count the walk can't tell where the roles end, so it must not guess.
+		{
+			name:      "missing total_count",
+			roles:     groupRoles(250),
+			role:      "r150",
+			omitTotal: true,
+			wantErr:   "missing total_count",
+			wantPages: []int{1},
 		},
 		{
 			name:      "server error on second walk",
@@ -195,10 +205,11 @@ func TestRead(t *testing.T) {
 					})
 				}
 				// page_count is optional in the API spec, so leave it out.
-				if err := json.NewEncoder(w).Encode(map[string]any{
-					"data":        data,
-					"total_count": len(roles) + tt.totalBias,
-				}); err != nil {
+				body := map[string]any{"data": data}
+				if !tt.omitTotal {
+					body["total_count"] = len(roles) + tt.totalBias
+				}
+				if err := json.NewEncoder(w).Encode(body); err != nil {
 					t.Errorf("failed to encode response: %v", err)
 				}
 				if tt.deleteR0 && len(pages) == 1 {
