@@ -99,7 +99,8 @@ func (c *groupResourceInstanceRoleAssignmentClient) Create(ctx context.Context, 
 	httpClient := http.DefaultClient
 
 	apiUrl = strings.TrimSuffix(apiUrl, "/")
-	url := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles", apiUrl, projectId, envId, plan.Group.ValueString())
+	rolesURL := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles",
+		apiUrl, projectId, envId, plan.Group.ValueString())
 
 	// Prepare request body
 	body := GroupAddRole{
@@ -115,7 +116,7 @@ func (c *groupResourceInstanceRoleAssignmentClient) Create(ctx context.Context, 
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyJSON))
+	req, err := http.NewRequestWithContext(ctx, "POST", rolesURL, bytes.NewBuffer(bodyJSON))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -156,8 +157,9 @@ func (c *groupResourceInstanceRoleAssignmentClient) Read(ctx context.Context, da
 		apiUrl, projectId, envId, data.Group.ValueString())
 
 	found, pages, err := findRole(ctx, rolesURL, token, data)
-	// A role deleted on an earlier page mid-walk shifts the rest back a page, so a miss
-	// across several pages gets one more walk before the assignment counts as gone.
+	// A role deleted on an earlier page mid-walk shifts every later role back one slot, so a
+	// role at a page boundary can land on a page already read. A miss across several pages
+	// therefore gets one more walk before the assignment counts as gone.
 	if err == nil && !found && pages > 1 {
 		found, _, err = findRole(ctx, rolesURL, token, data)
 	}
@@ -173,7 +175,7 @@ func (c *groupResourceInstanceRoleAssignmentClient) Read(ctx context.Context, da
 }
 
 // findRole walks the group's roles page by page, and reports whether the assignment
-// is there and how many pages it read.
+// is there and the number of pages it requested.
 func findRole(ctx context.Context, rolesURL, token string,
 	data GroupResourceInstanceRoleAssignmentModel) (bool, int, error) {
 	// page_count is optional in the API response, so stop on total_count instead.
@@ -216,6 +218,7 @@ type groupRolesPage struct {
 	TotalCount *int `json:"total_count"`
 }
 
+// listRolesPage fetches one page of up to groupRolesPerPage roles from rolesURL.
 func listRolesPage(ctx context.Context, rolesURL, token string, page int) (groupRolesPage, error) {
 	httpClient := http.DefaultClient
 
@@ -224,7 +227,6 @@ func listRolesPage(ctx context.Context, rolesURL, token string, page int) (group
 		"per_page": {strconv.Itoa(groupRolesPerPage)},
 	}
 
-	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rolesURL+"?"+query.Encode(), nil)
 	if err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to create request: %w", err)
@@ -233,14 +235,12 @@ func listRolesPage(ctx context.Context, rolesURL, token string, page int) (group
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	req.Header.Set("Content-Type", "application/json")
 
-	// Execute request
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to read response body: %w", err)
@@ -272,7 +272,8 @@ func (c *groupResourceInstanceRoleAssignmentClient) Delete(ctx context.Context, 
 	httpClient := http.DefaultClient
 
 	apiUrl = strings.TrimSuffix(apiUrl, "/")
-	url := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles", apiUrl, projectId, envId, plan.Group.ValueString())
+	rolesURL := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles",
+		apiUrl, projectId, envId, plan.Group.ValueString())
 
 	// Prepare request body
 	body := GroupAddRole{
@@ -288,7 +289,7 @@ func (c *groupResourceInstanceRoleAssignmentClient) Delete(ctx context.Context, 
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, bytes.NewBuffer(bodyJSON))
+	req, err := http.NewRequestWithContext(ctx, "DELETE", rolesURL, bytes.NewBuffer(bodyJSON))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
