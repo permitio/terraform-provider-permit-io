@@ -186,13 +186,12 @@ func TestRead(t *testing.T) {
 					if status == 0 {
 						status = http.StatusInternalServerError
 					}
-					// An empty-page body, so code that ignored the status would read a miss.
+					// A real error body has no total_count, so code that parsed before checking
+					// the status would report a parse error and hide the status.
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(status)
 					err := json.NewEncoder(w).Encode(map[string]any{
-						"detail":      http.StatusText(status),
-						"data":        []any{},
-						"total_count": 0,
+						"detail": http.StatusText(status),
 					})
 					if err != nil {
 						t.Errorf("failed to write error response: %v", err)
