@@ -255,7 +255,8 @@ func listRolesPage(ctx context.Context, rolesURL, token string, page int) (group
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to parse response: %w", err)
 	}
-	// Paging stops on total_count, so a zero stand-in would turn a miss into a deletion.
+	// Defaulting total_count to 0 would end the walk after page 1, so an assignment on a
+	// later page would read as a miss and be dropped from state.
 	if result.TotalCount == nil {
 		return groupRolesPage{}, fmt.Errorf("failed to parse response: missing total_count")
 	}
