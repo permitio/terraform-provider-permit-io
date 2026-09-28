@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -35,7 +34,7 @@ func TestRead(t *testing.T) {
 		role      string
 		errOn     int    // request number that fails with errStatus
 		errStatus int    // status of the errOn response; 0 means 500
-		badBodyOn int    // request number that returns a malformed body
+		badBodyOn int    // request number whose data field has the wrong type
 		totalBias int    // added to the total_count the stub reports
 		omitTotal bool   // the stub leaves total_count out of the response
 		deleteR0  bool   // another client deletes r0 after the first request
@@ -177,18 +176,23 @@ func TestRead(t *testing.T) {
 					if status == 0 {
 						status = http.StatusInternalServerError
 					}
-					// A parseable body, so code that ignored the status would not fail on parsing.
+					// An empty-page body, so code that ignored the status would read a miss.
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(status)
-					err := json.NewEncoder(w).Encode(map[string]string{
-						"detail": http.StatusText(status),
+					err := json.NewEncoder(w).Encode(map[string]any{
+						"detail":      http.StatusText(status),
+						"data":        []any{},
+						"total_count": 0,
 					})
 					if err != nil {
 						t.Errorf("failed to write error response: %v", err)
 					}
 					return
 				case tt.badBodyOn:
-					if _, err := io.WriteString(w, "{"); err != nil {
+					// A type mismatch still fills total_count, so a swallowed parse error
+					// would read as an empty page.
+					_, err := fmt.Fprintf(w, `{"data": {}, "total_count": %d}`, len(roles))
+					if err != nil {
 						t.Errorf("failed to write response: %v", err)
 					}
 					return
