@@ -39,6 +39,7 @@ func TestRead(t *testing.T) {
 		omitTotal bool   // the stub leaves total_count out of the response
 		deleteR0  bool   // another client deletes r0 after the first request
 		skewR0    bool   // r0 is deleted between the first response's data and count
+		dropKey   string // counted in total_count but left out of data, like a malformed tuple
 		cancelCtx bool   // Read runs with an already cancelled context
 		wantErr   string // "" means found
 		wantPages []int
@@ -94,6 +95,17 @@ func TestRead(t *testing.T) {
 			role:      "r100",
 			skewR0:    true,
 			wantPages: []int{1, 1},
+		},
+		// The backend drops malformed tuples after paging but still counts them, so page 1
+		// is short without being the last. r0's deletion then shifts r100 onto page 1 and
+		// leaves page 2 empty: a walk that saw under a full page still needs the second walk.
+		{
+			name:      "short page, deleted mid-walk",
+			roles:     groupRoles(101),
+			dropKey:   "r5",
+			role:      "r100",
+			deleteR0:  true,
+			wantPages: []int{1, 2, 1},
 		},
 		// The same role on another instance or resource is not a match.
 		{
@@ -211,6 +223,9 @@ func TestRead(t *testing.T) {
 				start := min((page-1)*perPage, len(roles))
 				end := min(page*perPage, len(roles))
 				for _, role := range roles[start:end] {
+					if role.key == tt.dropKey {
+						continue
+					}
 					data = append(data, map[string]any{
 						"key":               role.key,
 						"resource":          map[string]string{"key": role.resource},
