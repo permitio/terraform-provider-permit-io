@@ -1,6 +1,7 @@
 package group_resource_instance_role_assignments
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,9 +33,12 @@ func TestRead(t *testing.T) {
 		name      string
 		roles     []groupRole
 		role      string
-		errOn     int    // request number that fails with a 500
+		errOn     int    // request number that fails with errStatus
+		errStatus int    // status of the errOn response; 0 means 500
 		badBodyOn int    // request number that returns a malformed body
+		totalBias int    // added to the total_count the stub reports
 		deleteR0  bool   // another client deletes r0 after the first request
+		cancelCtx bool   // Read runs with an already cancelled context
 		wantErr   string // "" means found
 		wantPages []int
 	}{
@@ -49,6 +53,14 @@ func TestRead(t *testing.T) {
 			wantPages: []int{1, 2, 3, 1, 2, 3},
 		},
 		{name: "no roles", role: "r0", wantErr: "not found", wantPages: []int{1}},
+		// total_count can overstate the rows actually returned, so an empty page ends the walk.
+		{
+			name:      "total_count overstates rows",
+			role:      "r0",
+			totalBias: 5,
+			wantErr:   "not found",
+			wantPages: []int{1},
+		},
 		// A full last page must not trigger a request for an empty one.
 		{
 			name:      "exactly one page",
@@ -64,6 +76,14 @@ func TestRead(t *testing.T) {
 			role:      "r100",
 			deleteR0:  true,
 			wantPages: []int{1, 2, 3, 1},
+		},
+		// A miss that spans only two pages needs the second walk too.
+		{
+			name:      "deleted mid-walk, two pages",
+			roles:     groupRoles(150),
+			role:      "r100",
+			deleteR0:  true,
+			wantPages: []int{1, 2, 1},
 		},
 		// The same role on another instance or resource is not a match.
 		{
@@ -98,6 +118,24 @@ func TestRead(t *testing.T) {
 			wantErr:   `list roles of group "developers" (page 1): API request failed with status 500`,
 			wantPages: []int{1, 2, 3, 1},
 		},
+		// A 4xx fails the refresh like a 5xx; only a real miss may drop the assignment.
+		{
+			name:      "forbidden",
+			roles:     groupRoles(250),
+			role:      "r5",
+			errOn:     1,
+			errStatus: http.StatusForbidden,
+			wantErr:   `list roles of group "developers" (page 1): API request failed with status 403`,
+			wantPages: []int{1},
+		},
+		// A cancelled refresh must fail before any request, not read as a deletion.
+		{
+			name:      "cancelled context",
+			roles:     groupRoles(250),
+			role:      "r5",
+			cancelCtx: true,
+			wantErr:   "context canceled",
+		},
 	}
 
 	for _, tt := range tests {
@@ -116,10 +154,28 @@ func TestRead(t *testing.T) {
 					return
 				}
 				pages = append(pages, page)
+				// A walk that never stops fails here instead of hanging until the test timeout.
+				if len(pages) > 20 {
+					t.Errorf("too many requests: %v", pages)
+					http.Error(w, "too many requests", http.StatusInternalServerError)
+					return
+				}
 
 				switch len(pages) {
 				case tt.errOn:
-					http.Error(w, "internal error", http.StatusInternalServerError)
+					status := tt.errStatus
+					if status == 0 {
+						status = http.StatusInternalServerError
+					}
+					// A parseable body, so code that ignored the status would not fail on parsing.
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(status)
+					err := json.NewEncoder(w).Encode(map[string]string{
+						"detail": http.StatusText(status),
+					})
+					if err != nil {
+						t.Errorf("failed to write error response: %v", err)
+					}
 					return
 				case tt.badBodyOn:
 					if _, err := io.WriteString(w, "{"); err != nil {
@@ -141,7 +197,7 @@ func TestRead(t *testing.T) {
 				// page_count is optional in the API spec, so leave it out.
 				if err := json.NewEncoder(w).Encode(map[string]any{
 					"data":        data,
-					"total_count": len(roles),
+					"total_count": len(roles) + tt.totalBias,
 				}); err != nil {
 					t.Errorf("failed to encode response: %v", err)
 				}
@@ -157,7 +213,12 @@ func TestRead(t *testing.T) {
 				cachedApiUrl:    server.URL,
 				cachedToken:     "token",
 			}
-			_, err := client.Read(t.Context(), GroupResourceInstanceRoleAssignmentModel{
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if tt.cancelCtx {
+				cancel()
+			}
+			_, err := client.Read(ctx, GroupResourceInstanceRoleAssignmentModel{
 				Group:            types.StringValue("developers"),
 				Role:             types.StringValue(tt.role),
 				Resource:         types.StringValue("workspace"),
@@ -170,6 +231,10 @@ func TestRead(t *testing.T) {
 				t.Errorf("Read(%q) error = %v, want nil", tt.role, err)
 			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
 				t.Errorf("Read(%q) error = %v, want error containing %q", tt.role, err, tt.wantErr)
+			}
+			// resource.go removes the assignment from state on any "not found" error.
+			if tt.wantErr != "not found" && err != nil && strings.Contains(err.Error(), "not found") {
+				t.Errorf("Read(%q) error = %v, must not read as not-found", tt.role, err)
 			}
 			if !slices.Equal(pages, tt.wantPages) {
 				t.Errorf("Read(%q) requested pages %v, want %v", tt.role, pages, tt.wantPages)
