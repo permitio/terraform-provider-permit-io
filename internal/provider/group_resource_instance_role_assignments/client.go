@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/permitio/permit-golang/pkg/permit"
@@ -150,30 +152,52 @@ func (c *groupResourceInstanceRoleAssignmentClient) Read(ctx context.Context, da
 	}
 
 	apiUrl = strings.TrimSuffix(apiUrl, "/")
-	url := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles", apiUrl, projectId, envId, data.Group.ValueString())
+	rolesURL := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles",
+		apiUrl, projectId, envId, data.Group.ValueString())
 
-	// The list is paginated, so check every page before treating the assignment as gone
+	found, pages, err := findRole(ctx, rolesURL, token, data)
+	// A role deleted on an earlier page mid-walk shifts the rest back a page, so a miss
+	// across several pages gets one more walk before the assignment counts as gone.
+	if err == nil && !found && pages > 1 {
+		found, _, err = findRole(ctx, rolesURL, token, data)
+	}
+	if err != nil {
+		return GroupResourceInstanceRoleAssignmentModel{}, err
+	}
+	if !found {
+		return GroupResourceInstanceRoleAssignmentModel{},
+			fmt.Errorf("group resource instance role assignment not found")
+	}
+
+	return data, nil
+}
+
+// findRole walks the group's roles page by page, and reports whether the assignment
+// is there and how many pages it read.
+func findRole(ctx context.Context, rolesURL, token string,
+	data GroupResourceInstanceRoleAssignmentModel) (bool, int, error) {
+	// page_count is optional in the API response, so stop on total_count instead.
+	seen := 0
 	for page := 1; ; page++ {
-		result, err := listGroupRolesPage(ctx, url, token, page)
+		result, err := listRolesPage(ctx, rolesURL, token, page)
 		if err != nil {
-			return GroupResourceInstanceRoleAssignmentModel{}, err
+			return false, page, fmt.Errorf(
+				"list roles of group %q (page %d): %w", data.Group.ValueString(), page, err)
 		}
 
-		// Find the matching role assignment
 		for _, item := range result.Data {
 			if item.Key == data.Role.ValueString() &&
 				item.Resource.Key == data.Resource.ValueString() &&
 				item.ResourceInstance.Key == data.ResourceInstance.ValueString() {
-				return data, nil
+				return true, page, nil
 			}
 		}
 
-		if page >= result.PageCount {
-			break
+		seen += len(result.Data)
+		if len(result.Data) == 0 || seen >= result.TotalCount {
+			return false, page, nil
 		}
 	}
-
-	return GroupResourceInstanceRoleAssignmentModel{}, fmt.Errorf("group resource instance role assignment not found")
 }
 
 // groupRolesPerPage is the largest page size the group roles endpoint accepts.
@@ -189,14 +213,19 @@ type groupRolesPage struct {
 			Key string `json:"key"`
 		} `json:"resource"`
 	} `json:"data"`
-	PageCount int `json:"page_count"`
+	TotalCount int `json:"total_count"`
 }
 
-func listGroupRolesPage(ctx context.Context, url, token string, page int) (groupRolesPage, error) {
+func listRolesPage(ctx context.Context, rolesURL, token string, page int) (groupRolesPage, error) {
 	httpClient := http.DefaultClient
 
+	query := url.Values{
+		"page":     {strconv.Itoa(page)},
+		"per_page": {strconv.Itoa(groupRolesPerPage)},
+	}
+
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s?page=%d&per_page=%d", url, page, groupRolesPerPage), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rolesURL+"?"+query.Encode(), nil)
 	if err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -218,7 +247,8 @@ func listGroupRolesPage(ctx context.Context, url, token string, page int) (group
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return groupRolesPage{}, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return groupRolesPage{},
+			fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var result groupRolesPage
