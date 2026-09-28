@@ -245,19 +245,25 @@ func TestRead(t *testing.T) {
 			if tt.cancelCtx {
 				cancel()
 			}
-			_, err := client.Read(ctx, GroupResourceInstanceRoleAssignmentModel{
+			want := GroupResourceInstanceRoleAssignmentModel{
+				Id:               types.StringValue("developers"),
 				Group:            types.StringValue("developers"),
 				Role:             types.StringValue(tt.role),
 				Resource:         types.StringValue("workspace"),
 				ResourceInstance: types.StringValue("ws-1"),
 				Tenant:           types.StringValue("default"),
-			})
+			}
+			got, err := client.Read(ctx, want)
 
 			switch {
 			case tt.wantErr == "" && err != nil:
 				t.Errorf("Read(%q) error = %v, want nil", tt.role, err)
 			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
 				t.Errorf("Read(%q) error = %v, want error containing %q", tt.role, err, tt.wantErr)
+			}
+			// resource.go writes the returned model into state.
+			if tt.wantErr == "" && got != want {
+				t.Errorf("Read(%q) = %+v, want %+v", tt.role, got, want)
 			}
 			// resource.go removes the assignment from state on any "not found" error.
 			if tt.wantErr != "not found" && err != nil && strings.Contains(err.Error(), "not found") {
