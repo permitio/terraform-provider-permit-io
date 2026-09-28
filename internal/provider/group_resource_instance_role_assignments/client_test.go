@@ -38,6 +38,7 @@ func TestRead(t *testing.T) {
 		totalBias int    // added to the total_count the stub reports
 		omitTotal bool   // the stub leaves total_count out of the response
 		deleteR0  bool   // another client deletes r0 after the first request
+		skewR0    bool   // r0 is deleted between the first response's data and count
 		cancelCtx bool   // Read runs with an already cancelled context
 		wantErr   string // "" means found
 		wantPages []int
@@ -52,14 +53,14 @@ func TestRead(t *testing.T) {
 			wantErr:   "not found",
 			wantPages: []int{1, 2, 3, 1, 2, 3},
 		},
-		{name: "no roles", role: "r0", wantErr: "not found", wantPages: []int{1}},
+		{name: "no roles", role: "r0", wantErr: "not found", wantPages: []int{1, 1}},
 		// total_count can overstate the rows actually returned, so an empty page ends the walk.
 		{
 			name:      "total_count overstates rows",
 			role:      "r0",
 			totalBias: 5,
 			wantErr:   "not found",
-			wantPages: []int{1},
+			wantPages: []int{1, 1},
 		},
 		// A full last page must not trigger a request for an empty one.
 		{
@@ -67,7 +68,7 @@ func TestRead(t *testing.T) {
 			roles:     groupRoles(groupRolesPerPage),
 			role:      "missing",
 			wantErr:   "not found",
-			wantPages: []int{1},
+			wantPages: []int{1, 1},
 		},
 		// r100 shifts from page 2 onto page 1, which the first walk already read.
 		{
@@ -85,13 +86,22 @@ func TestRead(t *testing.T) {
 			deleteR0:  true,
 			wantPages: []int{1, 2, 1},
 		},
+		// data still holds r0..r99 but total_count already reflects r0's deletion, so the
+		// first walk ends on page 1 without reaching r100.
+		{
+			name:      "deleted between data and count",
+			roles:     groupRoles(101),
+			role:      "r100",
+			skewR0:    true,
+			wantPages: []int{1, 1},
+		},
 		// The same role on another instance or resource is not a match.
 		{
 			name:      "near misses",
 			roles:     []groupRole{{"r5", "workspace", "ws-2"}, {"r5", "doc", "ws-1"}},
 			role:      "r5",
 			wantErr:   "not found",
-			wantPages: []int{1},
+			wantPages: []int{1, 1},
 		},
 		// A failed page must fail the refresh, not report the assignment as gone.
 		{
@@ -207,6 +217,9 @@ func TestRead(t *testing.T) {
 						"resource":          map[string]string{"key": role.resource},
 						"resource_instance": map[string]string{"key": role.instance},
 					})
+				}
+				if tt.skewR0 && len(pages) == 1 {
+					roles = roles[1:]
 				}
 				// page_count is optional in the API spec, so leave it out.
 				body := map[string]any{"data": data}

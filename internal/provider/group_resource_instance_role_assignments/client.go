@@ -156,12 +156,13 @@ func (c *groupResourceInstanceRoleAssignmentClient) Read(ctx context.Context, da
 	rolesURL := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles",
 		apiUrl, projectId, envId, data.Group.ValueString())
 
-	found, pages, err := findRole(ctx, rolesURL, token, data)
-	// A role deleted on an earlier page mid-walk shifts every later role back one slot, so a
-	// role at a page boundary can land on a page already read. A miss across several pages
-	// therefore gets one more walk before the assignment counts as gone.
-	if err == nil && !found && pages > 1 {
-		found, _, err = findRole(ctx, rolesURL, token, data)
+	found, err := findRole(ctx, rolesURL, token, data)
+	// Paging runs outside any snapshot: a delete that commits mid-walk shifts later roles
+	// onto pages already read, and one that commits between the backend's data and count
+	// queries for a page ends the walk early. Either hides a role that still exists, so a
+	// miss gets one more walk before the assignment counts as gone.
+	if err == nil && !found {
+		found, err = findRole(ctx, rolesURL, token, data)
 	}
 	if err != nil {
 		return GroupResourceInstanceRoleAssignmentModel{}, err
@@ -174,16 +175,15 @@ func (c *groupResourceInstanceRoleAssignmentClient) Read(ctx context.Context, da
 	return data, nil
 }
 
-// findRole walks the group's roles page by page, and reports whether the assignment
-// is there and the number of pages it requested.
+// findRole walks the group's roles page by page and reports whether the assignment is there.
 func findRole(ctx context.Context, rolesURL, token string,
-	data GroupResourceInstanceRoleAssignmentModel) (bool, int, error) {
+	data GroupResourceInstanceRoleAssignmentModel) (bool, error) {
 	// page_count is optional in the API response, so stop on total_count instead.
 	seen := 0
 	for page := 1; ; page++ {
 		result, err := listRolesPage(ctx, rolesURL, token, page)
 		if err != nil {
-			return false, page, fmt.Errorf(
+			return false, fmt.Errorf(
 				"list roles of group %q (page %d): %w", data.Group.ValueString(), page, err)
 		}
 
@@ -191,13 +191,13 @@ func findRole(ctx context.Context, rolesURL, token string,
 			if item.Key == data.Role.ValueString() &&
 				item.Resource.Key == data.Resource.ValueString() &&
 				item.ResourceInstance.Key == data.ResourceInstance.ValueString() {
-				return true, page, nil
+				return true, nil
 			}
 		}
 
 		seen += len(result.Data)
 		if len(result.Data) == 0 || seen >= *result.TotalCount {
-			return false, page, nil
+			return false, nil
 		}
 	}
 }
