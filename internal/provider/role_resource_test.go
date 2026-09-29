@@ -3,10 +3,16 @@ package provider
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	permitConfig "github.com/permitio/permit-golang/pkg/config"
+	"github.com/permitio/permit-golang/pkg/models"
+	"github.com/permitio/permit-golang/pkg/permit"
 )
 
 func TestResources(t *testing.T) {
@@ -304,68 +310,141 @@ func TestResources(t *testing.T) {
 	})
 }
 
-// TestRoleDerivation is a focused regression test for issue #30: applying a
-// permitio_role_derivation must succeed when the role and to_role keys differ
-// between the two resources. It mirrors the reported scenario (an admin role on
-// "file" deriving a distinctly-keyed admin role on the parent "folder"). With the
-// role/to_role mapping reversed (the pre-fix behaviour) the Permit API returns a
-// 404, so this test fails if the fix in role_derivations/client.go is reverted.
+// TestRoleDerivation covers issue #30 with distinct role keys on the two resources:
+// folder admins (`role` on `on_resource`) get the file admin role (`to_role` on
+// `resource`). It checks the grant through the API, so it fails if the provider sends
+// role and to_role the other way round, and it checks that a derivation deleted
+// outside Terraform is planned for re-creation instead of failing the refresh.
 func TestRoleDerivation(t *testing.T) {
 	testID := fmt.Sprintf("test-%d-%d", time.Now().Unix(), rand.Intn(10000))
+	fileKey := "file-" + testID
+	folderKey := "folder-" + testID
+	parentKey := "parent-" + testID
+	fileAdminKey := "admin-" + testID
+	folderAdminKey := "folder-admin-" + testID
+	const address = "permitio_role_derivation.folderFileAdmin"
+
+	config := providerConfig + fmt.Sprintf(`
+		resource "permitio_resource" "file" {
+			key  = %[1]q
+			name = %[1]q
+			actions = {
+				"read" = { "name" = "Read" }
+			}
+			attributes = {}
+		}
+		resource "permitio_resource" "folder" {
+			key  = %[2]q
+			name = %[2]q
+			actions = {
+				"read" = { "name" = "Read" }
+			}
+			attributes = {}
+		}
+		resource "permitio_relation" "parent" {
+			key              = %[3]q
+			name             = "parent of"
+			subject_resource = permitio_resource.folder.key
+			object_resource  = permitio_resource.file.key
+		}
+		resource "permitio_role" "fileAdmin" {
+			key         = %[4]q
+			name        = "File Administrator"
+			permissions = ["read"]
+			resource    = permitio_resource.file.key
+		}
+		resource "permitio_role" "folderAdmin" {
+			key         = %[5]q
+			name        = "Folder Administrator"
+			permissions = ["read"]
+			resource    = permitio_resource.folder.key
+		}
+		resource "permitio_role_derivation" "folderFileAdmin" {
+			role        = permitio_role.folderAdmin.key
+			on_resource = permitio_resource.folder.key
+			to_role     = permitio_role.fileAdmin.key
+			resource    = permitio_resource.file.key
+			linked_by   = permitio_relation.parent.key
+		}`, fileKey, folderKey, parentKey, fileAdminKey, folderAdminKey)
+
+	grant := models.DerivedRoleRuleRead{
+		Role:             folderAdminKey,
+		OnResource:       folderKey,
+		LinkedByRelation: parentKey,
+	}
+	checks := resource.ComposeAggregateTestCheckFunc(
+		resource.TestCheckResourceAttr(address, "role", folderAdminKey),
+		resource.TestCheckResourceAttr(address, "on_resource", folderKey),
+		resource.TestCheckResourceAttr(address, "to_role", fileAdminKey),
+		resource.TestCheckResourceAttr(address, "resource", fileKey),
+		resource.TestCheckResourceAttr(address, "linked_by", parentKey),
+		testAccCheckRoleGrantedTo(t, fileKey, fileAdminKey, grant),
+	)
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: providerConfig + fmt.Sprintf(`
-				resource "permitio_resource" "file" {
-					key  = "file-%s"
-					name = "file-%s"
-					actions = {
-						"read" = { "name" = "Read" }
+				Config: config,
+				Check:  checks,
+			},
+			{
+				PreConfig: func() {
+					// ImplicitGrants.Delete's parameter names are swapped in the SDK: the
+					// first argument fills the URL's resource slot, the second its role slot.
+					err := testAccPermitClient().Api.ImplicitGrants.Delete(
+						t.Context(), fileKey, fileAdminKey, models.DerivedRoleRuleDelete{
+							Role:             grant.Role,
+							OnResource:       grant.OnResource,
+							LinkedByRelation: grant.LinkedByRelation,
+						})
+					if err != nil {
+						t.Fatalf("deleting role derivation outside Terraform: %v", err)
 					}
-					attributes = {}
-				}
-				resource "permitio_resource" "folder" {
-					key  = "folder-%s"
-					name = "folder-%s"
-					actions = {
-						"read" = { "name" = "Read" }
-					}
-					attributes = {}
-				}
-				resource "permitio_relation" "parent" {
-					key              = "parent-%s"
-					name             = "parent of"
-					subject_resource = permitio_resource.folder.key
-					object_resource  = permitio_resource.file.key
-				}
-				resource "permitio_role" "fileAdmin" {
-					key         = "admin-%s"
-					name        = "File Administrator"
-					permissions = ["read"]
-					resource    = permitio_resource.file.key
-				}
-				resource "permitio_role" "folderAdmin" {
-					key         = "folder-admin-%s"
-					name        = "Folder Administrator"
-					permissions = ["read"]
-					resource    = permitio_resource.folder.key
-				}
-				resource "permitio_role_derivation" "folderFileAdmin" {
-					resource    = permitio_resource.file.key
-					role        = permitio_role.fileAdmin.key
-					on_resource = permitio_resource.folder.key
-					to_role     = permitio_role.folderAdmin.key
-					linked_by   = permitio_relation.parent.key
-				}`, testID, testID, testID, testID, testID, testID, testID),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "role", fmt.Sprintf("admin-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "to_role", fmt.Sprintf("folder-admin-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "resource", fmt.Sprintf("file-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "on_resource", fmt.Sprintf("folder-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_role_derivation.folderFileAdmin", "linked_by", fmt.Sprintf("parent-%s", testID)),
-				),
+				},
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(address, plancheck.ResourceActionCreate),
+					},
+				},
+				Check: checks,
 			},
 		},
 	})
+}
+
+// testAccPermitClient builds an SDK client from the same environment variables the
+// provider reads, so tests can change Permit state outside Terraform.
+func testAccPermitClient() *permit.Client {
+	apiURL := os.Getenv("PERMITIO_API_URL")
+	if apiURL == "" {
+		apiURL = DefaultApiUrl
+	}
+	return permit.NewPermit(
+		permitConfig.NewConfigBuilder(os.Getenv("PERMITIO_API_KEY")).WithApiUrl(apiURL).Build(),
+	)
+}
+
+// testAccCheckRoleGrantedTo checks through the API that roleKey on resourceKey is
+// derived from want.Role on want.OnResource via want.LinkedByRelation.
+func testAccCheckRoleGrantedTo(
+	t *testing.T, resourceKey, roleKey string, want models.DerivedRoleRuleRead,
+) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		role, err := testAccPermitClient().Api.ResourceRoles.Get(t.Context(), resourceKey, roleKey)
+		if err != nil {
+			return fmt.Errorf("getting role %s/%s: %w", resourceKey, roleKey, err)
+		}
+		if role.GrantedTo != nil {
+			for _, got := range role.GrantedTo.UsersWithRole {
+				if got.Role == want.Role && got.OnResource == want.OnResource &&
+					got.LinkedByRelation == want.LinkedByRelation {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("role %s/%s is not derived from %s on %s via %s",
+			resourceKey, roleKey, want.Role, want.OnResource, want.LinkedByRelation)
+	}
 }
