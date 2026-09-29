@@ -98,10 +98,16 @@ func (r *RoleDerivationResource) Create(ctx context.Context, request resource.Cr
 	roleRead, err := r.client.Create(ctx, plan)
 
 	if err != nil {
-		response.Diagnostics.AddError(
-			"Unable to create role derivation",
-			fmt.Errorf("unable to create role derivation: %w", err).Error(),
-		)
+		detail := fmt.Errorf("unable to create role derivation: %w", err).Error()
+		if common.IsNotFoundErr(err) {
+			detail += fmt.Sprintf(
+				"\n\nCheck that to_role %q is a role on resource %q, role %q is a role on "+
+					"on_resource %q, and linked_by %q is a relation between the two resources.",
+				plan.ToRole.ValueString(), plan.Resource.ValueString(), plan.Role.ValueString(),
+				plan.OnResource.ValueString(), plan.LinkedByRelation.ValueString(),
+			)
+		}
+		response.Diagnostics.AddError("Unable to create role derivation", detail)
 		return
 	}
 
@@ -120,6 +126,11 @@ func (r *RoleDerivationResource) Read(ctx context.Context, request resource.Read
 	reality, err := r.client.Read(ctx, model)
 
 	if err != nil {
+		// The derivation or its role was deleted outside Terraform; drop it so it is recreated.
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to read role derivation",
 			fmt.Errorf("unable to read role derivation: %w", err).Error(),
