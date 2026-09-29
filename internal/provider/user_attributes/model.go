@@ -32,13 +32,13 @@ func tfModelFromSDK(m models.ResourceAttributeRead) userAttributeModel {
 		EnvironmentId:  types.StringValue(m.EnvironmentId),
 
 		ResourceId:  types.StringValue(m.ResourceId),
-		ResourceKey: types.StringValue(UserKey), // Will always be "__user"
+		ResourceKey: types.StringValue(m.ResourceKey), // Always "__user" for user attributes
 
 		CreatedAt: types.StringValue(m.CreatedAt.String()),
 		UpdatedAt: types.StringValue(m.UpdatedAt.String()),
 
 		Type:        types.StringValue(string(m.Type)),
 		Key:         types.StringValue(m.Key),
-		Description: types.StringValue(*m.Description),
+		Description: types.StringPointerValue(m.Description),
 	}
 }

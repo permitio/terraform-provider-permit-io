@@ -85,6 +85,18 @@ func newAttributesModelsFromSDK(sdkAttributes *map[string]models.AttributeBlockR
 	return attributes
 }
 
+// newAttributesModelsFromSDKWithPlan converts SDK attributes to the Terraform model,
+// preserving the plan's null vs empty map distinction when the API returns an empty map.
+func newAttributesModelsFromSDKWithPlan(sdkAttributes *map[string]models.AttributeBlockRead, planAttributes attributesModel) attributesModel {
+	result := newAttributesModelsFromSDK(sdkAttributes)
+	// If API returned an empty map but the plan had null (user didn't specify attributes),
+	// preserve null to avoid "was null, but now empty map" inconsistency.
+	if len(result) == 0 && planAttributes == nil {
+		return nil
+	}
+	return result
+}
+
 func (a attributesModel) toSDK() map[string]models.AttributeBlockEditable {
 	var attributes map[string]models.AttributeBlockEditable
 	if a == nil {

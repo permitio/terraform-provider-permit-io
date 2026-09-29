@@ -92,6 +92,7 @@ func (r *RoleResource) Create(ctx context.Context, request resource.CreateReques
 			"Unable to create role",
 			fmt.Errorf("unable to create role: %w", err).Error(),
 		)
+		return
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, roleRead)...)
@@ -116,6 +117,7 @@ func (r *RoleResource) Read(ctx context.Context, request resource.ReadRequest, r
 			"Unable to read role",
 			fmt.Errorf("unable to read role: %w", err).Error(),
 		)
+		return
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &roleRead)...)
@@ -137,6 +139,7 @@ func (r *RoleResource) Update(ctx context.Context, request resource.UpdateReques
 			"Unable to update role",
 			fmt.Errorf("unable to update role: %w", err).Error(),
 		)
+		return
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, roleRead)...)
