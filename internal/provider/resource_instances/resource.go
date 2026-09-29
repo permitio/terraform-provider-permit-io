@@ -52,7 +52,7 @@ func (r *ResourceInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 		MarkdownDescription: "The unique resource type ID.",
 		Computed:            true,
 		PlanModifiers: []planmodifier.String{
-			stringplanmodifier.UseStateForUnknown(),
+			stringplanmodifier.UseNonNullStateForUnknown(),
 		},
 	}
 	attributes["tenant"] = schema.StringAttribute{
