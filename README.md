@@ -106,7 +106,7 @@ resource "permitio_tenant" "acme_corp" {
 ## Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.19
+- [Go](https://golang.org/doc/install) >= 1.26
 
 ## Building The Provider
 

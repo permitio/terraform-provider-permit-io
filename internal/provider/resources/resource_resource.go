@@ -59,35 +59,35 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				MarkdownDescription: "Unique id of the resource",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"organization_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the organization that owns the resource",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"project_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the project that owns the resource",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"environment_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the environment that owns the resource",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"created_at": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Timestamp when the resource was created",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"updated_at": schema.StringAttribute{
@@ -108,7 +108,7 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				MarkdownDescription: "The URN (Uniform Resource Name) of the resource",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"description": schema.StringAttribute{
@@ -123,7 +123,7 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 						"id": schema.StringAttribute{
 							Computed: true,
 							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
+								stringplanmodifier.UseNonNullStateForUnknown(),
 							},
 						},
 						"name": schema.StringAttribute{

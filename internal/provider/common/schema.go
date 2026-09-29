@@ -12,7 +12,7 @@ func CreateBaseResourceSchema() map[string]schema.Attribute {
 			Computed:            true,
 			MarkdownDescription: "The resource ID. This is a unique identifier for the resource. ",
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"key": schema.StringAttribute{
@@ -35,28 +35,28 @@ func CreateBaseResourceSchema() map[string]schema.Attribute {
 			MarkdownDescription: "The organization ID. This is a unique identifier for the organization. ",
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"project_id": schema.StringAttribute{
 			MarkdownDescription: "The project ID. This is a unique identifier for the project. ",
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"environment_id": schema.StringAttribute{
 			MarkdownDescription: "The environment ID. This is a unique identifier for the environment. ",
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"created_at": schema.StringAttribute{
 			MarkdownDescription: "The creation timestamp. This is a timestamp for when the object was created. ",
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"updated_at": schema.StringAttribute{

@@ -43,11 +43,12 @@ func (c *apiClient) Read(ctx context.Context, plan roleDerivationModel) (roleDer
 			fmt.Errorf("failed getting target role %s/%s: %w", plan.Resource.ValueString(), plan.ToRole.ValueString(), err)
 	}
 
-	if targetRoleRead.GrantedTo == nil {
-		return roleDerivationModel{}, fmt.Errorf("target role has no role grants")
+	var grants []models.DerivedRoleRuleRead
+	if targetRoleRead.GrantedTo != nil {
+		grants = targetRoleRead.GrantedTo.UsersWithRole
 	}
 
-	derivation, found := lo.Find(targetRoleRead.GrantedTo.UsersWithRole, func(item models.DerivedRoleRuleRead) bool {
+	derivation, found := lo.Find(grants, func(item models.DerivedRoleRuleRead) bool {
 		return item.OnResource == plan.OnResource.ValueString() &&
 			item.Role == plan.Role.ValueString() &&
 			item.LinkedByRelation == plan.LinkedByRelation.ValueString()
