@@ -25,6 +25,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@72b6676b71ab476b77e676928516f6982eef7a41 # v5.3.0
         id: import_gpg
