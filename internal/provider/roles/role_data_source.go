@@ -110,7 +110,7 @@ func (d *RoleDataSource) Read(ctx context.Context, request datasource.ReadReques
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to read role",
-			fmt.Errorf("Unable to read role %s: %w", roleRead, err).Error(),
+			fmt.Errorf("unable to read role %s: %w", roleRead, err).Error(),
 		)
 	}
 

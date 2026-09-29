@@ -46,14 +46,14 @@ func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		Computed:            true,
 		Optional:            true,
 		PlanModifiers: []planmodifier.Set{
-			setplanmodifier.UseStateForUnknown(),
+			setplanmodifier.UseNonNullStateForUnknown(),
 		},
 	}
 	attributes["extends"] = schema.SetAttribute{
 		MarkdownDescription: "list of role keys that define what roles this role extends. In other words: this role will automatically inherit all the permissions of the given roles in this list.",
 		ElementType:         types.StringType,
 		PlanModifiers: []planmodifier.Set{
-			setplanmodifier.UseStateForUnknown(),
+			setplanmodifier.UseNonNullStateForUnknown(),
 		},
 		Computed: true,
 		Optional: true,

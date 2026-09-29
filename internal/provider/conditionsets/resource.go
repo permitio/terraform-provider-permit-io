@@ -100,28 +100,28 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			Computed:            true,
 			MarkdownDescription: "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.\n\n",
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"organization_id": schema.StringAttribute{
 			Computed:            true,
 			MarkdownDescription: "The id of the organization to which the condition set belongs.",
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"project_id": schema.StringAttribute{
 			MarkdownDescription: "The id of the project to which the condition set belongs.",
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"environment_id": schema.StringAttribute{
 			MarkdownDescription: "The id of the environment to which the condition set belongs.",
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"key": schema.StringAttribute{
@@ -137,7 +137,7 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			Optional:            true,
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"conditions": schema.StringAttribute{
@@ -153,7 +153,7 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			Optional:            true,
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 	}

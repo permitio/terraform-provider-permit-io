@@ -66,7 +66,7 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Schema(_ context.Context, 
 				Computed:            true,
 				MarkdownDescription: "Unique identifier of the role assignment",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"group": schema.StringAttribute{

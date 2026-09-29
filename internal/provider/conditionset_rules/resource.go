@@ -59,28 +59,28 @@ func (c *ConditionSetRuleResource) Schema(_ context.Context, _ resource.SchemaRe
 				Computed:            true,
 				MarkdownDescription: "Unique id of the condition set rule",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"organization_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the organization that owns the condition set rule",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"project_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the project that owns the condition set rule",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"environment_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the environment that owns the condition set rule",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"user_set": schema.StringAttribute{

@@ -60,28 +60,28 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Computed:            true,
 				MarkdownDescription: "Unique id of the proxy config",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"organization_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the organization that owns the proxy config",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"project_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the project that owns the proxy config",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"environment_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique id of the environment that owns the proxy config",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"key": schema.StringAttribute{
