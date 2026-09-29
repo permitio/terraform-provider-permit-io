@@ -81,10 +81,11 @@ resource "permitio_role" "folderAdmin" {
   ]
 }
 
+# Folder admins get the admin role on every file in the folder.
 resource "permitio_role_derivation" "folderFileAdmin" {
-  resource    = permitio_resource.file.key
-  role        = permitio_role.fileAdmin.key
+  role        = permitio_role.folderAdmin.key
   on_resource = permitio_resource.folder.key
-  to_role     = permitio_role.folderAdmin.key
+  to_role     = permitio_role.fileAdmin.key
+  resource    = permitio_resource.file.key
   linked_by   = permitio_relation.parent.key
 }

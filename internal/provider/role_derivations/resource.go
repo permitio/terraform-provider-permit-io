@@ -36,44 +36,53 @@ func (r *RoleDerivationResource) Metadata(_ context.Context, request resource.Me
 func (r *RoleDerivationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := make(map[string]schema.Attribute)
 	attributes["resource"] = schema.StringAttribute{
-		MarkdownDescription: "Either the unique id of the resource, or the URL-friendly key of the resource that you want to create role derivation for.",
-		Required:            true,
+		MarkdownDescription: "The key or ID of the resource that `to_role` belongs to. " +
+			"Users get `to_role` on instances of this resource.",
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["role"] = schema.StringAttribute{
-		MarkdownDescription: "The role that the user will derive.",
-		Required:            true,
+		MarkdownDescription: "The key of a role on `on_resource`. Users who have this role on an " +
+			"`on_resource` instance get `to_role` on the linked `resource` instances.",
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["on_resource"] = schema.StringAttribute{
-		MarkdownDescription: "The resource that the user will derive the role on.",
+		MarkdownDescription: "The key of the related resource that `role` belongs to.",
 		Required:            true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["to_role"] = schema.StringAttribute{
-		MarkdownDescription: "The role that you want to create role derivation for.",
+		MarkdownDescription: "The key of the role on `resource` that users get through this derivation.",
 		Required:            true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["linked_by"] = schema.StringAttribute{
-		MarkdownDescription: "The relation that links the resource to the role.",
-		Required:            true,
+		MarkdownDescription: "The key of the relation that links `on_resource` instances to " +
+			"`resource` instances.",
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 
 	resp.Schema = schema.Schema{
-		Attributes:          attributes,
-		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Implicit-Grants/operation/create_implicit_grant) for more information on role derivations.",
+		Attributes: attributes,
+		MarkdownDescription: "Grants `to_role` on `resource` to every user who has `role` on an " +
+			"`on_resource` instance linked by the `linked_by` relation. For example, " +
+			"`role = \"manager\"`, `on_resource = \"folder\"`, `to_role = \"editor\"`, " +
+			"`resource = \"file\"` and `linked_by = \"parent\"` make folder managers editors of " +
+			"the files in their folders. See [the documentation](" +
+			"https://api.permit.io/v2/redoc#tag/Implicit-Grants/operation/create_implicit_grant) " +
+			"for more information on role derivations.",
 	}
 }
 
