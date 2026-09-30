@@ -59,6 +59,41 @@ jobs:
           go build -o "$RUNNER_TEMP/checkgotest" ./internal/acctest/checkgotest
           go test -count=1 -json -skip '^TestAcc' ./... |
             "$RUNNER_TEMP/checkgotest" -require "$REQUIRED_TEST"
+      # Lists the provider schema changes a pull request makes, labelled BREAKING or
+      # non-breaking, in the job summary. Breaking changes are expected while 1.0.0 is
+      # prepared, so they are reported, not failed. schemadiff exits 0 (no breaking
+      # change), 1 (breaking changes) or 2 (could not compare), and 2 fails the step.
+      - name: Report provider schema changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          SCHEMA: internal/provider/testdata/provider-schema.json
+        run: |
+          go build -o "$RUNNER_TEMP/schemadiff" ./internal/acctest/schemadiff
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          echo "### Provider schema changes against $BASE_REF" >>"$GITHUB_STEP_SUMMARY"
+          in_base=$(git ls-tree --name-only FETCH_HEAD -- "$SCHEMA")
+          if [[ -z $in_base ]]; then
+            echo "no base schema: $BASE_REF has no $SCHEMA to compare with" |
+              tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git show "FETCH_HEAD:$SCHEMA" >"$RUNNER_TEMP/base-schema.json"
+          status=0
+          "$RUNNER_TEMP/schemadiff" "$RUNNER_TEMP/base-schema.json" "$SCHEMA" \
+            >"$RUNNER_TEMP/schemadiff.txt" || status=$?
+          cat "$RUNNER_TEMP/schemadiff.txt"
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/schemadiff.txt"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          case $status in
+            0) ;;
+            1) echo "::warning title=Breaking schema changes::See the job summary." ;;
+            *) exit "$status" ;;
+          esac
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
           version: v2.14.0

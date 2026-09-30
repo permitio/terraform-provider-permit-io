@@ -1,0 +1,1453 @@
+{
+  "provider": {
+    "version": 0,
+    "attributes": {
+      "api_key": {
+        "type": "string",
+        "optional": true,
+        "sensitive": true,
+        "description": "The API key for Permit.io API (Required)"
+      },
+      "api_url": {
+        "type": "string",
+        "optional": true,
+        "description": "The URL of Permit.io API"
+      },
+      "timeout": {
+        "type": "number",
+        "optional": true,
+        "description": "Timeout for the requests to Permit.io API - default is 10 seconds"
+      }
+    }
+  },
+  "resources": {
+    "permitio_condition_set_rule": {
+      "version": 0,
+      "description": "See [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Set-Rules) for more information on condition sets rules.",
+      "attributes": {
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the environment that owns the condition set rule",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the condition set rule",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the organization that owns the condition set rule",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "permission": {
+          "type": "string",
+          "required": true,
+          "description": "The permission that will be granted to the userset on the resourceset. The permission can be either a resource action id, or {resource_key}:{action_key}, i.e: the \"permission name\".",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the project that owns the condition set rule",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "resource_set": {
+          "type": "string",
+          "required": true,
+          "description": "The resourceset that represents the resources that are granted for access, i.e: all the resources matching this rule can be accessed by the userset to perform the granted permission",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "user_set": {
+          "type": "string",
+          "required": true,
+          "description": "The userset that will be given permission, i.e: all the users matching this rule will be given the specified permission",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        }
+      }
+    },
+    "permitio_group_resource_instance_role_assignment": {
+      "version": 0,
+      "description": "Assigns a role to a group on a specific resource instance within a tenant. This uses the Permit.io Groups API to manage group-level permissions on resource instances. For user-specific assignments, use `permitio_resource_instance_role_assignment` instead.",
+      "attributes": {
+        "group": {
+          "type": "string",
+          "required": true,
+          "description": "Group key to assign the role to",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique identifier of the role assignment",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "required": true,
+          "description": "Resource type (e.g., 'workspace', 'document')",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "resource_instance": {
+          "type": "string",
+          "required": true,
+          "description": "Resource instance key (e.g., 'ws-123', 'doc-456')",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "role": {
+          "type": "string",
+          "required": true,
+          "description": "Role key to assign",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "tenant": {
+          "type": "string",
+          "required": true,
+          "description": "Tenant key for scoped assignment",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        }
+      }
+    },
+    "permitio_proxy_config": {
+      "version": 0,
+      "description": "See [the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config) for more information about proxy configs.",
+      "attributes": {
+        "auth_mechanism": {
+          "type": "string",
+          "required": true,
+          "description": "Default: \"Bearer\"\nEnum: \"Bearer\" \"Basic\" \"Headers\"\nProxy config auth mechanism will define the authentication mechanism that will be used to authenticate the request.\n\nBearer injects the secret into the Authorization header as a Bearer token,\n\nBasic injects the secret into the Authorization header as a Basic user:password,\n\nHeaders injects plain headers into the request.",
+          "validators": [
+            "auth_mechanism must be in [Bearer Basic Headers]"
+          ]
+        },
+        "auth_secret": {
+          "type": "single_nested",
+          "required": true,
+          "description": "Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service."
+        },
+        "auth_secret.basic": {
+          "type": "string",
+          "optional": true
+        },
+        "auth_secret.bearer": {
+          "type": "string",
+          "optional": true
+        },
+        "auth_secret.headers": {
+          "type": "map(string)",
+          "optional": true
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the environment that owns the proxy config",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the proxy config",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.\n\n"
+        },
+        "mapping_rules": {
+          "type": "list_nested",
+          "required": true,
+          "description": "Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method."
+        },
+        "mapping_rules.action": {
+          "type": "string",
+          "optional": true
+        },
+        "mapping_rules.headers": {
+          "type": "map(string)",
+          "optional": true
+        },
+        "mapping_rules.http_method": {
+          "type": "string",
+          "required": true
+        },
+        "mapping_rules.priority": {
+          "type": "number",
+          "optional": true
+        },
+        "mapping_rules.resource": {
+          "type": "string",
+          "required": true
+        },
+        "mapping_rules.url": {
+          "type": "string",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "The name of the proxy config, for example: 'Stripe API"
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the organization that owns the proxy config",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the project that owns the proxy config",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        }
+      }
+    },
+    "permitio_relation": {
+      "version": 0,
+      "description": "See [the documentation](https://api.permit.io/v2/redoc#tag/Resource-Relations/operation/create_resource_relation) for more information about Relations",
+      "attributes": {
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "description": "The creation timestamp. This is a timestamp for when the object was created. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The description. This is a human-readable description for the object. "
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The environment ID. This is a unique identifier for the environment. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "The resource ID. This is a unique identifier for the resource. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "The key. This is a unique identifier. ",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "The name. This is a human-readable name for the object. "
+        },
+        "object_resource": {
+          "type": "string",
+          "required": true,
+          "description": "The object resource ID or key",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "object_resource_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The object resource ID"
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The organization ID. This is a unique identifier for the organization. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The project ID. This is a unique identifier for the project. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "subject_resource": {
+          "type": "string",
+          "required": true,
+          "description": "The subject resource ID or key",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "subject_resource_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The subject resource ID"
+        },
+        "updated_at": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The update timestamp. This is a timestamp for when the object was last updated. "
+        }
+      }
+    },
+    "permitio_resource": {
+      "version": 0,
+      "description": "See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource) for more information about resources.",
+      "attributes": {
+        "actions": {
+          "type": "map_nested",
+          "required": true,
+          "description": "A actions definition block, typically contained within a resource type definition block.\n    The actions represents the ways you can interact with a protected resource."
+        },
+        "actions.description": {
+          "type": "string",
+          "optional": true
+        },
+        "actions.id": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "actions.name": {
+          "type": "string",
+          "required": true
+        },
+        "attributes": {
+          "type": "map_nested",
+          "optional": true,
+          "description": "Attributes that each resource of this type defines, and can be used in your ABAC policies."
+        },
+        "attributes.description": {
+          "type": "string",
+          "optional": true
+        },
+        "attributes.type": {
+          "type": "string",
+          "required": true,
+          "validators": [
+            "The type of the attribute in the resource."
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "description": "Timestamp when the resource was created",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "An optional longer description of what this resource respresents in your system"
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the environment that owns the resource",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the resource",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "A URL-friendly name of the resource (i.e: slug). You will be able to query later using this key instead of the id (UUID) of the resource."
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "The name of the resource"
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the organization that owns the resource",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique id of the project that owns the resource",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "updated_at": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "Timestamp when the resource was last updated"
+        },
+        "urn": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The URN (Uniform Resource Name) of the resource",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        }
+      }
+    },
+    "permitio_resource_instance": {
+      "version": 0,
+      "description": "Manages a Permit.io resource instance. Resource instances represent specific objects of a resource type (e.g., a specific document, project, or folder). See [the documentation](https://api.permit.io/v2/redoc#tag/Resource-Instances) for more information.",
+      "attributes": {
+        "attributes": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies."
+        },
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "description": "The creation timestamp. This is a timestamp for when the object was created. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The environment ID. This is a unique identifier for the environment. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "The resource ID. This is a unique identifier for the resource. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "The key. This is a unique identifier. ",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The organization ID. This is a unique identifier for the organization. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The project ID. This is a unique identifier for the project. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "required": true,
+          "description": "The resource type key that this instance belongs to.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "resource_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The unique resource type ID.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "tenant": {
+          "type": "string",
+          "optional": true,
+          "description": "The tenant key for multi-tenant enforcement.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "updated_at": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The update timestamp. This is a timestamp for when the object was last updated. "
+        }
+      }
+    },
+    "permitio_resource_instance_role_assignment": {
+      "version": 0,
+      "description": "Assigns a role to a user on a specific resource instance within a tenant. This is for instance-level permissions (e.g., giving a user editor access to a specific document). For tenant-level role assignments, use `permitio_role_assignment` instead.",
+      "attributes": {
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique identifier of the role assignment",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "required": true,
+          "description": "Resource type (e.g., 'workspace', 'document')",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "resource_instance": {
+          "type": "string",
+          "required": true,
+          "description": "Resource instance key (e.g., 'ws-123', 'doc-456')",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "role": {
+          "type": "string",
+          "required": true,
+          "description": "Role key to assign",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "tenant": {
+          "type": "string",
+          "required": true,
+          "description": "Tenant key for scoped assignment",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "user": {
+          "type": "string",
+          "required": true,
+          "description": "User key to assign the role to",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        }
+      }
+    },
+    "permitio_resource_set": {
+      "version": 0,
+      "description": "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
+      "attributes": {
+        "conditions": {
+          "type": "string",
+          "required": true,
+          "description": "a boolean expression that consists of multiple conditions, with and/or logic."
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "an optional longer description of the set",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The id of the environment to which the condition set belongs.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.\n\n",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name."
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "A descriptive name for the set, i.e: 'US based employees' or 'Users behind VPN'"
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The id of the organization to which the condition set belongs.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "parent_id": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The parent condition set id. Allows creating a nested condition set hierarchy.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The id of the project to which the condition set belongs.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    "permitio_role": {
+      "version": 0,
+      "description": "See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource) for more information about roles.\n You can also read about Resource Roles [here](https://api.permit.io/v2/redoc#tag/Resource-Roles/operation/create_resource_role).",
+      "attributes": {
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "description": "The creation timestamp. This is a timestamp for when the object was created. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The description. This is a human-readable description for the object. "
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The environment ID. This is a unique identifier for the environment. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "extends": {
+          "type": "set(string)",
+          "optional": true,
+          "computed": true,
+          "description": "list of role keys that define what roles this role extends. In other words: this role will automatically inherit all the permissions of the given roles in this list.",
+          "plan_modifiers": [
+            "setplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "The resource ID. This is a unique identifier for the resource. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "The key. This is a unique identifier. ",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "The name. This is a human-readable name for the object. "
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The organization ID. This is a unique identifier for the organization. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "permissions": {
+          "type": "set(string)",
+          "optional": true,
+          "computed": true,
+          "description": "list of action keys that define what actions this resource role is permitted to do",
+          "plan_modifiers": [
+            "setplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The project ID. This is a unique identifier for the project. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "optional": true,
+          "description": "The unique resource key that the role belongs to.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "resource_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The unique resource ID that the role belongs to."
+        },
+        "updated_at": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The update timestamp. This is a timestamp for when the object was last updated. "
+        }
+      }
+    },
+    "permitio_role_assignment": {
+      "version": 0,
+      "description": "Assigns a role to a user within a specific tenant.",
+      "attributes": {
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique identifier of the role assignment",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "role": {
+          "type": "string",
+          "required": true,
+          "description": "Role key to assign",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "tenant": {
+          "type": "string",
+          "required": true,
+          "description": "Tenant key for scoped assignment",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "user": {
+          "type": "string",
+          "required": true,
+          "description": "User key to assign the role to",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        }
+      }
+    },
+    "permitio_role_derivation": {
+      "version": 0,
+      "description": "Grants `to_role` on `resource` to every user who has `role` on an `on_resource` instance linked by the `linked_by` relation. For example, `role = \"manager\"`, `on_resource = \"folder\"`, `to_role = \"editor\"`, `resource = \"file\"` and `linked_by = \"parent\"` make folder managers editors of the files in their folders. See [the documentation](https://api.permit.io/v2/redoc#tag/Implicit-Grants/operation/create_implicit_grant) for more information on role derivations.",
+      "attributes": {
+        "linked_by": {
+          "type": "string",
+          "required": true,
+          "description": "The key of the relation that links `on_resource` instances to `resource` instances.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "on_resource": {
+          "type": "string",
+          "required": true,
+          "description": "The key of the related resource that `role` belongs to.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "required": true,
+          "description": "The key or ID of the resource that `to_role` belongs to. Users get `to_role` on instances of this resource.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "role": {
+          "type": "string",
+          "required": true,
+          "description": "The key of a role on `on_resource`. Users who have this role on an `on_resource` instance get `to_role` on the linked `resource` instances.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "to_role": {
+          "type": "string",
+          "required": true,
+          "description": "The key of the role on `resource` that users get through this derivation.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        }
+      }
+    },
+    "permitio_tenant": {
+      "version": 0,
+      "description": "Manages a Permit.io tenant. Tenants represent isolated groups or organizations within your application. See [the documentation](https://api.permit.io/v2/redoc#tag/Tenants) for more information about tenants.",
+      "attributes": {
+        "attributes": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "Arbitrary tenant attributes in JSON format that will be used to enforce attribute-based access control policies."
+        },
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "description": "The creation timestamp. This is a timestamp for when the object was created. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The description. This is a human-readable description for the object. "
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The environment ID. This is a unique identifier for the environment. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "The resource ID. This is a unique identifier for the resource. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "The key. This is a unique identifier. ",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "last_action_at": {
+          "type": "string",
+          "computed": true,
+          "description": "Date and time when the tenant was last active (ISO_8601 format). In other words, this is the last time a permission check was done on a resource belonging to this tenant."
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "The name. This is a human-readable name for the object. "
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The organization ID. This is a unique identifier for the organization. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The project ID. This is a unique identifier for the project. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "updated_at": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The update timestamp. This is a timestamp for when the object was last updated. "
+        }
+      }
+    },
+    "permitio_user_attribute": {
+      "version": 0,
+      "description": "See [the documentation](https://api.permit.io/v2/redoc#tag/User-Attributes/operation/create_user_attribute) for more information about User Attributes",
+      "attributes": {
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "description": "The creation timestamp. This is a timestamp for when the object was created. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "description": {
+          "type": "string",
+          "required": true,
+          "description": "The description of the attribute"
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The environment ID. This is a unique identifier for the environment. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "The resource ID. This is a unique identifier for the resource. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "The key of the attribute"
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The organization ID. This is a unique identifier for the organization. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The project ID. This is a unique identifier for the project. ",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "resource_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The ID of the User resource"
+        },
+        "resource_key": {
+          "type": "string",
+          "computed": true,
+          "description": "The key of the User resource, will always be `__user`"
+        },
+        "type": {
+          "type": "string",
+          "required": true,
+          "description": "The type of the attribute",
+          "validators": [
+            "The type of the attribute in the resource."
+          ]
+        },
+        "updated_at": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The update timestamp. This is a timestamp for when the object was last updated. "
+        }
+      }
+    },
+    "permitio_user_set": {
+      "version": 0,
+      "description": "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
+      "attributes": {
+        "conditions": {
+          "type": "string",
+          "required": true,
+          "description": "a boolean expression that consists of multiple conditions, with and/or logic."
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "an optional longer description of the set",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The id of the environment to which the condition set belongs.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.\n\n",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name."
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "A descriptive name for the set, i.e: 'US based employees' or 'Users behind VPN'"
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The id of the organization to which the condition set belongs.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "parent_id": {
+          "type": "string",
+          "optional": true,
+          "computed": true,
+          "description": "The parent condition set id. Allows creating a nested condition set hierarchy.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The id of the project to which the condition set belongs.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "optional": true,
+          "description": "The resource id to which the condition set applies. This is only required for resource sets."
+        }
+      }
+    }
+  },
+  "data_sources": {
+    "permitio_condition_set": {
+      "version": 0,
+      "attributes": {
+        "conditions": {
+          "type": "string",
+          "required": true
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true
+        },
+        "id": {
+          "type": "string",
+          "computed": true
+        },
+        "key": {
+          "type": "string",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": true
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true
+        },
+        "resource": {
+          "type": "string",
+          "optional": true
+        },
+        "type": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    "permitio_resource": {
+      "version": 0,
+      "attributes": {
+        "actions": {
+          "type": "map_nested",
+          "required": true
+        },
+        "actions.description": {
+          "type": "string",
+          "optional": true
+        },
+        "actions.id": {
+          "type": "string",
+          "computed": true
+        },
+        "actions.name": {
+          "type": "string",
+          "required": true
+        },
+        "attributes": {
+          "type": "map_nested",
+          "optional": true
+        },
+        "attributes.description": {
+          "type": "string",
+          "optional": true
+        },
+        "attributes.type": {
+          "type": "string",
+          "required": true,
+          "validators": [
+            "The type of the attribute in the resource."
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "computed": true
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true
+        },
+        "id": {
+          "type": "string",
+          "computed": true
+        },
+        "key": {
+          "type": "string",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": true
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true
+        },
+        "updated_at": {
+          "type": "string",
+          "optional": true,
+          "computed": true
+        },
+        "urn": {
+          "type": "string",
+          "optional": true,
+          "computed": true
+        }
+      }
+    },
+    "permitio_role": {
+      "version": 0,
+      "attributes": {
+        "created_at": {
+          "type": "string",
+          "computed": true
+        },
+        "description": {
+          "type": "string",
+          "optional": true,
+          "computed": true
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true
+        },
+        "extends": {
+          "type": "set(string)",
+          "optional": true,
+          "computed": true
+        },
+        "id": {
+          "type": "string",
+          "computed": true
+        },
+        "key": {
+          "type": "string",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": true
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true
+        },
+        "permissions": {
+          "type": "set(string)",
+          "optional": true,
+          "computed": true
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true
+        },
+        "resource": {
+          "type": "string",
+          "optional": true,
+          "computed": true
+        },
+        "resource_id": {
+          "type": "string",
+          "computed": true
+        },
+        "updated_at": {
+          "type": "string",
+          "optional": true,
+          "computed": true
+        }
+      }
+    },
+    "permitio_user": {
+      "version": 0,
+      "description": "Fetches a user from the Permit.io directory.",
+      "attributes": {
+        "attributes": {
+          "type": "string",
+          "computed": true,
+          "description": "Custom user attributes as JSON string"
+        },
+        "email": {
+          "type": "string",
+          "computed": true,
+          "description": "User's email address"
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Environment ID"
+        },
+        "first_name": {
+          "type": "string",
+          "computed": true,
+          "description": "User's first name"
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "Unique user ID"
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "User key identifier"
+        },
+        "last_name": {
+          "type": "string",
+          "computed": true,
+          "description": "User's last name"
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Organization ID"
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "Project ID"
+        }
+      }
+    },
+    "permitio_user_attribute": {
+      "version": 0,
+      "description": "Fetches a user attribute by key. See [the documentation](https://api.permit.io/v2/redoc#tag/User-Attributes/operation/get_user_attribute) for more information about User Attributes",
+      "attributes": {
+        "created_at": {
+          "type": "string",
+          "computed": true,
+          "description": "The creation timestamp. This is a timestamp for when the object was created."
+        },
+        "description": {
+          "type": "string",
+          "computed": true,
+          "description": "The description of the attribute"
+        },
+        "environment_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The environment ID. This is a unique identifier for the environment."
+        },
+        "id": {
+          "type": "string",
+          "computed": true,
+          "description": "The attribute ID. This is a unique identifier for the attribute."
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "The key of the attribute"
+        },
+        "organization_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The organization ID. This is a unique identifier for the organization."
+        },
+        "project_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The project ID. This is a unique identifier for the project."
+        },
+        "resource_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The ID of the User resource"
+        },
+        "resource_key": {
+          "type": "string",
+          "computed": true,
+          "description": "The key of the User resource, will always be `__user`"
+        },
+        "type": {
+          "type": "string",
+          "computed": true,
+          "description": "The type of the attribute"
+        },
+        "updated_at": {
+          "type": "string",
+          "computed": true,
+          "description": "The update timestamp. This is a timestamp for when the object was last updated."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "provider": {
+    "version": 0,
+    "attributes": {
+      "api_key": {
+        "type": "string",
+        "optional": true,
+        "sensitive": true
+      }
+    }
+  },
+  "resources": {
+    "example_role": {
+      "version": 0,
+      "attributes": {
+        "id": {
+          "type": "string",
+          "computed": true,
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
+        },
+        "key": {
+          "type": "string",
+          "required": true,
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
+        },
+        "name": {
+          "type": "string",
+          "optional": true
+        },
+        "permissions": {
+          "type": "set(string)",
+          "optional": true,
+          "computed": true
+        },
+        "resource": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    }
+  },
+  "data_sources": {
+    "example_role": {
+      "version": 0,
+      "attributes": {
+        "key": {
+          "type": "string",
+          "required": true
+        }
+      }
+    }
+  }
+}
