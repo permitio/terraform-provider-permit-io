@@ -6,8 +6,15 @@ Terraform provider for Permit.io - manages Permit.io resources (resources, roles
 ## Build & Test
 ```bash
 GOTOOLCHAIN=auto go build ./...                    # Build
+GOTOOLCHAIN=auto go test -count=1 -skip '^TestAcc' ./...  # Unit and offline tests (mock Permit API, no key needed)
 PERMITIO_API_KEY=<key> GOTOOLCHAIN=auto TF_ACC=1 go test ./internal/provider/ -run <TestName> -v -timeout 300s  # Acceptance tests
 ```
+
+## Offline tests
+- Offline provider tests run Terraform against `internal/acctest/mockpermit`, a fake Permit API. Set `TF_ACC_TERRAFORM_PATH=/path/to/terraform` or put `terraform` on `PATH`; otherwise terraform-plugin-testing downloads the latest Terraform release.
+- `mockpermit.New(t, mockpermit.Tenants)` serves only the listed route sets and points the provider at the fake through `PERMITIO_API_URL`/`PERMITIO_API_KEY` with `t.Setenv`, so these tests cannot use `t.Parallel`. A request to a route the fake does not serve fails the test; add the route to the mock's route table. So does a path with an empty or dot segment, which usually means an empty key or ID.
+- CI pipes `go test -json` into `internal/acctest/checkgotest`, which fails the run when a test skips or no test runs. An offline test must not call `t.Skip`.
+- Name every test that needs the real API `TestAcc*`: the Build job skips those by name and fails on any other test that skips, including a `resource.Test` without `TF_ACC`.
 
 ## Testing with real API
 - Use `PERMITIO_API_KEY` env var (not `PERMIT_API_KEY`)
@@ -25,4 +32,5 @@ PERMITIO_API_KEY=<key> GOTOOLCHAIN=auto TF_ACC=1 go test ./internal/provider/ -r
 - `internal/provider/` - All resource implementations
 - Each resource type has: `resource.go` (schema + CRUD), `client.go` (API calls), `model.go` (data models)
 - `internal/provider/common/` - Shared utilities
+- `internal/acctest/` - Test support: `mockpermit` (the fake Permit API) and `checkgotest` (the CI test result checker)
 - SDK: `github.com/permitio/permit-golang` v1.2.8
