@@ -2,29 +2,34 @@ package provider
 
 import (
 	"fmt"
-	"math/rand"
-	"os"
 	"testing"
-	"time"
 
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/models"
-	"github.com/permitio/permit-golang/pkg/permit"
 )
 
-func TestResources(t *testing.T) {
-	testID := fmt.Sprintf("test-%d-%d", time.Now().Unix(), rand.Intn(10000))
+func TestAccResources(t *testing.T) {
+	testID := acctest.RandomWithPrefix(testAccKeyPrefix)
+	documentKey := testID + "-document"
+	const (
+		doc    = "permitio_resource.document"
+		admin  = "permitio_role.admin"
+		writer = "permitio_role.writer"
+		proxy  = "permitio_proxy_config.foaz"
+	)
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDestroy,
 		Steps: []resource.TestStep{
 			// Read testing
 			{
 				Config: providerConfig + fmt.Sprintf(`resource "permitio_resource" "document" {
-						key		 = "document-%s"
-						name	 = "document-%s"
+						key		 = "%s-document"
+						name	 = "%s-document"
 						description = "a new document"
 						actions = {
 								"read" = {
@@ -42,23 +47,23 @@ func TestResources(t *testing.T) {
 						}
 					}
 					resource "permitio_role" "admin" {
-						  key         = "admin-%s"
+						  key         = "%s-admin"
 						  name        = "admin"	
 						  description = "a new admin"	
-						  permissions = ["document-%s:read"]
+						  permissions = ["%s-document:read"]
 							depends_on = [
 							"permitio_resource.document"
 						  ]	
 					  }
 					resource "permitio_role" "writer" {
-							  key         = "writer-%s"
+							  key         = "%s-writer"
 							  name        = "writer"
 							  description = "a new writer"
 							  permissions = [
-								"document-%s:write"
+								"%s-document:write"
 							  ]
 							  extends = [
-								"admin-%s"
+								"%s-admin"
 							  ]
 							  depends_on = [
 								"permitio_role.admin",
@@ -67,30 +72,31 @@ func TestResources(t *testing.T) {
 							}`, testID, testID, testID, testID, testID, testID, testID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Document Resource tests
-					resource.TestCheckResourceAttr("permitio_resource.document", "key", fmt.Sprintf("document-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_resource.document", "name", fmt.Sprintf("document-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_resource.document", "description", "a new document"),
-					resource.TestCheckResourceAttr("permitio_resource.document", "actions.read.name", "read"),
-					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.created_at.type", "time"),
-					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.created_at.description", "creation time of the document"),
+					resource.TestCheckResourceAttr(doc, "key", documentKey),
+					resource.TestCheckResourceAttr(doc, "name", documentKey),
+					resource.TestCheckResourceAttr(doc, "description", "a new document"),
+					resource.TestCheckResourceAttr(doc, "actions.read.name", "read"),
+					resource.TestCheckResourceAttr(doc, "attributes.created_at.type", "time"),
+					resource.TestCheckResourceAttr(doc, "attributes.created_at.description",
+						"creation time of the document"),
 					// Admin Role tests
-					resource.TestCheckResourceAttr("permitio_role.admin", "key", fmt.Sprintf("admin-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_role.admin", "name", "admin"),
-					resource.TestCheckResourceAttr("permitio_role.admin", "description", "a new admin"),
-					resource.TestCheckResourceAttr("permitio_role.admin", "permissions.#", "1"),
-					resource.TestCheckResourceAttr("permitio_role.admin", "permissions.0", fmt.Sprintf("document-%s:read", testID)),
+					resource.TestCheckResourceAttr(admin, "key", testID+"-admin"),
+					resource.TestCheckResourceAttr(admin, "name", "admin"),
+					resource.TestCheckResourceAttr(admin, "description", "a new admin"),
+					resource.TestCheckResourceAttr(admin, "permissions.#", "1"),
+					resource.TestCheckResourceAttr(admin, "permissions.0", documentKey+":read"),
 					// Writer Role tests
-					resource.TestCheckResourceAttr("permitio_role.writer", "key", fmt.Sprintf("writer-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_role.writer", "name", "writer"),
-					resource.TestCheckResourceAttr("permitio_role.writer", "description", "a new writer"),
-					resource.TestCheckResourceAttr("permitio_role.writer", "permissions.#", "1"),
-					resource.TestCheckResourceAttr("permitio_role.writer", "permissions.0", fmt.Sprintf("document-%s:write", testID)),
+					resource.TestCheckResourceAttr(writer, "key", testID+"-writer"),
+					resource.TestCheckResourceAttr(writer, "name", "writer"),
+					resource.TestCheckResourceAttr(writer, "description", "a new writer"),
+					resource.TestCheckResourceAttr(writer, "permissions.#", "1"),
+					resource.TestCheckResourceAttr(writer, "permissions.0", documentKey+":write"),
 				),
 			},
 			{
 				Config: providerConfig + fmt.Sprintf(`resource "permitio_resource" "document" {
-						key		 = "document-%s"
-						name	 = "document-%s"
+						key		 = "%s-document"
+						name	 = "%s-document"
 						description = "a new document"
 						actions = {
 							"read" = {
@@ -116,31 +122,38 @@ func TestResources(t *testing.T) {
 						}
 					}
 					resource "permitio_role" "admin" {
-							  key         = "admin-%s"
+							  key         = "%s-admin"
 							  name        = "admin"	
 							  description = "a new admin"	
-							  permissions = ["document-%s:read", "document-%s:write", "document-%s:delete"]
+							  permissions = [
+								"%s-document:read",
+								"%s-document:write",
+								"%s-document:delete",
+							  ]
 								depends_on = [
 								"permitio_resource.document"
 							  ]
 							  }`, testID, testID, testID, testID, testID, testID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Document Resource tests
-					resource.TestCheckResourceAttr("permitio_resource.document", "key", fmt.Sprintf("document-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_resource.document", "actions.delete.name", "delete"),
-					resource.TestCheckResourceAttr("permitio_resource.document", "actions.delete.description", "delete a document"),
-					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.created_at.type", "number"),
-					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.created_at.description", "creation time of the document"),
-					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.content.type", "string"),
-					resource.TestCheckResourceAttr("permitio_resource.document", "attributes.content.description", "the content of the document"),
+					resource.TestCheckResourceAttr(doc, "key", documentKey),
+					resource.TestCheckResourceAttr(doc, "actions.delete.name", "delete"),
+					resource.TestCheckResourceAttr(doc, "actions.delete.description",
+						"delete a document"),
+					resource.TestCheckResourceAttr(doc, "attributes.created_at.type", "number"),
+					resource.TestCheckResourceAttr(doc, "attributes.created_at.description",
+						"creation time of the document"),
+					resource.TestCheckResourceAttr(doc, "attributes.content.type", "string"),
+					resource.TestCheckResourceAttr(doc, "attributes.content.description",
+						"the content of the document"),
 					// Admin Role tests
-					resource.TestCheckResourceAttr("permitio_role.admin", "key", fmt.Sprintf("admin-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_role.admin", "permissions.#", "3"),
+					resource.TestCheckResourceAttr(admin, "key", testID+"-admin"),
+					resource.TestCheckResourceAttr(admin, "permissions.#", "3"),
 				),
 			},
 			{
 				Config: providerConfig + fmt.Sprintf(`resource "permitio_proxy_config" "foaz" {
-				  key            = "foaz-%s"
+				  key            = "%s-foaz"
 				  name           = "Boaz"
 				  auth_mechanism = "Basic"
 				  auth_secret = {
@@ -150,29 +163,29 @@ func TestResources(t *testing.T) {
 					{
 					  url         = "https://example.com/documents"
 					  http_method = "post"
-					  resource    = "document-%s"
+					  resource    = "%s-document"
 					  action      = "read"
 					},
 					{
 					  url         = "https://example.com/documents/{project_id}"
 					  http_method = "delete"
-					  resource    = "document-%s"
+					  resource    = "%s-document"
 					  action      = "delete"
 					}
 				  ]
 				}`, testID, testID, testID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Proxy Config tests
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "key", fmt.Sprintf("foaz-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "name", "Boaz"),
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "auth_mechanism", "Basic"),
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "auth_secret.basic", "hello:world"),
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "mapping_rules.#", "2"),
+					resource.TestCheckResourceAttr(proxy, "key", testID+"-foaz"),
+					resource.TestCheckResourceAttr(proxy, "name", "Boaz"),
+					resource.TestCheckResourceAttr(proxy, "auth_mechanism", "Basic"),
+					resource.TestCheckResourceAttr(proxy, "auth_secret.basic", "hello:world"),
+					resource.TestCheckResourceAttr(proxy, "mapping_rules.#", "2"),
 				),
 			},
 			{
 				Config: providerConfig + fmt.Sprintf(`resource "permitio_proxy_config" "foaz" {
-					  key            = "foaz-%s"
+					  key            = "%s-foaz"
 					  name           = "Boaz"
 					  auth_mechanism = "Basic"
 					  auth_secret = {
@@ -182,25 +195,25 @@ func TestResources(t *testing.T) {
 						{
 						  url         = "https://example.com/documents"
 						  http_method = "post"
-						  resource    = "document-%s"
+						  resource    = "%s-document"
 						  action      = "read"
 						},
 						{
 						  url         = "https://example.com/documents/{project_id}"
 						  http_method = "delete"
-						  resource    = "document-%s"
+						  resource    = "%s-document"
 						  action      = "delete"
 						},
 						{
 						  url         = "https://example.com/documents/{project_id}"
 						  http_method = "get"
-						  resource    = "document-%s"
+						  resource    = "%s-document"
 						  action      = "read"
 						},
 						{
 						  url         = "https://example.com/documents/{project_id}"
 						  http_method = "put"
-						  resource    = "document-%s"
+						  resource    = "%s-document"
 						  action      = "update"
 						  headers = {
 							"x-update-id" : "foaz"
@@ -210,16 +223,16 @@ func TestResources(t *testing.T) {
 				}`, testID, testID, testID, testID, testID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Proxy Config tests
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "key", fmt.Sprintf("foaz-%s", testID)),
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "name", "Boaz"),
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "auth_mechanism", "Basic"),
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "auth_secret.basic", "hello:world"),
-					resource.TestCheckResourceAttr("permitio_proxy_config.foaz", "mapping_rules.#", "4"),
+					resource.TestCheckResourceAttr(proxy, "key", testID+"-foaz"),
+					resource.TestCheckResourceAttr(proxy, "name", "Boaz"),
+					resource.TestCheckResourceAttr(proxy, "auth_mechanism", "Basic"),
+					resource.TestCheckResourceAttr(proxy, "auth_secret.basic", "hello:world"),
+					resource.TestCheckResourceAttr(proxy, "mapping_rules.#", "4"),
 				),
 			},
 			{Config: providerConfig + fmt.Sprintf(`resource "permitio_resource" "file" {
-				key  = "file-%s"
-				name = "file-%s"
+				key  = "%s-file"
+				name = "%s-file"
 				actions = {
 				"create" = {
 				"name" = "Create"
@@ -242,8 +255,8 @@ func TestResources(t *testing.T) {
 				}
 			}
 				resource "permitio_resource" "folder" {
-				key  = "folder-%s"
-				name = "folder-%s"
+				key  = "%s-folder"
+				name = "%s-folder"
 				actions = {
 				"create" = {
 				"name" = "Create"
@@ -267,14 +280,14 @@ func TestResources(t *testing.T) {
 			}
 
 				resource "permitio_relation" "parent" {
-				key              = "parent-%s"
+				key              = "%s-parent"
 				name             = "parent of"
 				subject_resource = permitio_resource.folder.key
 				object_resource  = permitio_resource.file.key
 			}
 			
 				resource "permitio_role" "fileAdmin" {
-				key         = "admin-%s"
+				key         = "%s-admin"
 				name        = "Administrator"
 				description = "Administrator access to files"
 				permissions = ["read", "create", "update", "delete"]
@@ -286,7 +299,7 @@ func TestResources(t *testing.T) {
 			}
 			
 				resource "permitio_role" "folderAdmin" {
-				key         = "admin-%s"
+				key         = "%s-admin"
 				name        = "Administrator"
 				description = "Administrator access to folders"
 				permissions = ["create", "list", "modify", "delete"]
@@ -310,18 +323,18 @@ func TestResources(t *testing.T) {
 	})
 }
 
-// TestRoleDerivation covers issue #30 with distinct role keys on the two resources:
+// TestAccRoleDerivation covers derivations with distinct role keys on the two resources:
 // folder admins (`role` on `on_resource`) get the file admin role (`to_role` on
 // `resource`). It checks the grant through the API, so it fails if the provider sends
 // role and to_role the other way round, and it checks that a derivation deleted
 // outside Terraform is planned for re-creation instead of failing the refresh.
-func TestRoleDerivation(t *testing.T) {
-	testID := fmt.Sprintf("test-%d-%d", time.Now().Unix(), rand.Intn(10000))
-	fileKey := "file-" + testID
-	folderKey := "folder-" + testID
-	parentKey := "parent-" + testID
-	fileAdminKey := "admin-" + testID
-	folderAdminKey := "folder-admin-" + testID
+func TestAccRoleDerivation(t *testing.T) {
+	testID := acctest.RandomWithPrefix(testAccKeyPrefix)
+	fileKey := testID + "-file"
+	folderKey := testID + "-folder"
+	parentKey := testID + "-parent"
+	fileAdminKey := testID + "-admin"
+	folderAdminKey := testID + "-folder-admin"
 	const address = "permitio_role_derivation.folderFileAdmin"
 
 	config := providerConfig + fmt.Sprintf(`
@@ -382,7 +395,9 @@ func TestRoleDerivation(t *testing.T) {
 	)
 
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: config,
@@ -390,9 +405,13 @@ func TestRoleDerivation(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
+					client, err := testAccPermitClient()
+					if err != nil {
+						t.Fatalf("building the client to delete the role derivation: %v", err)
+					}
 					// ImplicitGrants.Delete's parameter names are swapped in the SDK: the
 					// first argument fills the URL's resource slot, the second its role slot.
-					err := testAccPermitClient().Api.ImplicitGrants.Delete(
+					err = client.Api.ImplicitGrants.Delete(
 						t.Context(), fileKey, fileAdminKey, models.DerivedRoleRuleDelete{
 							Role:             grant.Role,
 							OnResource:       grant.OnResource,
@@ -414,25 +433,18 @@ func TestRoleDerivation(t *testing.T) {
 	})
 }
 
-// testAccPermitClient builds an SDK client from the same environment variables the
-// provider reads, so tests can change Permit state outside Terraform.
-func testAccPermitClient() *permit.Client {
-	apiURL := os.Getenv("PERMITIO_API_URL")
-	if apiURL == "" {
-		apiURL = DefaultApiUrl
-	}
-	return permit.NewPermit(
-		permitConfig.NewConfigBuilder(os.Getenv("PERMITIO_API_KEY")).WithApiUrl(apiURL).Build(),
-	)
-}
-
 // testAccCheckRoleGrantedTo checks through the API that roleKey on resourceKey is
 // derived from want.Role on want.OnResource via want.LinkedByRelation.
 func testAccCheckRoleGrantedTo(
 	t *testing.T, resourceKey, roleKey string, want models.DerivedRoleRuleRead,
 ) resource.TestCheckFunc {
 	return func(*terraform.State) error {
-		role, err := testAccPermitClient().Api.ResourceRoles.Get(t.Context(), resourceKey, roleKey)
+		client, err := testAccPermitClient()
+		if err != nil {
+			return fmt.Errorf("building the client to check role %s/%s: %w",
+				resourceKey, roleKey, err)
+		}
+		role, err := client.Api.ResourceRoles.Get(t.Context(), resourceKey, roleKey)
 		if err != nil {
 			return fmt.Errorf("getting role %s/%s: %w", resourceKey, roleKey, err)
 		}

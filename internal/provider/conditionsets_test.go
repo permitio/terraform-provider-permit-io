@@ -1,21 +1,27 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-// TestUserSetWithContains tests that the contains operator in conditions is correctly preserved.
-func TestUserSetWithContains(t *testing.T) {
+// TestAccUserSetWithContains tests that the contains operator in conditions is correctly preserved.
+func TestAccUserSetWithContains(t *testing.T) {
+	key := acctest.RandomWithPrefix(testAccKeyPrefix)
+	const address = "permitio_user_set.test_contains"
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDestroy,
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: providerConfig +
-					`resource "permitio_user_set" "test_contains" {
-						key  = "test-contains-user-set"
+				Config: providerConfig + fmt.Sprintf(`
+					resource "permitio_user_set" "test_contains" {
+						key  = %q
 						name = "Test Contains Operator"
 						conditions = jsonencode({
 							"allOf" : [
@@ -30,19 +36,19 @@ func TestUserSetWithContains(t *testing.T) {
 								}
 							]
 						})
-					}`,
+					}`, key),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("permitio_user_set.test_contains", "key", "test-contains-user-set"),
-					resource.TestCheckResourceAttr("permitio_user_set.test_contains", "name", "Test Contains Operator"),
+					resource.TestCheckResourceAttr(address, "key", key),
+					resource.TestCheckResourceAttr(address, "name", "Test Contains Operator"),
 					// Check that the conditions contain the 'contains' operator
-					resource.TestCheckResourceAttrSet("permitio_user_set.test_contains", "conditions"),
+					resource.TestCheckResourceAttrSet(address, "conditions"),
 				),
 			},
 			// Update testing
 			{
-				Config: providerConfig +
-					`resource "permitio_user_set" "test_contains" {
-						key  = "test-contains-user-set"
+				Config: providerConfig + fmt.Sprintf(`
+					resource "permitio_user_set" "test_contains" {
+						key  = %q
 						name = "Test Contains Operator Updated"
 						conditions = jsonencode({
 							"allOf" : [
@@ -57,27 +63,37 @@ func TestUserSetWithContains(t *testing.T) {
 								}
 							]
 						})
-					}`,
+					}`, key),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("permitio_user_set.test_contains", "key", "test-contains-user-set"),
-					resource.TestCheckResourceAttr("permitio_user_set.test_contains", "name", "Test Contains Operator Updated"),
-					resource.TestCheckResourceAttrSet("permitio_user_set.test_contains", "conditions"),
+					resource.TestCheckResourceAttr(address, "key", key),
+					resource.TestCheckResourceAttr(address, "name",
+						"Test Contains Operator Updated"),
+					resource.TestCheckResourceAttrSet(address, "conditions"),
 				),
 			},
 		},
 	})
 }
 
-// TestUserSetWithParentId tests that parent_id field is correctly handled.
-func TestUserSetWithParentId(t *testing.T) {
+// TestAccUserSetWithParentId tests that parent_id field is correctly handled.
+func TestAccUserSetWithParentId(t *testing.T) {
+	testID := acctest.RandomWithPrefix(testAccKeyPrefix)
+	parentKey := testID + "-parent"
+	childKey := testID + "-child"
+	const (
+		parent = "permitio_user_set.parent"
+		child  = "permitio_user_set.child"
+	)
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDestroy,
 		Steps: []resource.TestStep{
 			// Create parent user set first
 			{
-				Config: providerConfig +
-					`resource "permitio_user_set" "parent" {
-						key  = "parent-user-set"
+				Config: providerConfig + fmt.Sprintf(`
+					resource "permitio_user_set" "parent" {
+						key  = %q
 						name = "Parent User Set"
 						conditions = jsonencode({
 							"allOf" : [
@@ -95,7 +111,7 @@ func TestUserSetWithParentId(t *testing.T) {
 					}
 
 					resource "permitio_user_set" "child" {
-						key  = "child-user-set"
+						key  = %q
 						name = "Child User Set"
 						parent_id = permitio_user_set.parent.id
 						conditions = jsonencode({
@@ -112,28 +128,36 @@ func TestUserSetWithParentId(t *testing.T) {
 							]
 						})
 						depends_on = [permitio_user_set.parent]
-					}`,
+					}`, parentKey, childKey),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("permitio_user_set.parent", "key", "parent-user-set"),
-					resource.TestCheckResourceAttr("permitio_user_set.parent", "name", "Parent User Set"),
-					resource.TestCheckResourceAttr("permitio_user_set.child", "key", "child-user-set"),
-					resource.TestCheckResourceAttr("permitio_user_set.child", "name", "Child User Set"),
-					resource.TestCheckResourceAttrSet("permitio_user_set.child", "parent_id"),
+					resource.TestCheckResourceAttr(parent, "key", parentKey),
+					resource.TestCheckResourceAttr(parent, "name", "Parent User Set"),
+					resource.TestCheckResourceAttr(child, "key", childKey),
+					resource.TestCheckResourceAttr(child, "name", "Child User Set"),
+					resource.TestCheckResourceAttrSet(child, "parent_id"),
 				),
 			},
 		},
 	})
 }
 
-// TestResourceSetWithContains tests that the contains operator works for resource sets.
-func TestResourceSetWithContains(t *testing.T) {
+// TestAccResourceSetWithContains tests that the contains operator works for resource sets.
+// The condition reads resource.title, so the resource declares a title attribute;
+// without one, creating the set failed with 400 Bad Request on every run.
+func TestAccResourceSetWithContains(t *testing.T) {
+	testID := acctest.RandomWithPrefix(testAccKeyPrefix)
+	resourceKey := testID + "-document"
+	setKey := testID + "-contains"
+	const address = "permitio_resource_set.test_contains"
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: providerConfig +
-					`resource "permitio_resource" "test_doc" {
-						key         = "test-document"
+				Config: providerConfig + fmt.Sprintf(`
+					resource "permitio_resource" "test_doc" {
+						key         = %q
 						name        = "test document"
 						description = "a test document"
 						actions = {
@@ -141,10 +165,16 @@ func TestResourceSetWithContains(t *testing.T) {
 								"name" = "read"
 							}
 						}
+						attributes = {
+							"title" = {
+								"description" = "the title of the document"
+								"type"        = "string"
+							}
+						}
 					}
 
 					resource "permitio_resource_set" "test_contains" {
-						key      = "test-contains-resource-set"
+						key      = %q
 						name     = "Test Resource Set with Contains"
 						resource = permitio_resource.test_doc.key
 						conditions = jsonencode({
@@ -161,26 +191,31 @@ func TestResourceSetWithContains(t *testing.T) {
 							]
 						})
 						depends_on = [permitio_resource.test_doc]
-					}`,
+					}`, resourceKey, setKey),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("permitio_resource_set.test_contains", "key", "test-contains-resource-set"),
-					resource.TestCheckResourceAttr("permitio_resource_set.test_contains", "name", "Test Resource Set with Contains"),
-					resource.TestCheckResourceAttrSet("permitio_resource_set.test_contains", "conditions"),
+					resource.TestCheckResourceAttr(address, "key", setKey),
+					resource.TestCheckResourceAttr(address, "name",
+						"Test Resource Set with Contains"),
+					resource.TestCheckResourceAttrSet(address, "conditions"),
 				),
 			},
 		},
 	})
 }
 
-// TestUserSetMultipleOperators tests complex conditions with multiple operators.
-func TestUserSetMultipleOperators(t *testing.T) {
+// TestAccUserSetMultipleOperators tests complex conditions with multiple operators.
+func TestAccUserSetMultipleOperators(t *testing.T) {
+	key := acctest.RandomWithPrefix(testAccKeyPrefix)
+	const address = "permitio_user_set.test_multiple"
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: providerConfig +
-					`resource "permitio_user_set" "test_multiple" {
-						key  = "test-multiple-operators"
+				Config: providerConfig + fmt.Sprintf(`
+					resource "permitio_user_set" "test_multiple" {
+						key  = %q
 						name = "Test Multiple Operators"
 						conditions = jsonencode({
 							"allOf" : [
@@ -196,11 +231,11 @@ func TestUserSetMultipleOperators(t *testing.T) {
 								}
 							]
 						})
-					}`,
+					}`, key),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("permitio_user_set.test_multiple", "key", "test-multiple-operators"),
-					resource.TestCheckResourceAttr("permitio_user_set.test_multiple", "name", "Test Multiple Operators"),
-					resource.TestCheckResourceAttrSet("permitio_user_set.test_multiple", "conditions"),
+					resource.TestCheckResourceAttr(address, "key", key),
+					resource.TestCheckResourceAttr(address, "name", "Test Multiple Operators"),
+					resource.TestCheckResourceAttrSet(address, "conditions"),
 				),
 			},
 		},
