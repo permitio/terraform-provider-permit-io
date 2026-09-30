@@ -61,7 +61,6 @@ func CreateBaseResourceSchema() map[string]schema.Attribute {
 		},
 		"updated_at": schema.StringAttribute{
 			MarkdownDescription: "The update timestamp. This is a timestamp for when the object was last updated. ",
-			Optional:            true,
 			Computed:            true,
 		},
 	}

@@ -247,6 +247,181 @@ resource "permitio_user_set" "reviewers" {
 	})
 }
 
+// TestUserSetDescription checks that a user set's description of "" reaches the
+// API and the state as "", on create and on update, and stays "" when the API
+// answers with null for it, and that removing a description clears it: the
+// provider sends "", which the Go SDK can send where it cannot send null, and
+// keeps the description null in the state (PER-16604).
+func TestUserSetDescription(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.ConditionSets)
+	const (
+		reviewers  = "permitio_user_set.reviewers"
+		staff      = "permitio_user_set.staff"
+		conditions = `{"allOf": [{"allOf": [{"subject.employed": {"equals": true}}]}]}`
+	)
+	config := func(reviewersDescription, staffDescription string) string {
+		return userSetDescriptionConfig("reviewers", reviewersDescription) +
+			userSetDescriptionConfig("staff", staffDescription)
+	}
+	body := func(fields string) string {
+		return `{` + fields + `, "conditions": ` + conditions + `}`
+	}
+	var (
+		createReviewers = body(`"key": "reviewers", "name": "reviewers", "type": "userset",
+			"description": ""`)
+		createStaff    = body(`"key": "staff", "name": "staff", "type": "userset"`)
+		describe       = body(`"name": "reviewers", "description": "Users who review"`)
+		emptyStaff     = body(`"name": "staff", "description": ""`)
+		clearReviewers = body(`"name": "reviewers", "description": ""`)
+		reviewersPath  = conditionSetsPath + "/reviewers"
+		staffPath      = conditionSetsPath + "/staff"
+		bothUpdated    = []plancheck.PlanCheck{
+			plancheck.ExpectResourceAction(reviewers, plancheck.ResourceActionUpdate),
+			plancheck.ExpectResourceAction(staff, plancheck.ResourceActionUpdate),
+		}
+		emptyPlan = []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}
+	)
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{
+				Config: config(`""`, ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPostRefresh: emptyPlan,
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(reviewers, "description", ""),
+					resource.TestCheckNoResourceAttr(staff, "description"),
+					m.CheckRequests(http.MethodPost, conditionSetsPath, createReviewers,
+						createStaff),
+					m.CheckStoredJSON("condition_sets/reviewers", "description", `""`),
+				),
+			},
+			{
+				// An API that stores "" as no description answers with null for it.
+				PreConfig: func() {
+					m.SetStored("condition_sets/reviewers", map[string]any{"description": nil})
+				},
+				Config: config(`""`, ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: emptyPlan,
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(reviewers, "description", ""),
+					m.CheckStoredJSON("condition_sets/reviewers", "description", "null"),
+				),
+			},
+			{
+				Config: config(`"Users who review"`, `""`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             bothUpdated,
+					PostApplyPostRefresh: emptyPlan,
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(reviewers, "description", "Users who review"),
+					resource.TestCheckResourceAttr(staff, "description", ""),
+					m.CheckRequests(http.MethodPatch, reviewersPath, describe),
+					m.CheckRequests(http.MethodPatch, staffPath, emptyStaff),
+				),
+			},
+			{
+				Config: config("", ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             bothUpdated,
+					PostApplyPostRefresh: emptyPlan,
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(reviewers, "description"),
+					resource.TestCheckNoResourceAttr(staff, "description"),
+					m.CheckRequests(http.MethodPatch, reviewersPath, describe, clearReviewers),
+					m.CheckRequests(http.MethodPatch, staffPath, emptyStaff, emptyStaff),
+					m.CheckStoredJSON("condition_sets/reviewers", "description", `""`),
+				),
+			},
+		},
+	})
+}
+
+// userSetDescriptionConfig returns a user set named key with the description
+// argument set to description, an HCL expression, or without it when description
+// is empty.
+func userSetDescriptionConfig(key, description string) string {
+	argument := ""
+	if description != "" {
+		argument = "description = " + description
+	}
+	return fmt.Sprintf(`
+resource "permitio_user_set" %[1]q {
+  key  = %[1]q
+  name = %[1]q
+  %[2]s
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "subject.employed" = { equals = true } }] }]
+  })
+}
+`, key, argument)
+}
+
+// TestUserSetParentCannotBeRemoved checks that a plan that removes parent_id from a
+// set that has a parent fails, and sends nothing. The API detaches a set only when
+// an update sends a null parent_id, which the Go SDK cannot send, so an apply would
+// have kept the parent while the state said there was none (PER-16604). It also
+// checks the remedy the error names: a tainted set is replaced without a parent.
+func TestUserSetParentCannotBeRemoved(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.ConditionSets)
+	const (
+		child  = "permitio_user_set.interns"
+		parent = "permitio_user_set.employees"
+	)
+	withoutParent := strings.Replace(employeesConfig,
+		"parent_id = permitio_user_set.employees.id", "", 1)
+	if withoutParent == employeesConfig {
+		t.Fatal("DID NOT RUN: employeesConfig has no parent_id to remove")
+	}
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{
+				Config: employeesConfig,
+				Check:  resource.TestCheckResourceAttrPair(child, "parent_id", parent, "id"),
+			},
+			{
+				Config: withoutParent,
+				ExpectError: regexp.MustCompile(`(?s)Cannot remove the parent of a condition ` +
+					`set.*terraform\s+taint`),
+			},
+			{
+				Config: employeesConfig,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair(child, "parent_id", parent, "id"),
+					m.CheckRequests(http.MethodPatch, conditionSetsPath+"/interns"),
+				),
+			},
+			{
+				Config: withoutParent,
+				Taint:  []string{child},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(child, plancheck.ResourceActionReplace),
+					},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(child, "parent_id"),
+					m.CheckRequests(http.MethodPatch, conditionSetsPath+"/interns"),
+				),
+			},
+		},
+	})
+}
+
 // documentConfig is the resource that the resource sets are on, the
 // internal_documents set that the other resource sets get as their parent, and
 // internal_reports, a resource set created with it as its parent.

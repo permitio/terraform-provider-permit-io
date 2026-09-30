@@ -27,7 +27,7 @@ func (c *tenantClient) Create(ctx context.Context, plan tenantModel) (tenantMode
 	tenantCreate := models.TenantCreate{
 		Key:         plan.Key.ValueString(),
 		Name:        plan.Name.ValueString(),
-		Description: plan.Description.ValueStringPointer(),
+		Description: common.KnownStringPointer(plan.Description),
 		Attributes:  attributes,
 	}
 
@@ -69,7 +69,7 @@ func (c *tenantClient) Update(ctx context.Context, plan tenantModel) (tenantMode
 
 	tenantUpdate := models.TenantUpdate{
 		Name:        plan.Name.ValueStringPointer(),
-		Description: plan.Description.ValueStringPointer(),
+		Description: common.KnownStringPointer(plan.Description),
 		Attributes:  attributes,
 	}
 

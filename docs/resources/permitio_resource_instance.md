@@ -24,7 +24,6 @@ Manages a Permit.io resource instance. Resource instances represent specific obj
 
 - `attributes` (String) Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ pages = 12 })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the instance has no attributes, so removing it clears them in Permit.
 - `tenant` (String) The tenant key for multi-tenant enforcement.
-- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ### Read-Only
 
@@ -34,6 +33,7 @@ Manages a Permit.io resource instance. Resource instances represent specific obj
 - `organization_id` (String) The organization ID. This is a unique identifier for the organization.
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `resource_id` (String) The unique resource type ID.
+- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ## Import
 

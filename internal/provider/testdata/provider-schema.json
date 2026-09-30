@@ -357,7 +357,6 @@
         },
         "updated_at": {
           "type": "string",
-          "optional": true,
           "computed": true,
           "description": "The update timestamp. This is a timestamp for when the object was last updated. "
         }
@@ -464,7 +463,6 @@
         },
         "updated_at": {
           "type": "string",
-          "optional": true,
           "computed": true,
           "description": "Timestamp when the resource was last updated"
         },
@@ -562,7 +560,6 @@
         },
         "updated_at": {
           "type": "string",
-          "optional": true,
           "computed": true,
           "description": "The update timestamp. This is a timestamp for when the object was last updated. "
         }
@@ -662,11 +659,7 @@
         "description": {
           "type": "string",
           "optional": true,
-          "computed": true,
-          "description": "an optional longer description of the set",
-          "plan_modifiers": [
-            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
-          ]
+          "description": "an optional longer description of the set. Removing it clears the description in Permit."
         },
         "environment_id": {
           "type": "string",
@@ -708,10 +701,9 @@
         "parent_id": {
           "type": "string",
           "optional": true,
-          "computed": true,
-          "description": "The parent condition set id. Allows creating a nested condition set hierarchy.",
+          "description": "The parent condition set id. Allows creating a nested condition set hierarchy. A plan that removes it from a set that has a parent fails: the provider cannot detach a set from its parent in place. To remove it from such a set, run `terraform taint` on the set and apply: Terraform replaces the set, which deletes its condition set rules. `terraform apply -replace` fails with the same error.",
           "plan_modifiers": [
-            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+            "conditionsets.refuseParentRemoval: Fails a plan that removes the parent of a condition set that has one."
           ]
         },
         "project_id": {
@@ -824,7 +816,6 @@
         },
         "updated_at": {
           "type": "string",
-          "optional": true,
           "computed": true,
           "description": "The update timestamp. This is a timestamp for when the object was last updated. "
         }
@@ -1017,7 +1008,6 @@
         },
         "updated_at": {
           "type": "string",
-          "optional": true,
           "computed": true,
           "description": "The update timestamp. This is a timestamp for when the object was last updated. "
         }
@@ -1104,7 +1094,6 @@
         },
         "updated_at": {
           "type": "string",
-          "optional": true,
           "computed": true,
           "description": "The update timestamp. This is a timestamp for when the object was last updated. "
         }
@@ -1122,11 +1111,7 @@
         "description": {
           "type": "string",
           "optional": true,
-          "computed": true,
-          "description": "an optional longer description of the set",
-          "plan_modifiers": [
-            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
-          ]
+          "description": "an optional longer description of the set. Removing it clears the description in Permit."
         },
         "environment_id": {
           "type": "string",
@@ -1168,10 +1153,9 @@
         "parent_id": {
           "type": "string",
           "optional": true,
-          "computed": true,
-          "description": "The parent condition set id. Allows creating a nested condition set hierarchy.",
+          "description": "The parent condition set id. Allows creating a nested condition set hierarchy. A plan that removes it from a set that has a parent fails: the provider cannot detach a set from its parent in place. To remove it from such a set, run `terraform taint` on the set and apply: Terraform replaces the set, which deletes its condition set rules. `terraform apply -replace` fails with the same error.",
           "plan_modifiers": [
-            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+            "conditionsets.refuseParentRemoval: Fails a plan that removes the parent of a condition set that has one."
           ]
         },
         "project_id": {
@@ -1316,7 +1300,6 @@
         },
         "updated_at": {
           "type": "string",
-          "optional": true,
           "computed": true
         },
         "urn": {
@@ -1384,7 +1367,6 @@
         },
         "updated_at": {
           "type": "string",
-          "optional": true,
           "computed": true
         }
       }

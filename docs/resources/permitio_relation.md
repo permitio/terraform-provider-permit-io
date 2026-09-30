@@ -25,7 +25,6 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resource-Relations/op
 ### Optional
 
 - `description` (String) The description. This is a human-readable description for the object.
-- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ### Read-Only
 
@@ -36,3 +35,4 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resource-Relations/op
 - `organization_id` (String) The organization ID. This is a unique identifier for the organization.
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `subject_resource_id` (String) The subject resource ID
+- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.

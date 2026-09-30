@@ -28,7 +28,7 @@ func TestAccTenantAttributesRemoved(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckTenantDestroyed(key),
+		CheckDestroy:             testAccCheckDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: config(`attributes = jsonencode({ tier = "gold", seats = 25 })`),
@@ -68,26 +68,6 @@ func testAccCheckTenantAttributes(key string, want map[string]any) resource.Test
 		if !reflect.DeepEqual(tenant.Attributes, want) {
 			return fmt.Errorf("tenant %s has the attributes %v in Permit, want %v", key,
 				tenant.Attributes, want)
-		}
-		return nil
-	}
-}
-
-// testAccCheckTenantDestroyed fails unless Permit answers 404 for the tenant with
-// this key.
-func testAccCheckTenantDestroyed(key string) resource.TestCheckFunc {
-	return func(*terraform.State) error {
-		client, err := testAccPermitClient()
-		if err != nil {
-			return fmt.Errorf("building the client for the destroy check: %w", err)
-		}
-		_, err = client.Api.Tenants.Get(context.Background(), key)
-		exists, err := testAccExistsFromErr(err)
-		if err != nil {
-			return fmt.Errorf("checking that tenant %s was destroyed: %w", key, err)
-		}
-		if exists {
-			return fmt.Errorf("tenant %s still exists in Permit after destroy", key)
 		}
 		return nil
 	}

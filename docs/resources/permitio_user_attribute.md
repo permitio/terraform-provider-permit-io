@@ -23,7 +23,6 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/User-Attributes/opera
 ### Optional
 
 - `description` (String) The description of the attribute. Leaving it out keeps the current description; set it to `""` to clear it.
-- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ### Read-Only
 
@@ -34,3 +33,4 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/User-Attributes/opera
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `resource_id` (String) The ID of the User resource
 - `resource_key` (String) The key of the User resource, will always be `__user`
+- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.

@@ -26,7 +26,6 @@ description: |-
 - `name` (String)
 - `permissions` (Set of String)
 - `resource` (String)
-- `updated_at` (String)
 
 ### Read-Only
 
@@ -36,3 +35,4 @@ description: |-
 - `organization_id` (String)
 - `project_id` (String)
 - `resource_id` (String)
+- `updated_at` (String)

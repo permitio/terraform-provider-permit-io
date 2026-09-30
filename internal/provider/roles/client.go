@@ -30,7 +30,7 @@ func (c *roleClient) Create(ctx context.Context, plan roleModel) (roleModel, err
 		roleCreate := models.ResourceRoleCreate{
 			Key:         plan.Key.ValueString(),
 			Name:        plan.Name.ValueString(),
-			Description: plan.Description.ValueStringPointer(),
+			Description: common.KnownStringPointer(plan.Description),
 			Permissions: permissions,
 			Extends:     extends,
 		}
@@ -46,7 +46,7 @@ func (c *roleClient) Create(ctx context.Context, plan roleModel) (roleModel, err
 		roleCreate := models.RoleCreate{
 			Key:         plan.Key.ValueString(),
 			Name:        plan.Name.ValueString(),
-			Description: plan.Description.ValueStringPointer(),
+			Description: common.KnownStringPointer(plan.Description),
 			Permissions: permissions,
 			Extends:     extends,
 		}
@@ -115,7 +115,7 @@ func (c *roleClient) Update(ctx context.Context, plan roleModel) (roleModel, err
 		// via dedicated endpoints to avoid server-side errors with large permission sets.
 		roleUpdate := models.ResourceRoleUpdate{
 			Name:        plan.Name.ValueStringPointer(),
-			Description: plan.Description.ValueStringPointer(),
+			Description: common.KnownStringPointer(plan.Description),
 			Extends:     extends,
 		}
 
@@ -167,7 +167,7 @@ func (c *roleClient) Update(ctx context.Context, plan roleModel) (roleModel, err
 		// via dedicated endpoints to avoid server-side errors with large permission sets.
 		roleUpdate := models.RoleUpdate{
 			Name:        plan.Name.ValueStringPointer(),
-			Description: plan.Description.ValueStringPointer(),
+			Description: common.KnownStringPointer(plan.Description),
 			Extends:     extends,
 		}
 

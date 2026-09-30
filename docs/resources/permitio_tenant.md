@@ -24,7 +24,6 @@ Manages a Permit.io tenant. Tenants represent isolated groups or organizations w
 
 - `attributes` (String) Arbitrary tenant attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ tier = "gold" })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the tenant has no attributes, so removing it clears them in Permit.
 - `description` (String) The description. This is a human-readable description for the object.
-- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ### Read-Only
 
@@ -34,3 +33,4 @@ Manages a Permit.io tenant. Tenants represent isolated groups or organizations w
 - `last_action_at` (String) Date and time when the tenant was last active (ISO_8601 format). In other words, this is the last time a permission check was done on a resource belonging to this tenant.
 - `organization_id` (String) The organization ID. This is a unique identifier for the organization.
 - `project_id` (String) The project ID. This is a unique identifier for the project.
+- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.

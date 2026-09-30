@@ -26,7 +26,6 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/c
 
 - `attributes` (Attributes Map) Attributes that each resource of this type defines, and can be used in your ABAC policies. (see [below for nested schema](#nestedatt--attributes))
 - `description` (String) An optional longer description of what this resource respresents in your system
-- `updated_at` (String) Timestamp when the resource was last updated
 - `urn` (String) The URN (Uniform Resource Name) of the resource
 
 ### Read-Only
@@ -36,6 +35,7 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/c
 - `id` (String) Unique id of the resource
 - `organization_id` (String) Unique id of the organization that owns the resource
 - `project_id` (String) Unique id of the project that owns the resource
+- `updated_at` (String) Timestamp when the resource was last updated
 
 <a id="nestedatt--actions"></a>
 ### Nested Schema for `actions`

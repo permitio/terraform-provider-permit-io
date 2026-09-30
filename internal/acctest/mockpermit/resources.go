@@ -95,15 +95,26 @@ func (s *Server) getResource(w http.ResponseWriter, r *http.Request) {
 
 // updateResource overwrites each field the body provides, as the API documents
 // for this PATCH, keeping the IDs of the actions and attributes whose keys stay.
+// Like the API, it keeps the actions or attributes when the body leaves them out,
+// keeps the attributes when the body nulls them, answers a null actions with a
+// 422, and deletes every attribute for an empty attributes object. The API also
+// deletes the resource sets whose conditions name a deleted attribute; the fake
+// keeps them.
 func (s *Server) updateResource(w http.ResponseWriter, r *http.Request) {
 	body, ok := s.decodeObject(w, r)
 	if !ok {
 		return
 	}
-	_, patchesActions := body["actions"]
-	actions, actionsErr := readBlocks("actions", body["actions"])
-	_, patchesAttributes := body["attributes"]
-	attributes, attributesErr := readBlocks("attributes", body["attributes"])
+	actionsValue, patchesActions := body["actions"]
+	if patchesActions && actionsValue == nil {
+		s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY",
+			"actions may not be null")
+		return
+	}
+	actions, actionsErr := readBlocks("actions", actionsValue)
+	attributesValue, patchesAttributes := body["attributes"]
+	patchesAttributes = patchesAttributes && attributesValue != nil
+	attributes, attributesErr := readBlocks("attributes", attributesValue)
 	if err := errors.Join(actionsErr, attributesErr); err != nil {
 		s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", err.Error())
 		return
@@ -121,11 +132,11 @@ func (s *Server) updateResource(w http.ResponseWriter, r *http.Request) {
 	if patchesActions {
 		unconfirmed = append(unconfirmed, leftOut("actions", storedActions, actions)...)
 	}
-	if patchesAttributes {
+	if patchesAttributes && len(attributes) > 0 {
 		unconfirmed = append(unconfirmed, leftOut("attributes", storedAttributes, attributes)...)
 	}
 	if len(unconfirmed) > 0 {
-		s.refuseUnconfirmed(w, r, fmt.Sprintf("the body leaves out or nulls %q", unconfirmed))
+		s.refuseUnconfirmed(w, r, fmt.Sprintf("the body leaves out %q", unconfirmed))
 		return
 	}
 	maps.Copy(resource, body)
@@ -329,18 +340,11 @@ func readBlocks(field string, value any) (blocks, error) {
 }
 
 // leftOut lists what a PATCH that provides a resource's actions or attributes
-// nulls or leaves out: the whole field, a stored block, or a field of a stored
-// block. The API documents that it overwrites a field a PATCH provides, but not
-// what it then does with any of these, so the fake refuses them rather than guess.
-// A null field on a resource that has no blocks in it is not refused: clearing it
-// and ignoring it leave the resource the same.
+// leaves out: a stored block, or a field of a stored block. The API deletes a
+// block left out of a PATCH, together with the role permissions and resource sets
+// that use it, which the fake does not model, and what it does with a field left
+// out of a block is unconfirmed, so the fake refuses both rather than guess.
 func leftOut(field string, stored, patch blocks) []string {
-	if patch == nil {
-		if len(stored) == 0 {
-			return nil
-		}
-		return []string{field}
-	}
 	var missing []string
 	for key, block := range stored {
 		patchBlock, ok := patch[key]

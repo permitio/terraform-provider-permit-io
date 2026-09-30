@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -261,6 +262,28 @@ func (s *Server) DeleteStored(stored ...string) {
 		}
 		delete(s.objects[collection], key)
 	}
+}
+
+// SetStored sets fields of a stored object the way a change outside Terraform
+// would, such as a description edited in the Permit UI. stored is written
+// "collection/key" as StoredKeys lists it. It fails the test when it is given no
+// fields or an object that is not stored, so a test cannot pass by changing
+// nothing.
+func (s *Server) SetStored(stored string, fields map[string]any) {
+	s.t.Helper()
+	if len(fields) == 0 {
+		s.t.Errorf("mockpermit: SetStored was given no fields to set on %s", stored)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	collection, key, _ := strings.Cut(stored, "/")
+	object, ok := s.objects[collection][key]
+	if !ok {
+		s.t.Errorf("mockpermit: SetStored: %s is not stored", stored)
+		return
+	}
+	maps.Copy(object, fields)
 }
 
 func (s *Server) handle(mux *http.ServeMux, rt route) {

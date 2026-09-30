@@ -25,7 +25,6 @@ description: |-
 - `attributes` (Attributes Map) (see [below for nested schema](#nestedatt--attributes))
 - `description` (String)
 - `name` (String)
-- `updated_at` (String)
 - `urn` (String)
 
 ### Read-Only
@@ -35,6 +34,7 @@ description: |-
 - `id` (String) The ID of this resource.
 - `organization_id` (String)
 - `project_id` (String)
+- `updated_at` (String)
 
 <a id="nestedatt--actions"></a>
 ### Nested Schema for `actions`

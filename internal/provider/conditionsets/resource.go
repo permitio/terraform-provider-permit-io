@@ -170,12 +170,8 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			Required:            true,
 		},
 		"description": schema.StringAttribute{
-			MarkdownDescription: "an optional longer description of the set",
+			MarkdownDescription: "an optional longer description of the set. Removing it clears the description in Permit.",
 			Optional:            true,
-			Computed:            true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseNonNullStateForUnknown(),
-			},
 		},
 		"conditions": schema.StringAttribute{
 			MarkdownDescription: "a boolean expression that consists of multiple conditions, with and/or logic. A JSON object, such as `jsonencode({ allOf = [...] })`. Differences in whitespace and key order from the object Permit returns do not show as changes.",
@@ -183,14 +179,45 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			CustomType:          jsontypes.NormalizedType{},
 		},
 		"parent_id": schema.StringAttribute{
-			MarkdownDescription: "The parent condition set id. Allows creating a nested condition set hierarchy.",
+			MarkdownDescription: "The parent condition set id. Allows creating a nested condition set hierarchy. A plan that removes it from a set that has a parent fails: the provider cannot detach a set from its parent in place. To remove it from such a set, run `terraform taint` on the set and apply: Terraform replaces the set, which deletes its condition set rules. `terraform apply -replace` fails with the same error.",
 			Optional:            true,
-			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseNonNullStateForUnknown(),
+				refuseParentRemoval{},
 			},
 		},
 	}
+}
+
+// refuseParentRemoval is the plan modifier of parent_id that fails a plan that
+// removes the parent of a set that has one. The API detaches a set only when an
+// update sends parent_id as null, and the Go SDK leaves a null parent_id out of
+// the request, so the apply would keep the parent (PER-16604).
+type refuseParentRemoval struct{}
+
+func (refuseParentRemoval) Description(context.Context) string {
+	return "Fails a plan that removes the parent of a condition set that has one."
+}
+
+func (m refuseParentRemoval) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (refuseParentRemoval) PlanModifyString(_ context.Context, req planmodifier.StringRequest,
+	resp *planmodifier.StringResponse,
+) {
+	if req.Plan.Raw.IsNull() || req.StateValue.IsNull() || !req.PlanValue.IsNull() {
+		return
+	}
+	resp.Diagnostics.AddAttributeError(req.Path, "Cannot remove the parent of a condition set",
+		fmt.Sprintf("The condition set has the parent %s. The Permit API detaches a set "+
+			"from its parent only when an update sends parent_id as null, which the "+
+			"Permit Go SDK the provider uses cannot send, so an apply would keep the "+
+			"parent. Keep parent_id in the configuration, detach the set outside "+
+			"Terraform and then remove parent_id, or mark the set for replacement with "+
+			"terraform taint and then apply, which creates it again without a parent; "+
+			"Permit deletes the set's condition set rules when it deletes the set. "+
+			"terraform apply -replace does not help: its plan still starts from the "+
+			"set that has the parent, and fails with this error.", req.StateValue))
 }
 
 // modelSource is a plan or a state, which get reads a condition set from.

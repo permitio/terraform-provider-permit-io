@@ -63,7 +63,6 @@ func (d *RoleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 				Computed: true,
 			},
 			"updated_at": schema.StringAttribute{
-				Optional: true,
 				Computed: true,
 			},
 			"key": schema.StringAttribute{

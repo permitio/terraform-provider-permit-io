@@ -3,12 +3,14 @@ package resources_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/permitio/terraform-provider-permit-io/internal/acctest/mockpermit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider"
 )
@@ -232,4 +234,65 @@ resource "permitio_resource" "folder" {
   }
 }
 `, name, actions)
+}
+
+// TestResourceRemovingAttributesClearsThem checks that removing a resource's
+// attributes block sends "attributes": {}, which deletes them in Permit, and
+// leaves them null in the state. The API keeps the attributes when a PATCH nulls
+// them, which failed the apply with an inconsistent result (PER-16604).
+func TestResourceRemovingAttributesClearsThem(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.Resources)
+	const address = "permitio_resource.document"
+	documentConfig := func(attributes string) string {
+		return fmt.Sprintf(`
+resource "permitio_resource" "document" {
+  key         = "document"
+  name        = "Document"
+  description = "A text document"
+  actions = {
+    read = { name = "Read" }
+  }
+  %s
+}
+`, attributes)
+	}
+	onlyTheResource := func(*terraform.State) error {
+		if keys := m.StoredKeys(); !slices.Equal(keys, []string{"resources/document"}) {
+			return fmt.Errorf("the mock holds %q, want the resource without attributes", keys)
+		}
+		return nil
+	}
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{
+				Config: documentConfig(`attributes = {
+    owner = { type = "string", description = "Who owns the document" }
+    pages = { type = "number" }
+  }`),
+				Check: resource.TestCheckResourceAttr(address, "attributes.%", "2"),
+			},
+			{
+				Config: documentConfig(""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(address, plancheck.ResourceActionUpdate),
+					},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(address, "attributes.%"),
+					m.CheckRequests(http.MethodPatch, resourcesPath+"/document", `{
+						"name": "Document",
+						"description": "A text document",
+						"actions": {"read": {"name": "Read"}},
+						"attributes": {}
+					}`),
+					onlyTheResource,
+				),
+			},
+		},
+	})
 }

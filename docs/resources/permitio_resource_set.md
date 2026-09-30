@@ -24,8 +24,8 @@ See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/op
 
 ### Optional
 
-- `description` (String) an optional longer description of the set
-- `parent_id` (String) The parent condition set id. Allows creating a nested condition set hierarchy.
+- `description` (String) an optional longer description of the set. Removing it clears the description in Permit.
+- `parent_id` (String) The parent condition set id. Allows creating a nested condition set hierarchy. A plan that removes it from a set that has a parent fails: the provider cannot detach a set from its parent in place. To remove it from such a set, run `terraform taint` on the set and apply: Terraform replaces the set, which deletes its condition set rules. `terraform apply -replace` fails with the same error.
 
 ### Read-Only
 

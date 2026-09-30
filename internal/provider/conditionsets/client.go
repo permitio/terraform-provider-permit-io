@@ -68,15 +68,7 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 		resource = types.StringValue(conditionSet.Resource.Key)
 	}
 
-	// Handle description: if API returns null and state is null, keep it null
-	// This ensures consistency for omitted description fields
-	var description types.String
-	if conditionSet.Description != nil {
-		description = types.StringPointerValue(conditionSet.Description)
-	} else {
-		// API returned null - explicitly set to null to maintain consistency
-		description = types.StringPointerValue(nil)
-	}
+	description := descriptionValue(conditionSet.Description, data.Description)
 
 	// Handle parent_id: if API returns null, keep it null to maintain consistency
 	var parentId types.String
@@ -132,15 +124,11 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 	}
 
 	conditionSetCreate := models.ConditionSetCreate{
-		Key:        conditionSetPlan.Key.ValueString(),
-		Name:       conditionSetPlan.Name.ValueString(),
-		Type:       &conditionSetType,
-		Conditions: conditions,
-	}
-
-	// Only set description if it's not null and not empty
-	if !conditionSetPlan.Description.IsNull() && conditionSetPlan.Description.ValueString() != "" {
-		conditionSetCreate.Description = conditionSetPlan.Description.ValueStringPointer()
+		Key:         conditionSetPlan.Key.ValueString(),
+		Name:        conditionSetPlan.Name.ValueString(),
+		Description: common.KnownStringPointer(conditionSetPlan.Description),
+		Type:        &conditionSetType,
+		Conditions:  conditions,
 	}
 
 	if !conditionSetPlan.Resource.IsNull() {
@@ -174,12 +162,8 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 		return err
 	}
 
-	// Set description from API response, or null if API returns null
-	if conditionSetRead.Description != nil {
-		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
-	} else {
-		conditionSetPlan.Description = types.StringPointerValue(nil)
-	}
+	conditionSetPlan.Description = descriptionValue(conditionSetRead.Description,
+		conditionSetPlan.Description)
 	// Handle parent_id from API response
 	if conditionSetRead.ParentId != nil {
 		parentIdBytes, err := json.Marshal(conditionSetRead.ParentId)
@@ -209,9 +193,13 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 		return fmt.Errorf("conditions: %w", err)
 	}
 
+	// A description the configuration leaves out is sent as "", which clears it:
+	// the Go SDK leaves a null description out of the request, and the API keeps
+	// the description then.
+	description := conditionSetPlan.Description.ValueString()
 	csUpdate := models.ConditionSetUpdate{
 		Name:        conditionSetPlan.Name.ValueStringPointer(),
-		Description: conditionSetPlan.Description.ValueStringPointer(),
+		Description: &description,
 		Conditions:  conditions,
 	}
 
@@ -241,12 +229,8 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 	}
 
 	conditionSetPlan.Name = types.StringValue(conditionSetRead.Name)
-	// Set description from API response, or null if API returns null
-	if conditionSetRead.Description != nil {
-		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
-	} else {
-		conditionSetPlan.Description = types.StringPointerValue(nil)
-	}
+	conditionSetPlan.Description = descriptionValue(conditionSetRead.Description,
+		conditionSetPlan.Description)
 	// Handle parent_id from API response
 	if conditionSetRead.ParentId != nil {
 		parentIdBytes, err := json.Marshal(conditionSetRead.ParentId)
@@ -273,4 +257,15 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 
 func (c *ConditionSetClient) Delete(ctx context.Context, key string) error {
 	return c.client.Api.ConditionSets.Delete(ctx, key)
+}
+
+// descriptionValue returns the description of a condition set that the API
+// answered with, where prior is the description of the plan or the prior state.
+// The provider clears a description by sending "", so when the API answers with
+// no description or "", the value keeps a null or "" that prior has.
+func descriptionValue(api *string, prior types.String) types.String {
+	if (api == nil || *api == "") && (prior.IsNull() || prior.Equal(types.StringValue(""))) {
+		return prior
+	}
+	return types.StringPointerValue(api)
 }

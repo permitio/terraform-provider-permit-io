@@ -63,6 +63,8 @@ func testAccObjectExists(
 		_, err = client.Api.ResourceRelations.Get(ctx, attrs["object_resource"], attrs["key"])
 	case "permitio_user_attribute":
 		_, err = client.Api.ResourceAttributes.Get(ctx, user_attributes.UserKey, attrs["key"])
+	case "permitio_tenant":
+		_, err = client.Api.Tenants.Get(ctx, attrs["key"])
 	case "permitio_role_derivation":
 		return testAccRoleDerivationExists(ctx, client, attrs)
 	default:
@@ -170,6 +172,7 @@ func TestCheckDestroy(t *testing.T) {
 		proxyGet      = "GET /v2/facts/proj/env/proxy_configs/tfacc-1-proxy"
 		relationGet   = "GET /v2/schema/proj/env/resources/tfacc-1-file/relations/tfacc-1-parent"
 		attributeGet  = "GET /v2/schema/proj/env/resources/__user/attributes/tfacc_1_attr"
+		tenantGet     = "GET /v2/facts/proj/env/tenants/tfacc-1-acme"
 		toRoleGet     = "GET /v2/schema/proj/env/resources/tfacc-1-file/roles/tfacc-1-admin"
 	)
 	state := testState(map[string]*terraform.ResourceState{
@@ -191,6 +194,8 @@ func TestCheckDestroy(t *testing.T) {
 		}),
 		"permitio_user_attribute.attr": testResourceState("permitio_user_attribute",
 			map[string]string{"key": "tfacc_1_attr"}),
+		"permitio_tenant.acme": testResourceState("permitio_tenant",
+			map[string]string{"key": "tfacc-1-acme"}),
 		"permitio_role_derivation.derive": testResourceState("permitio_role_derivation",
 			map[string]string{
 				"resource": "tfacc-1-file", "to_role": "tfacc-1-admin",
@@ -227,6 +232,11 @@ func TestCheckDestroy(t *testing.T) {
 			name:    "an auth error is not a 404",
 			replies: map[string]fakeReply{attributeGet: {http.StatusUnauthorized, `{}`}},
 			wantErr: "checking that permitio_user_attribute.attr was destroyed",
+		},
+		{
+			name:    "a tenant that still exists fails",
+			replies: map[string]fakeReply{tenantGet: {http.StatusOK, `{"key":"tfacc-1-acme"}`}},
+			wantErr: "permitio_tenant.acme still exists",
 		},
 		{
 			name: "a derivation still granted on its target role fails",
@@ -280,7 +290,7 @@ func TestCheckDestroy(t *testing.T) {
 			}
 			want := slices.Sorted(slices.Values([]string{
 				resourceGet, globalRoleGet, fileRoleGet, userSetGet, resSetGet,
-				proxyGet, relationGet, attributeGet, toRoleGet,
+				proxyGet, relationGet, attributeGet, tenantGet, toRoleGet,
 			}))
 			if got := requests(); !slices.Equal(got, want) {
 				t.Errorf("requests = %q, want one lookup per managed object %q", got, want)
@@ -292,12 +302,13 @@ func TestCheckDestroy(t *testing.T) {
 func TestCheckDestroyRejectsUnknownType(t *testing.T) {
 	requests := newFakePermitAPI(t, nil)
 	state := testState(map[string]*terraform.ResourceState{
-		"permitio_tenant.t": testResourceState("permitio_tenant", map[string]string{"key": "k"}),
+		"permitio_role_assignment.a": testResourceState("permitio_role_assignment",
+			map[string]string{"user": "u"}),
 	})
 
 	err := testAccCheckDestroy(state)
 
-	const want = "no destroy check for resource type permitio_tenant"
+	const want = "no destroy check for resource type permitio_role_assignment"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("testAccCheckDestroy() = %v, want an error containing %q", err, want)
 	}

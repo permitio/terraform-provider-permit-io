@@ -3,10 +3,12 @@ package resources
 import (
 	"context"
 	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type ResourceClient struct {
@@ -16,7 +18,8 @@ type ResourceClient struct {
 type ResourceMethods interface {
 	ResourceRead(ctx context.Context, data ResourceModel) (ResourceModel, error)
 	ResourceCreate(ctx context.Context, resourcePlan *ResourceModel) error
-	ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel) error
+	ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel,
+		priorAttributes attributesModel) error
 }
 
 func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (ResourceModel, error) {
@@ -64,7 +67,6 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 	var (
 		actions    map[string]models.ActionBlockEditable
 		attributes map[string]models.AttributeBlockEditable
-		urn        *string
 	)
 	attributes = resourcePlan.Attributes.toSDK()
 	actions = make(map[string]models.ActionBlockEditable)
@@ -74,15 +76,11 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 			Description: action.Description.ValueStringPointer(),
 		}
 	}
-	urn = nil
-	if !resourcePlan.Urn.IsUnknown() {
-		urn = resourcePlan.Urn.ValueStringPointer()
-	}
 	resourceCreate := models.ResourceCreate{
 		Key:         resourcePlan.Key.ValueString(),
 		Name:        resourcePlan.Name.ValueString(),
-		Urn:         urn,
-		Description: resourcePlan.Description.ValueStringPointer(),
+		Urn:         common.KnownStringPointer(resourcePlan.Urn),
+		Description: common.KnownStringPointer(resourcePlan.Description),
 		Actions:     actions,
 		Attributes:  &attributes,
 	}
@@ -107,7 +105,13 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 	return nil
 }
 
-func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel) error {
+// ResourceUpdate sends the plan's resource. priorAttributes is the attributes of
+// the prior state. The API keeps the attributes when the request nulls them and
+// deletes them all for an empty object, so when the plan has no attributes and
+// the prior state has some, it sends {} to delete them.
+func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel,
+	priorAttributes attributesModel,
+) error {
 	actions := make(map[string]models.ActionBlockEditable)
 	for actionKey, action := range resourcePlan.Actions {
 		// TODO: Known bug with Go SDK - null description doesn't get updated correctly
@@ -117,10 +121,13 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 		}
 	}
 	attributes := resourcePlan.Attributes.toSDK()
+	if resourcePlan.Attributes == nil && len(priorAttributes) > 0 {
+		attributes = map[string]models.AttributeBlockEditable{}
+	}
 	resourceUpdate := models.ResourceUpdate{
 		Name:        resourcePlan.Name.ValueStringPointer(),
-		Urn:         resourcePlan.Urn.ValueStringPointer(),
-		Description: resourcePlan.Description.ValueStringPointer(),
+		Urn:         common.KnownStringPointer(resourcePlan.Urn),
+		Description: common.KnownStringPointer(resourcePlan.Description),
 		Actions:     &actions,
 		Attributes:  &attributes,
 	}

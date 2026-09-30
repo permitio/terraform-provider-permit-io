@@ -134,7 +134,6 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				Computed: true,
 			},
 			"updated_at": schema.StringAttribute{
-				Optional: true,
 				Computed: true,
 			},
 			"key": schema.StringAttribute{

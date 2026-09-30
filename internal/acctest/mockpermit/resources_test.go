@@ -211,11 +211,13 @@ func TestResourcePatchUnconfirmedBehaviour(t *testing.T) {
 		body      string
 		wantError string
 	}{
-		{name: "null actions", body: `{"actions": null}`, wantError: `["actions"]`},
-		{name: "null attributes", body: `{"attributes": null}`, wantError: `["attributes"]`},
 		{
 			name: "action left out", body: `{"actions": {"read": {"name": "Read"}}}`,
 			wantError: `["actions.write"]`,
+		},
+		{
+			name: "every action left out", body: `{"actions": {}}`,
+			wantError: `["actions.read" "actions.write"]`,
 		},
 		{
 			name:      "action description left out",
@@ -223,7 +225,8 @@ func TestResourcePatchUnconfirmedBehaviour(t *testing.T) {
 			wantError: `["actions.write.description"]`,
 		},
 		{
-			name: "attribute left out", body: `{"attributes": {}}`,
+			name:      "attribute left out",
+			body:      `{"attributes": {"pages": {"type": "number"}}}`,
 			wantError: `["attributes.owner"]`,
 		},
 		{
@@ -261,20 +264,30 @@ func TestResourcePatchUnconfirmedBehaviour(t *testing.T) {
 	}
 }
 
-// TestResourcePatchNullsEmptyBlocks checks that a PATCH may null actions or
-// attributes when the resource has none, which is what the provider sends for a
-// resource without an attributes block.
-func TestResourcePatchNullsEmptyBlocks(t *testing.T) {
+// TestResourcePatchNestedMaps checks what a resource PATCH does with a nested map,
+// as the API does: attributes left out or null stay, {} deletes every attribute,
+// and a null actions is a 422, also on a resource without actions.
+func TestResourcePatchNestedMaps(t *testing.T) {
 	m := New(t, Resources)
 	send(t, m, http.MethodPost, resourcesPath, `{"key": "document", "name": "Document",
-		"actions": {}, "attributes": null}`, http.StatusOK)
+		"actions": {}, "attributes": {"owner": {"type": "string"}}}`, http.StatusOK)
+	withOwner := `{"attributes": {"owner": {"id": "` + ObjectID(2) + `", "key": "owner",
+		"type": "string"}}}`
 
-	updated := send(t, m, http.MethodPatch, resourcesPath+"/document",
-		`{"name": "Shared", "actions": null, "attributes": null}`, http.StatusOK)
+	for _, body := range []string{`{"name": "Shared"}`, `{"attributes": null}`} {
+		wantFields(t, send(t, m, http.MethodPatch, resourcesPath+"/document", body,
+			http.StatusOK), withOwner)
+	}
+	send(t, m, http.MethodPatch, resourcesPath+"/document", `{"actions": null}`,
+		http.StatusUnprocessableEntity)
+	wantStoredKeys(t, m, "resource_attributes/document:owner", "resources/document")
+
+	cleared := send(t, m, http.MethodPatch, resourcesPath+"/document", `{"attributes": {}}`,
+		http.StatusOK)
 
 	want := `{"id": "` + ObjectID(1) + `", "key": "document", "name": "Shared", "actions": {},
 		"attributes": {}}`
-	wantFields(t, updated, want)
+	wantFields(t, cleared, want)
 	wantFields(t, send(t, m, http.MethodGet, resourcesPath+"/document", "", http.StatusOK), want)
 	wantStoredKeys(t, m, "resources/document")
 }

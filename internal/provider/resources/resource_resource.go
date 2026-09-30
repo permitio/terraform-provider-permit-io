@@ -91,7 +91,6 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"updated_at": schema.StringAttribute{
-				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Timestamp when the resource was last updated",
 			},
@@ -221,26 +220,23 @@ func (r *ResourceResource) Read(ctx context.Context, request resource.ReadReques
 func (r *ResourceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var (
 		resourcePlan ResourceModel
+		prior        ResourceModel
 	)
-	diags := req.Plan.Get(ctx, &resourcePlan)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &resourcePlan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	tflog.Info(ctx, fmt.Sprintf("update %v", resourcePlan.Actions))
 
-	if err := r.ResourceUpdate(ctx, &resourcePlan); err != nil {
+	if err := r.ResourceUpdate(ctx, &resourcePlan, prior.Attributes); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update resource",
 			common.APIErrorDetail("update", "resource", resourcePlan.Key.ValueString(), err),
 		)
 		return
 	}
-	diags = resp.State.Set(ctx, resourcePlan)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, resourcePlan)...)
 }
 
 // Delete deletes the resource and removes the Terraform state on success.

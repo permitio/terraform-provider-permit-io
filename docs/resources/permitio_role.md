@@ -28,7 +28,6 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/c
 - `extends` (Set of String) list of role keys that define what roles this role extends. In other words: this role will automatically inherit all the permissions of the given roles in this list.
 - `permissions` (Set of String) list of action keys that define what actions this resource role is permitted to do
 - `resource` (String) The unique resource key that the role belongs to.
-- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ### Read-Only
 
@@ -38,6 +37,7 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/c
 - `organization_id` (String) The organization ID. This is a unique identifier for the organization.
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `resource_id` (String) The unique resource ID that the role belongs to.
+- `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ## Import
 
