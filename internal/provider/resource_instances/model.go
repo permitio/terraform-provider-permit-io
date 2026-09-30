@@ -1,27 +1,35 @@
 package resource_instances
 
 import (
-	"encoding/json"
 	"fmt"
+
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type resourceInstanceModel struct {
-	Id             types.String `tfsdk:"id"`
-	OrganizationId types.String `tfsdk:"organization_id"`
-	ProjectId      types.String `tfsdk:"project_id"`
-	EnvironmentId  types.String `tfsdk:"environment_id"`
-	CreatedAt      types.String `tfsdk:"created_at"`
-	UpdatedAt      types.String `tfsdk:"updated_at"`
-	Key            types.String `tfsdk:"key"`
-	Resource       types.String `tfsdk:"resource"`
-	ResourceId     types.String `tfsdk:"resource_id"`
-	Tenant         types.String `tfsdk:"tenant"`
-	Attributes     types.String `tfsdk:"attributes"`
+	Id             types.String         `tfsdk:"id"`
+	OrganizationId types.String         `tfsdk:"organization_id"`
+	ProjectId      types.String         `tfsdk:"project_id"`
+	EnvironmentId  types.String         `tfsdk:"environment_id"`
+	CreatedAt      types.String         `tfsdk:"created_at"`
+	UpdatedAt      types.String         `tfsdk:"updated_at"`
+	Key            types.String         `tfsdk:"key"`
+	Resource       types.String         `tfsdk:"resource"`
+	ResourceId     types.String         `tfsdk:"resource_id"`
+	Tenant         types.String         `tfsdk:"tenant"`
+	Attributes     jsontypes.Normalized `tfsdk:"attributes"`
 }
 
-func tfModelFromResourceInstanceRead(m models.ResourceInstanceRead) (resourceInstanceModel, error) {
+// tfModelFromResourceInstanceRead returns the model of the resource instance the
+// API answered with. priorAttributes is the attributes of the plan or the prior
+// state, which the model keeps when the API holds the same attributes; see
+// common.OptionalJSONObjectValue.
+func tfModelFromResourceInstanceRead(m models.ResourceInstanceRead,
+	priorAttributes jsontypes.Normalized,
+) (resourceInstanceModel, error) {
 	r := resourceInstanceModel{}
 	r.Id = types.StringValue(m.Id)
 	r.Key = types.StringValue(m.Key)
@@ -34,16 +42,11 @@ func tfModelFromResourceInstanceRead(m models.ResourceInstanceRead) (resourceIns
 	r.UpdatedAt = types.StringValue(m.UpdatedAt.String())
 	r.Tenant = types.StringPointerValue(m.Tenant)
 
-	// Convert attributes map to JSON string
-	if len(m.Attributes) > 0 {
-		attributesJSON, err := json.Marshal(m.Attributes)
-		if err != nil {
-			return resourceInstanceModel{}, fmt.Errorf("encoding the attributes: %w", err)
-		}
-		r.Attributes = types.StringValue(string(attributesJSON))
-	} else {
-		r.Attributes = types.StringNull()
+	attributes, err := common.OptionalJSONObjectValue(m.Attributes, priorAttributes)
+	if err != nil {
+		return resourceInstanceModel{}, fmt.Errorf("encoding the attributes: %w", err)
 	}
+	r.Attributes = attributes
 
 	return r, nil
 }

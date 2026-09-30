@@ -1,6 +1,7 @@
 package mockpermit
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -53,6 +54,36 @@ func (s *Server) CheckStored(want ...string) resource.TestCheckFunc {
 	return func(*terraform.State) error {
 		if keys := s.StoredKeys(); !slices.Equal(keys, slices.Sorted(slices.Values(want))) {
 			return fmt.Errorf("objects in the mock after destroy: %q, want %q", keys, want)
+		}
+		return nil
+	}
+}
+
+// CheckStoredJSON returns a Terraform test check that passes when the field of the
+// stored object, written "collection/key" as StoredKeys lists it, encodes exactly
+// as want: compact, with sorted object keys and each number as the request that
+// set it wrote it.
+func (s *Server) CheckStoredJSON(stored, field, want string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		collection, key, _ := strings.Cut(stored, "/")
+		s.mu.Lock()
+		object, ok := s.objects[collection][key]
+		var value any
+		if ok {
+			value, ok = object[field]
+		}
+		s.mu.Unlock()
+		if !ok {
+			return fmt.Errorf("the mock holds no %s with the field %s; it holds %q",
+				stored, field, s.StoredKeys())
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("encoding the %s of %s: %w", field, stored, err)
+		}
+		if string(encoded) != want {
+			return fmt.Errorf("the %s of %s in the mock = %s, want %s", field, stored,
+				encoded, want)
 		}
 		return nil
 	}

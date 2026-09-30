@@ -15,11 +15,11 @@ const (
 // permitio_resource_instance calls: create, and get, update and delete by
 // resource:key or ID. A create body names the resource and the tenant by key, and
 // the fake returns the keys and IDs of both, as the API does. An instance without
-// attributes has the spec's default of none, and a PATCH overwrites the attributes
-// it provides, as the API documents. The fake fails the test on a get, update or
-// delete of an instance whose resource or tenant was deleted: the API deletes a
-// resource or tenant with its related data, and whether that includes the
-// instance is unconfirmed.
+// attributes has the spec's default of none. A PATCH with attributes replaces them
+// whole, so attributes {} clear them, and one without keeps them, as the API does
+// (PER-16603). The fake fails the test on a get, update or delete of an instance
+// whose resource or tenant was deleted: the API deletes a resource or tenant with
+// its related data, and whether that includes the instance is unconfirmed.
 var ResourceInstances = Routes{
 	{
 		"POST " + resourceInstancesPattern, "ResourceInstances.Create",

@@ -69,7 +69,9 @@ type configBuilder struct {
 
 // value returns a known, non-null value of typ for the attribute at path, or for
 // the whole configuration at the empty path. A collection has one element, so
-// that building it reaches every nested attribute.
+// that building it reaches every nested attribute. A string is "{}", which is
+// also valid JSON, so that an attribute of a JSON string type such as
+// jsontypes.Normalized decodes too.
 func (b configBuilder) value(
 	ctx context.Context,
 	typ tftypes.Type,
@@ -77,7 +79,7 @@ func (b configBuilder) value(
 ) (tftypes.Value, error) {
 	switch {
 	case typ.Is(tftypes.String):
-		return tftypes.NewValue(typ, "x"), nil
+		return tftypes.NewValue(typ, "{}"), nil
 	case typ.Is(tftypes.Number):
 		return tftypes.NewValue(typ, big.NewFloat(1)), nil
 	case typ.Is(tftypes.Bool):

@@ -164,6 +164,89 @@ resource "permitio_user_set" "engineers" {
 	m.AssertAllRoutesHit()
 }
 
+// TestUserSetConditionsJSON checks that conditions are compared as JSON: heredoc
+// conditions, with other whitespace than the API answers with, give an empty plan
+// after a create and after an update. The numbers in them, 18.0 and an integer
+// beyond 2^53 that a float64 would round to 9007199254740992, reach the API as
+// written (PER-16603).
+func TestUserSetConditionsJSON(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.ConditionSets)
+	const (
+		address = "permitio_user_set.reviewers"
+		stored  = "condition_sets/reviewers"
+	)
+	const heredoc = `conditions = <<-EOT
+    {
+      "allOf": [
+        { "allOf": [
+          { "subject.team": { "equals": "review" } },
+          { "subject.level": { "equals": 18.0 } },
+          { "subject.id": { "equals": 9007199254740993 } }
+        ] }
+      ]
+    }
+  EOT`
+	const heredocValue = "{\n  \"allOf\": [\n    { \"allOf\": [\n" +
+		"      { \"subject.team\": { \"equals\": \"review\" } },\n" +
+		"      { \"subject.level\": { \"equals\": 18.0 } },\n" +
+		"      { \"subject.id\": { \"equals\": 9007199254740993 } }\n" +
+		"    ] }\n  ]\n}\n"
+	const (
+		sentConditions = `{"allOf": [{"allOf": [{"subject.team": {"equals": "review"}},
+			{"subject.level": {"equals": 18.0}},
+			{"subject.id": {"equals": 9007199254740993}}]}]}`
+		storedConditions = `{"allOf":[{"allOf":[{"subject.team":{"equals":"review"}},` +
+			`{"subject.level":{"equals":18.0}},{"subject.id":{"equals":9007199254740993}}]}]}`
+		createBody = `{"key": "reviewers", "name": "Reviewers", "type": "userset",
+			"description": "Users who review", "conditions": ` + sentConditions + `}`
+		renamedBody = `{"name": "Document reviewers", "description": "Users who review",
+			"conditions": ` + sentConditions + `}`
+	)
+	config := func(name, conditions string) string {
+		return fmt.Sprintf(`
+resource "permitio_user_set" "reviewers" {
+  key         = "reviewers"
+  name        = %q
+  description = "Users who review"
+  %s
+}
+`, name, conditions)
+	}
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{
+				Config: config("Reviewers", heredoc),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(address, "conditions", heredocValue),
+					m.CheckRequests(http.MethodPost, conditionSetsPath, createBody),
+					m.CheckStoredJSON(stored, "conditions", storedConditions),
+				),
+			},
+			{
+				Config: config("Document reviewers", heredoc),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(address, plancheck.ResourceActionUpdate),
+					},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(address, "conditions", heredocValue),
+					m.CheckRequests(http.MethodPatch, conditionSetsPath+"/reviewers",
+						renamedBody),
+					m.CheckStoredJSON(stored, "conditions", storedConditions),
+				),
+			},
+		},
+	})
+}
+
 // documentConfig is the resource that the resource sets are on, the
 // internal_documents set that the other resource sets get as their parent, and
 // internal_reports, a resource set created with it as its parent.

@@ -51,13 +51,15 @@ type Request struct {
 
 // CheckJSONBody returns an error unless the request body is the same JSON value as
 // want. Object key order and whitespace do not matter; missing, extra or changed
-// fields do.
+// fields do. Numbers compare as written, so an integer beyond 2^53 that was rounded
+// on the way does not match.
 func (r Request) CheckJSONBody(want string) error {
-	var gotValue, wantValue any
-	if err := json.Unmarshal(r.Body, &gotValue); err != nil {
+	gotValue, err := decodeJSON(r.Body)
+	if err != nil {
 		return fmt.Errorf("%s %s: request body %q is not JSON: %w", r.Method, r.Path, r.Body, err)
 	}
-	if err := json.Unmarshal([]byte(want), &wantValue); err != nil {
+	wantValue, err := decodeJSON([]byte(want))
+	if err != nil {
 		return fmt.Errorf("want %q is not JSON: %w", want, err)
 	}
 	if !reflect.DeepEqual(gotValue, wantValue) {
@@ -65,6 +67,21 @@ func (r Request) CheckJSONBody(want string) error {
 			r.Method, r.Path, compactJSON(gotValue), compactJSON(wantValue))
 	}
 	return nil
+}
+
+// decodeJSON decodes data, which holds one JSON value, keeping each number as the
+// json.Number it was written as.
+func decodeJSON(data []byte) (any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("data after the JSON value")
+	}
+	return value, nil
 }
 
 // compactJSON writes a decoded JSON value on one line with sorted object keys, so
@@ -341,11 +358,15 @@ func (s *Server) getAPIKeyScope(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// decodeObject reads the request body as a JSON object. On failure it fails the
-// test, answers 422 like the API does, and returns false.
+// decodeObject reads the request body as a JSON object. It keeps each number as
+// the json.Number the request wrote, so the fake stores and answers an integer
+// beyond 2^53 with the digits it was sent instead of rounding it to a float64. On
+// failure it fails the test, answers 422 like the API does, and returns false.
 func (s *Server) decodeObject(w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
 	var object map[string]any
-	err := json.NewDecoder(r.Body).Decode(&object)
+	decoder := json.NewDecoder(r.Body)
+	decoder.UseNumber()
+	err := decoder.Decode(&object)
 	if err == nil && object == nil {
 		err = errors.New("the body is null")
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -29,17 +30,17 @@ type ConditionSetDataSource struct {
 // conditionSetDataSourceModel is a user set or a resource set that the
 // permitio_condition_set data source looks up by key.
 type conditionSetDataSourceModel struct {
-	Id             types.String `tfsdk:"id"`
-	OrganizationId types.String `tfsdk:"organization_id"`
-	ProjectId      types.String `tfsdk:"project_id"`
-	EnvironmentId  types.String `tfsdk:"environment_id"`
-	Key            types.String `tfsdk:"key"`
-	Name           types.String `tfsdk:"name"`
-	Description    types.String `tfsdk:"description"`
-	Type           types.String `tfsdk:"type"`
-	Resource       types.String `tfsdk:"resource"`
-	Conditions     types.String `tfsdk:"conditions"`
-	ParentId       types.String `tfsdk:"parent_id"`
+	Id             types.String         `tfsdk:"id"`
+	OrganizationId types.String         `tfsdk:"organization_id"`
+	ProjectId      types.String         `tfsdk:"project_id"`
+	EnvironmentId  types.String         `tfsdk:"environment_id"`
+	Key            types.String         `tfsdk:"key"`
+	Name           types.String         `tfsdk:"name"`
+	Description    types.String         `tfsdk:"description"`
+	Type           types.String         `tfsdk:"type"`
+	Resource       types.String         `tfsdk:"resource"`
+	Conditions     jsontypes.Normalized `tfsdk:"conditions"`
+	ParentId       types.String         `tfsdk:"parent_id"`
 }
 
 func (d *ConditionSetDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
@@ -102,8 +103,9 @@ func (d *ConditionSetDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 				Computed: true,
 			},
 			"conditions": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Optional:   true,
+				Computed:   true,
+				CustomType: jsontypes.NormalizedType{},
 			},
 			"parent_id": schema.StringAttribute{
 				Computed:            true,
@@ -147,7 +149,8 @@ func (d *ConditionSetDataSource) Read(ctx context.Context, request datasource.Re
 func newConditionSetDataSourceModel(
 	conditionSet *models.ConditionSetRead,
 ) (conditionSetDataSourceModel, error) {
-	conditions, err := json.Marshal(conditionSet.Conditions)
+	conditions, err := common.JSONObjectValue(conditionSet.Conditions,
+		jsontypes.NewNormalizedNull())
 	if err != nil {
 		return conditionSetDataSourceModel{}, fmt.Errorf("encoding the conditions: %w", err)
 	}
@@ -186,7 +189,7 @@ func newConditionSetDataSourceModel(
 		Description:    types.StringPointerValue(conditionSet.Description),
 		Type:           setType,
 		Resource:       resource,
-		Conditions:     types.StringValue(string(conditions)),
+		Conditions:     conditions,
 		ParentId:       parentId,
 	}, nil
 }

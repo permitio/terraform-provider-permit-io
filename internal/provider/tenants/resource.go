@@ -2,6 +2,7 @@ package tenants
 
 import (
 	"context"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
@@ -39,9 +40,9 @@ func (r *TenantResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 	}
 
 	attributes["attributes"] = schema.StringAttribute{
-		MarkdownDescription: "Arbitrary tenant attributes in JSON format that will be used to enforce attribute-based access control policies.",
+		MarkdownDescription: "Arbitrary tenant attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ tier = \"gold\" })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the tenant has no attributes, so removing it clears them in Permit.",
 		Optional:            true,
-		Computed:            true,
+		CustomType:          jsontypes.NormalizedType{},
 	}
 
 	resp.Schema = schema.Schema{
@@ -81,7 +82,7 @@ func (r *TenantResource) Read(ctx context.Context, request resource.ReadRequest,
 		return
 	}
 
-	tenantRead, err := r.client.Read(ctx, model.Key.ValueString())
+	tenantRead, err := r.client.Read(ctx, model.Key.ValueString(), model.Attributes)
 
 	if err != nil {
 		if common.IsNotFoundErr(err) {

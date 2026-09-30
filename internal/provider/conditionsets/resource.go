@@ -3,6 +3,7 @@ package conditionsets
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -177,8 +178,9 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			},
 		},
 		"conditions": schema.StringAttribute{
-			MarkdownDescription: "a boolean expression that consists of multiple conditions, with and/or logic.",
+			MarkdownDescription: "a boolean expression that consists of multiple conditions, with and/or logic. A JSON object, such as `jsonencode({ allOf = [...] })`. Differences in whitespace and key order from the object Permit returns do not show as changes.",
 			Required:            true,
+			CustomType:          jsontypes.NormalizedType{},
 		},
 		"parent_id": schema.StringAttribute{
 			MarkdownDescription: "The parent condition set id. Allows creating a nested condition set hierarchy.",

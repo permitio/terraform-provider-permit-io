@@ -527,6 +527,17 @@ func TestCheckJSONBody(t *testing.T) {
 		},
 		{name: "changed nested value", request: sent, want: `{"a":"x","b":{"c":2}}`, wantError: "want"},
 		{
+			name: "integer beyond 2^53 rounded",
+			request: Request{Method: http.MethodPost, Path: "/x",
+				Body: []byte(`{"n":9007199254740992}`)},
+			want: `{"n":9007199254740993}`, wantError: "want",
+		},
+		{
+			name:    "data after the value",
+			request: Request{Method: http.MethodPost, Path: "/x", Body: []byte(`{} {}`)},
+			want:    `{}`, wantError: "is not JSON",
+		},
+		{
 			name:    "body not JSON",
 			request: Request{Method: http.MethodPost, Path: "/x", Body: []byte("key=acme")},
 			want:    `{}`, wantError: "is not JSON",

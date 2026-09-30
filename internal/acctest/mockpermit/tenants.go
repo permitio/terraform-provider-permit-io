@@ -13,7 +13,9 @@ const (
 )
 
 // Tenants serves the tenant operations permitio_tenant calls: create, get, update
-// and delete by key. A tenant without attributes has the spec's default of none.
+// and delete by key. A tenant without attributes has the spec's default of none. A
+// PATCH replaces each field it has whole, the attributes too, so attributes {}
+// clear them, and keeps each field it leaves out, as the API does (PER-16603).
 var Tenants = Routes{
 	{"POST " + tenantsPattern, "Tenants.Create", (*Server).createTenant},
 	{"GET " + tenantPattern, "Tenants.Get", (*Server).getTenant},

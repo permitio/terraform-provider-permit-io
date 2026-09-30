@@ -2,6 +2,7 @@ package resource_instances
 
 import (
 	"context"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -62,9 +63,9 @@ func (r *ResourceInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 		},
 	}
 	attributes["attributes"] = schema.StringAttribute{
-		MarkdownDescription: "Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies.",
+		MarkdownDescription: "Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ pages = 12 })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the instance has no attributes, so removing it clears them in Permit.",
 		Optional:            true,
-		Computed:            true,
+		CustomType:          jsontypes.NormalizedType{},
 	}
 
 	resp.Schema = schema.Schema{
@@ -104,7 +105,8 @@ func (r *ResourceInstanceResource) Read(ctx context.Context, request resource.Re
 		return
 	}
 
-	instanceRead, err := r.client.Read(ctx, model.Key.ValueString(), model.Resource.ValueString())
+	instanceRead, err := r.client.Read(ctx, model.Key.ValueString(), model.Resource.ValueString(),
+		model.Attributes)
 
 	if err != nil {
 		if common.IsNotFoundErr(err) {

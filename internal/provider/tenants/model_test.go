@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/permitio/permit-golang/pkg/models"
 )
 
@@ -14,7 +15,7 @@ func TestTenantModelReportsAttributesItCannotEncode(t *testing.T) {
 	_, err := tfModelFromTenantRead(models.TenantRead{
 		Key:        "acme",
 		Attributes: map[string]interface{}{"score": math.Inf(1)},
-	})
+	}, jsontypes.NewNormalizedNull())
 
 	if err == nil || !strings.Contains(err.Error(), "encoding the attributes") {
 		t.Errorf("tfModelFromTenantRead = %v, want an error encoding the attributes", err)

@@ -4,22 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // userSetModel holds the attributes of a user set, which a resource set has too.
 type userSetModel struct {
-	Id             types.String `tfsdk:"id"`
-	OrganizationId types.String `tfsdk:"organization_id"`
-	ProjectId      types.String `tfsdk:"project_id"`
-	EnvironmentId  types.String `tfsdk:"environment_id"`
-	Key            types.String `tfsdk:"key"`
-	Name           types.String `tfsdk:"name"`
-	Description    types.String `tfsdk:"description"`
-	Conditions     types.String `tfsdk:"conditions"`
-	ParentId       types.String `tfsdk:"parent_id"`
+	Id             types.String         `tfsdk:"id"`
+	OrganizationId types.String         `tfsdk:"organization_id"`
+	ProjectId      types.String         `tfsdk:"project_id"`
+	EnvironmentId  types.String         `tfsdk:"environment_id"`
+	Key            types.String         `tfsdk:"key"`
+	Name           types.String         `tfsdk:"name"`
+	Description    types.String         `tfsdk:"description"`
+	Conditions     jsontypes.Normalized `tfsdk:"conditions"`
+	ParentId       types.String         `tfsdk:"parent_id"`
 }
 
 // ConditionSetModel holds a user set or a resource set. A user set has no
@@ -48,10 +50,9 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 		return ConditionSetModel{}, err
 	}
 
-	conditionsMarshalled, err := json.Marshal(conditionSet.Conditions)
-
+	conditions, err := common.JSONObjectValue(conditionSet.Conditions, data.Conditions)
 	if err != nil {
-		return ConditionSetModel{}, err
+		return ConditionSetModel{}, fmt.Errorf("conditions: %w", err)
 	}
 
 	// Handle resource: if API returns null, keep it null to maintain consistency.
@@ -104,7 +105,7 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 			Name:           types.StringValue(conditionSet.Name),
 			Description:    description,
 			ParentId:       parentId,
-			Conditions:     types.StringValue(string(conditionsMarshalled)),
+			Conditions:     conditions,
 		},
 		Resource: resource,
 	}
@@ -125,11 +126,9 @@ func (c *ConditionSetClient) NamesSetResource(ctx context.Context, setKey, resou
 }
 
 func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models.ConditionSetType, conditionSetPlan *ConditionSetModel) error {
-	var conditions map[string]any
-	err := json.Unmarshal([]byte(conditionSetPlan.Conditions.ValueString()), &conditions)
-
+	conditions, err := common.DecodeJSONObject(conditionSetPlan.Conditions.ValueString())
 	if err != nil {
-		return err
+		return fmt.Errorf("conditions: %w", err)
 	}
 
 	conditionSetCreate := models.ConditionSetCreate{
@@ -205,11 +204,9 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 }
 
 func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *ConditionSetModel) error {
-	var conditions map[string]any
-	err := json.Unmarshal([]byte(conditionSetPlan.Conditions.ValueString()), &conditions)
-
+	conditions, err := common.DecodeJSONObject(conditionSetPlan.Conditions.ValueString())
 	if err != nil {
-		return err
+		return fmt.Errorf("conditions: %w", err)
 	}
 
 	csUpdate := models.ConditionSetUpdate{
@@ -237,10 +234,10 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 		return err
 	}
 
-	conditionsMarshalled, err := json.Marshal(conditionSetRead.Conditions)
-
+	updatedConditions, err := common.JSONObjectValue(conditionSetRead.Conditions,
+		conditionSetPlan.Conditions)
 	if err != nil {
-		return err
+		return fmt.Errorf("conditions: %w", err)
 	}
 
 	conditionSetPlan.Name = types.StringValue(conditionSetRead.Name)
@@ -269,7 +266,7 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 	conditionSetPlan.ProjectId = types.StringValue(conditionSetRead.ProjectId)
 	conditionSetPlan.Id = types.StringValue(conditionSetRead.Id)
 	conditionSetPlan.OrganizationId = types.StringValue(conditionSetRead.OrganizationId)
-	conditionSetPlan.Conditions = types.StringValue(string(conditionsMarshalled))
+	conditionSetPlan.Conditions = updatedConditions
 
 	return nil
 }

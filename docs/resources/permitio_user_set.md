@@ -17,7 +17,7 @@ See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/op
 
 ### Required
 
-- `conditions` (String) a boolean expression that consists of multiple conditions, with and/or logic.
+- `conditions` (String) a boolean expression that consists of multiple conditions, with and/or logic. A JSON object, such as `jsonencode({ allOf = [...] })`. Differences in whitespace and key order from the object Permit returns do not show as changes.
 - `key` (String) A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.
 - `name` (String) A descriptive name for the set, i.e: 'US based employees' or 'Users behind VPN'
 

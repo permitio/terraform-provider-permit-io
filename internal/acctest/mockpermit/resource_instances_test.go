@@ -72,6 +72,36 @@ func TestResourceInstanceState(t *testing.T) {
 	wantStoredKeys(t, m, "resources/document", "tenants/acme")
 }
 
+// TestResourceInstancePatchReplacesAttributesWhole checks that a resource instance
+// PATCH with attributes replaces them whole, that attributes {} clear them, and
+// that a PATCH without them keeps them, as the API does. The fake keeps an integer
+// beyond 2^53 exact.
+func TestResourceInstancePatchReplacesAttributesWhole(t *testing.T) {
+	m := newDocumentsOfAcme(t, t)
+	const handbook = resourceInstancesPath + "/document:handbook"
+	wantStoredAttributes := func(want string) {
+		t.Helper()
+		err := m.CheckStoredJSON("resource_instances/document:handbook", "attributes", want)(nil)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+	send(t, m, http.MethodPost, resourceInstancesPath, `{"key": "handbook",
+		"resource": "document", "tenant": "acme",
+		"attributes": {"pages": 12, "isbn": 9007199254740993}}`, http.StatusOK)
+	wantStoredAttributes(`{"isbn":9007199254740993,"pages":12}`)
+
+	send(t, m, http.MethodPatch, handbook, `{}`, http.StatusOK)
+	wantStoredAttributes(`{"isbn":9007199254740993,"pages":12}`)
+
+	send(t, m, http.MethodPatch, handbook, `{"attributes": {"draft": true}}`, http.StatusOK)
+	wantStoredAttributes(`{"draft":true}`)
+
+	wantFields(t, send(t, m, http.MethodPatch, handbook, `{"attributes": {}}`, http.StatusOK),
+		`{"attributes": {}}`)
+	wantStoredAttributes(`{}`)
+}
+
 func TestResourceInstanceRequestErrors(t *testing.T) {
 	tests := []struct {
 		name       string

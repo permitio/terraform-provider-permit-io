@@ -474,8 +474,7 @@
         "attributes": {
           "type": "string",
           "optional": true,
-          "computed": true,
-          "description": "Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies."
+          "description": "Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ pages = 12 })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the instance has no attributes, so removing it clears them in Permit."
         },
         "created_at": {
           "type": "string",
@@ -646,7 +645,7 @@
         "conditions": {
           "type": "string",
           "required": true,
-          "description": "a boolean expression that consists of multiple conditions, with and/or logic."
+          "description": "a boolean expression that consists of multiple conditions, with and/or logic. A JSON object, such as `jsonencode({ allOf = [...] })`. Differences in whitespace and key order from the object Permit returns do not show as changes."
         },
         "description": {
           "type": "string",
@@ -938,8 +937,7 @@
         "attributes": {
           "type": "string",
           "optional": true,
-          "computed": true,
-          "description": "Arbitrary tenant attributes in JSON format that will be used to enforce attribute-based access control policies."
+          "description": "Arbitrary tenant attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ tier = \"gold\" })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the tenant has no attributes, so removing it clears them in Permit."
         },
         "created_at": {
           "type": "string",
@@ -1107,7 +1105,7 @@
         "conditions": {
           "type": "string",
           "required": true,
-          "description": "a boolean expression that consists of multiple conditions, with and/or logic."
+          "description": "a boolean expression that consists of multiple conditions, with and/or logic. A JSON object, such as `jsonencode({ allOf = [...] })`. Differences in whitespace and key order from the object Permit returns do not show as changes."
         },
         "description": {
           "type": "string",
