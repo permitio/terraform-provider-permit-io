@@ -256,9 +256,10 @@ func TestRetriesRefusedConnection(t *testing.T) {
 	if resp != nil {
 		_ = resp.Body.Close()
 	}
-	if !errors.Is(err, syscall.ECONNREFUSED) || attempts.Load() != 4 {
-		t.Errorf("RoundTrip() error = %v after %d attempts, want %v after MaxAttempts (4)",
-			err, attempts.Load(), syscall.ECONNREFUSED)
+	var opErr *net.OpError
+	if !errors.As(err, &opErr) || opErr.Op != "dial" || attempts.Load() != 4 {
+		t.Errorf("RoundTrip() error = %v after %d attempts, want a dial error after "+
+			"MaxAttempts (4)", err, attempts.Load())
 	}
 }
 
@@ -454,7 +455,7 @@ func TestRetryLogLeavesOutURL(t *testing.T) {
 		reason string
 	}{
 		{"429", newServer(t, "0", http.StatusTooManyRequests).URL, "429 Too Many Requests"},
-		{"refused connection", closed.URL, "connection refused"},
+		{"refused connection", closed.URL, "dial tcp"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

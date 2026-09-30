@@ -241,7 +241,7 @@ func TestConfigureFailsWhenAPIUnreachable(t *testing.T) {
 	t.Setenv("PERMITIO_API_KEY", "fake-key")
 	t.Setenv("PERMITIO_TIMEOUT", "1")
 
-	configureError(t, apiKeyScopePath, "connection refused", "PERMITIO_API_URL")
+	configureError(t, apiKeyScopePath, "dial tcp", "PERMITIO_API_URL")
 }
 
 func TestConfigureRetriesRateLimitedScope(t *testing.T) {
