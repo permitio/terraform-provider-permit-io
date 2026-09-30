@@ -1,0 +1,4 @@
+resource "permitio_tenant" "unpinned" { # expect: P1 NEEDS-REVIEW
+  key  = "unpinned"
+  name = "Unpinned"
+}

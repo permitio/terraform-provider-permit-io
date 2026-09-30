@@ -1,0 +1,62 @@
+# Runs the tests of the 1.0 migration skill (skills/) when a pull request changes the
+# skill or the upgrade guide it follows: the scanner against its fixtures, and
+# references/changes.md against the guide's entries. Not a required check: CI in
+# test.yml does not need this job.
+name: Migration skill
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**'
+      - 'docs/guides/version-1-upgrade.md'
+      - 'templates/guides/version-1-upgrade.md.tmpl'
+      - '.github/workflows/skill.yml'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Skill tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the oldest Python that SKILL.md promises the scanner runs on.
+        python: ['3.9', '3.13']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      # Exits 1 when a test fails or fewer than MIN_TESTS ran, and 2 when no test ran
+      # or unittest reported no count, so a run that found no tests never passes.
+      - name: Run the skill tests
+        shell: bash
+        env:
+          MIN_TESTS: 26
+        run: |
+          status=0
+          python -m unittest discover -s skills/tests -v 2>&1 |
+            tee "$RUNNER_TEMP/unittest.log" || status=$?
+          ran=$(sed -n 's/^Ran \([0-9]*\) tests\{0,1\} in .*/\1/p' "$RUNNER_TEMP/unittest.log")
+          if [[ -z $ran || $ran -eq 0 ]]; then
+            echo "::error title=Skill tests::No skill test ran."
+            exit 2
+          fi
+          if [[ $status -ne 0 ]]; then
+            exit 1
+          fi
+          if [[ $ran -lt $MIN_TESTS ]]; then
+            echo "::error title=Skill tests::${ran} tests ran, expected at least ${MIN_TESTS}."
+            exit 1
+          fi
+          echo "${ran} skill tests passed."

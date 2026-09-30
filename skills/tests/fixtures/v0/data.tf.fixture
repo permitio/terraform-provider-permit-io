@@ -1,0 +1,17 @@
+data "permitio_role" "admin" {
+  key  = "admin"
+  name = "Admin" # expect: S12 INFO
+}
+
+data "permitio_resource" "invoice" {
+  key  = "invoice"
+  name = "Invoice" # expect: S12 INFO
+  actions = {
+    read = { name = "Read" }
+  }
+  updated_at = "2025-01-01T00:00:00Z" # expect: S5 NEEDS-REVIEW
+}
+
+data "permitio_user" "alice" {
+  key = "alice"
+}

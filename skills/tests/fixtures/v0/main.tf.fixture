@@ -1,0 +1,113 @@
+variable "team_key" {
+  type = string
+}
+
+resource "permitio_resource" "document" {
+  key  = "document"
+  name = "Document"
+  actions = {
+    read = { name = "Read" }
+  }
+  attributes = {
+    title = { type = "string" }
+    metadata = {
+      type = "object" # expect: K1 NEEDS-REVIEW
+    }
+  }
+  updated_at = "2025-01-01T00:00:00Z" # expect: S5 NEEDS-REVIEW
+}
+
+resource "permitio_resource" "folder" {
+  key     = "folder"
+  name    = "Folder"
+  actions = { list = { name = "List" } }
+}
+
+resource "permitio_resource" "invoice" {
+  key        = "invoice"
+  name       = "Invoice"
+  actions    = { read = { name = "Read" } }
+  attributes = {} # expect: ST3 INFO
+}
+
+resource "permitio_user_set" "reviewers" {
+  key      = var.team_key # expect: S1 INFO
+  name     = "Reviewers"
+  resource = "document" # expect: S4 NEEDS-REVIEW
+  # resource = "a commented-out argument is not reported"
+  # expect-next: B9 INFO
+  conditions = <<EOT
+{"allOf": [{"allOf": [{"subject.team": {"equals": "review"}}]}]}
+EOT
+
+  lifecycle {
+    ignore_changes = [resource, description] # expect: S4 NEEDS-REVIEW
+  }
+}
+
+resource "permitio_resource_set" "drafts" {
+  key      = "drafts"
+  name     = "Drafts"
+  resource = permitio_resource.document.key
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "resource.status" = { equals = "draft" } }] }]
+  })
+}
+
+resource "permitio_relation" "parent" {
+  key              = "parent"
+  name             = "Parent"
+  subject_resource = permitio_resource.folder.id # expect: K6 NEEDS-REVIEW
+  object_resource  = permitio_resource.document.key
+}
+
+# The role derivation from the 0.0.25 example, with role and to_role reversed.
+resource "permitio_role_derivation" "folder_file_admin" { # expect: B14 NEEDS-REVIEW
+  resource    = "file"
+  role        = "fileAdmin"
+  on_resource = "folder"
+  to_role     = "folderAdmin"
+  linked_by   = "parent"
+}
+
+resource "permitio_role_assignment" "alice_admin" {
+  user   = "alice"
+  role   = "admin"
+  tenant = "3f2b9a1c-5d4e-4f6a-8b7c-9d0e1f2a3b4c" # expect: K6 INFO
+}
+
+# Condition set rules keep the arguments as written, so an ID doesn't drift: no K6.
+resource "permitio_condition_set_rule" "reviewers_read_drafts" {
+  user_set     = permitio_user_set.reviewers.id
+  permission   = "document:read"
+  resource_set = permitio_resource_set.drafts.key
+}
+
+resource "permitio_tenant" "acme" {
+  key        = "acme"
+  name       = "Acme"
+  attributes = "{\"tier\": \"gold\"}" # expect: B9 INFO
+}
+
+resource "permitio_resource_instance" "handbook" {
+  key        = "handbook"
+  resource   = permitio_resource.document.key
+  tenant     = permitio_tenant.acme.key
+  attributes = jsonencode({}) # expect: ST3 INFO
+}
+
+resource "permitio_user_attribute" "profile" {
+  key         = "profile"
+  type        = "object_array" # expect: K1 NEEDS-REVIEW
+  description = "The user's profile"
+}
+
+import {
+  to = permitio_role_assignment.alice_admin
+  id = "alice::default" # expect: ST2 NEEDS-REVIEW
+}
+
+import {
+  to = permitio_relation.parent
+  id = "document:parent"
+}

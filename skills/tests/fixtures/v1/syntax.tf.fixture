@@ -1,0 +1,43 @@
+# HCL the scanner must read without reporting anything: comments, strings and
+# heredocs that look like arguments, escapes, template directives and for
+# expressions.
+
+/*
+resource "permitio_user_set" "old" {
+  resource   = "document"
+  updated_at = "2025-01-01T00:00:00Z"
+}
+*/
+
+// updated_at = "a line comment"
+
+locals {
+  note     = "braces { and } in a string, a # and a // are text"
+  escaped  = "$${not.an.interpolation} and %%{ not a directive }"
+  template = "%{if true}yes%{else}no%{endif} ${upper("a { brace")}"
+  heredoc  = <<-EOT
+    updated_at = "inside a heredoc"
+    }
+  EOT
+  names    = [for key in ["a", "b"] : upper(key)]
+  by_key   = { for key in ["a", "b"] : key => { resource = key } }
+  unicode  = "réseau"
+}
+
+resource "permitio_user_set" "interns" {
+  key  = "interns"
+  name = "Interns"
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "subject.role" = { equals = "intern" } }] }]
+    resource = "a nested key, not the user set's argument"
+  })
+}
+
+resource "permitio_resource_set" "public" {
+  key      = "public"
+  name     = "Public"
+  resource = "file"
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "resource.public" = { equals = true } }] }]
+  })
+}

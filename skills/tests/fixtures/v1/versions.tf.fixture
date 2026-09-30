@@ -1,0 +1,25 @@
+# A configuration written for 1.0. The scanner may report only INFO items here.
+terraform {
+  required_version = ">= 1.5.7"
+
+  required_providers {
+    permitio = {
+      source  = "permitio/permit-io"
+      version = "~> 1.0"
+    }
+  }
+
+  cloud {
+    organization = "example"
+  }
+}
+
+variable "permitio_api_key" {
+  type      = string
+  sensitive = true
+}
+
+provider "permitio" {
+  api_key = var.permitio_api_key
+  timeout = 60
+}

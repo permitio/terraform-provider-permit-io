@@ -1,0 +1,8 @@
+# This file is maintained automatically by "terraform init".
+provider "registry.terraform.io/permitio/permit-io" {
+  version     = "0.0.25"
+  constraints = "~> 0.0.1"
+  hashes = [
+    "h1:0000000000000000000000000000000000000000000=",
+  ]
+}

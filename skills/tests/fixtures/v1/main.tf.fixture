@@ -1,0 +1,134 @@
+resource "permitio_resource" "folder" {
+  key  = "folder"
+  name = "Folder"
+  actions = {
+    list = { name = "List" }
+  }
+}
+
+resource "permitio_resource" "file" {
+  key  = "file"
+  name = "File"
+  actions = {
+    read  = { name = "Read" }
+    write = { name = "Write" }
+  }
+  attributes = {
+    file_id = { type = "string" }
+  }
+}
+
+resource "permitio_relation" "parent" {
+  key              = "parent"
+  name             = "Parent"
+  subject_resource = permitio_resource.folder.key
+  object_resource  = permitio_resource.file.key
+}
+
+resource "permitio_role" "folder_manager" {
+  key         = "manager"
+  name        = "Manager"
+  resource    = permitio_resource.folder.key
+  permissions = ["list"]
+}
+
+resource "permitio_role" "file_editor" {
+  key         = "editor"
+  name        = "Editor"
+  resource    = permitio_resource.file.key
+  permissions = ["read", "write"]
+}
+
+# Resolvable, and the right way round: nothing to report.
+resource "permitio_role_derivation" "managers_edit_files" {
+  role        = permitio_role.folder_manager.key
+  on_resource = permitio_resource.folder.key
+  to_role     = permitio_role.file_editor.key
+  resource    = permitio_resource.file.key
+  linked_by   = permitio_relation.parent.key
+}
+
+# Roles managed elsewhere: the scanner can't tell which resource they are on.
+resource "permitio_role_derivation" "owners_view_files" { # expect: B14 INFO
+  role        = "owner"
+  on_resource = "folder"
+  to_role     = "viewer"
+  resource    = "file"
+  linked_by   = "parent"
+}
+
+resource "permitio_user_set" "engineering" { # expect: S4 INFO
+  key         = "engineering"
+  name        = "Engineering"
+  description = "Users in the engineering department"
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "subject.department" = { equals = "engineering" } }] }]
+  })
+}
+
+resource "permitio_tenant" "main" {
+  key        = "main"
+  name       = "Main"
+  attributes = jsonencode({ region = "eu" })
+}
+
+resource "permitio_proxy_config" "files" {
+  key            = "files"
+  name           = "Files API"
+  auth_mechanism = "Bearer"
+  auth_secret = {
+    bearer = var.permitio_api_key
+  }
+  mapping_rules = [
+    {
+      url         = "https://files.example.com/files/{file_id}"
+      http_method = "get"
+      resource    = permitio_resource.file.key
+      action      = "read"
+    },
+    {
+      url         = "https://files.example.com/files/{file_id}"
+      http_method = "put"
+      resource    = permitio_resource.file.key
+      action      = "write"
+    },
+    {
+      url         = "^https://files\\.example\\.com/folders/[a-z]{3,8}$"
+      url_type    = "regex"
+      http_method = "get"
+      resource    = permitio_resource.folder.key
+      action      = "list"
+    },
+  ]
+}
+
+output "files_secret" {
+  value     = permitio_proxy_config.files.auth_secret
+  sensitive = true
+}
+
+output "files_proxy_id" {
+  value = permitio_proxy_config.files.id
+}
+
+# A user key that is a UUID, as an identity provider issues them. It is declared
+# here, so naming the user by it is naming it by key: nothing to report.
+resource "permitio_user" "alice" {
+  key   = "5b0c7e0e-2f4a-4d8b-9c1e-1a2b3c4d5e6f"
+  email = "alice@example.com"
+}
+
+resource "permitio_role_assignment" "alice_admin" {
+  user   = "5b0c7e0e-2f4a-4d8b-9c1e-1a2b3c4d5e6f"
+  role   = "admin"
+  tenant = permitio_tenant.main.key
+}
+
+data "permitio_role" "admin" {
+  key = "admin"
+}
+
+import {
+  to = permitio_role_derivation.managers_edit_files
+  id = "file:editor:folder:manager:parent"
+}
