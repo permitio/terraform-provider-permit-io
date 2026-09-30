@@ -1,42 +1,48 @@
-# Terraform Provider testing workflow.
+# Terraform provider tests. The CI job at the end is the one check to require.
 name: Tests
 
-# This GitHub action runs your tests for each pull request and push.
-# Optionally, you can turn it on using a schedule for regular testing.
+# Pull requests into any branch, pushes to main and manual runs. There is no path
+# filter: a required check that never starts blocks the pull request.
 on:
   pull_request:
-    paths-ignore:
-      - 'README.md'
   push:
-    paths-ignore:
-      - 'README.md'
+    branches: [main]
   workflow_dispatch:
 
-# Testing only needs permissions to read the repository contents.
-permissions:
-  contents: read
+permissions: {}
 
-concurrency: ${{ github.workflow }}
+# Concurrency is set per job, not for the whole run: cancelling a run would also
+# cancel an acceptance leg that is already running against its Permit environment.
+# Build, prek and generate each run once per ref at a time. A new push to a pull
+# request cancels the older run of these jobs; on main, and for manual runs, the
+# new one waits for it instead.
+
+# The Terraform that the offline tests (Build) and go generate (generate) use. The
+# checksum is the linux_amd64 line of the release's SHA256SUMS, whose HashiCorp
+# signature was verified when the version was pinned.
+env:
+  TERRAFORM_VERSION: 1.16.3
+  TERRAFORM_SHA256: 093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8
 
 jobs:
-  # Ensure project builds before running testing matrix
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-build
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@v4.1.1  # zizmor: ignore[unpinned-uses,artipacked]
-      - uses: actions/setup-go@v5.0.0  # zizmor: ignore[unpinned-uses]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: 'go.mod'
       - run: go mod download
-      # The offline tests run Terraform against a mock Permit API. The checksum is
-      # the linux_amd64 line of the release's SHA256SUMS, whose HashiCorp signature
-      # was verified when the version was pinned.
       - name: Install Terraform
-        env:
-          TERRAFORM_VERSION: 1.16.3
-          TERRAFORM_SHA256: 093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8
         run: |
           release="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
           zip="$RUNNER_TEMP/terraform.zip"
@@ -63,6 +69,7 @@ jobs:
       # non-breaking, in the job summary. Breaking changes are expected while 1.0.0 is
       # prepared, so they are reported, not failed. schemadiff exits 0 (no breaking
       # change), 1 (breaking changes) or 2 (could not compare), and 2 fails the step.
+      # The checkout keeps no token, so the base branch comes from the public URL.
       - name: Report provider schema changes
         if: github.event_name == 'pull_request'
         shell: bash
@@ -71,7 +78,7 @@ jobs:
           SCHEMA: internal/provider/testdata/provider-schema.json
         run: |
           go build -o "$RUNNER_TEMP/schemadiff" ./internal/acctest/schemadiff
-          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          git fetch --no-tags --depth=1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$BASE_REF"
           echo "### Provider schema changes against $BASE_REF" >>"$GITHUB_STEP_SUMMARY"
           in_base=$(git ls-tree --name-only FETCH_HEAD -- "$SCHEMA")
           if [[ -z $in_base ]]; then
@@ -102,15 +109,39 @@ jobs:
   # linux x86_64, which matches the one prek-action records for this version.
   prek:
     name: prek
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-prek
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     env:
       PREK_VERSION: 0.5.3
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491  # v5.0.0
+      # CI gates only the jobs in its needs, so every other job must be listed there.
+      # Exits 1 when the jobs and CI's needs differ, and 2 when no job is read.
+      - name: Check that CI needs every job
+        shell: bash
+        env:
+          WORKFLOW: .github/workflows/test.yml
+        run: |
+          jobs=$(yq '.jobs | keys | .[] | select(. != "ci")' "$WORKFLOW" | sort)
+          needs=$(yq '.jobs.ci.needs[]' "$WORKFLOW" | sort)
+          if [[ -z $jobs ]]; then
+            echo "::error title=CI needs::No jobs read from $WORKFLOW."
+            exit 2
+          fi
+          if [[ $jobs != "$needs" ]]; then
+            echo "::error title=CI needs::CI's needs must list every other job in $WORKFLOW."
+            diff <(echo "$jobs") <(echo "$needs") || true
+            exit 1
+          fi
+          echo "CI needs every other job: ${jobs//$'\n'/, }."
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         id: go
         with:
           go-version-file: 'go.mod'
@@ -148,29 +179,78 @@ jobs:
             exit 2
           fi
 
+  # Regenerates the docs and formats the examples in a checkout directory that is
+  # not named after the repository, so the output cannot depend on that name.
   generate:
-    runs-on: ubuntu-latest
+    name: generate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-generate
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: src
     steps:
-      - uses: actions/checkout@v4.1.1  # zizmor: ignore[unpinned-uses,artipacked]
-      - uses: actions/setup-go@v5.0.0  # zizmor: ignore[unpinned-uses]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          go-version-file: 'go.mod'
-          cache: true
-      - uses: hashicorp/setup-terraform@v3  # zizmor: ignore[unpinned-uses]
+          path: src
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
-          terraform_version: 1.4.0
-      - run: go generate ./...
-      - name: git diff
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+      # The same Terraform as Build, on PATH for terraform fmt and tfplugindocs.
+      - name: Install Terraform
         run: |
-          git diff --compact-summary --exit-code || \
-            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+          release="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
+          zip="$RUNNER_TEMP/terraform.zip"
+          curl -fsSL --retry 3 --retry-connrefused -o "$zip" \
+            "${release}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_SHA256}  ${zip}" | sha256sum --check --strict
+          unzip -q "$zip" -d "$RUNNER_TEMP/terraform"
+          echo "$RUNNER_TEMP/terraform" >>"$GITHUB_PATH"
+      # The committed pages are deleted first, so a page that go generate does not
+      # write shows up as deleted and the count below is of pages it wrote.
+      # tfplugindocs deletes these directories itself before it renders.
+      - name: Run go generate
+        run: |
+          rm -r docs/resources docs/data-sources
+          go generate ./...
+      # Exits 1 when go generate changed, added or deleted a file, and 2 when it
+      # wrote fewer than MIN_DOCS resource and data source pages. Change MIN_DOCS
+      # when you add or remove a resource or data source.
+      - name: Check generated files
+        env:
+          MIN_DOCS: 19
+        run: |
+          changes=$(git status --porcelain)
+          if [[ -n $changes ]]; then
+            printf '%s\n' "$changes"
+            git diff
+            echo "::error title=go generate::Generated files differ from the commit." \
+              "Run 'go generate ./...' and commit the result."
+            exit 1
+          fi
+          shopt -s nullglob
+          docs=(docs/resources/*.md docs/data-sources/*.md)
+          if (( ${#docs[@]} < MIN_DOCS )); then
+            echo "::error title=go generate::${#docs[@]} doc pages, expected at least ${MIN_DOCS}."
+            exit 2
+          fi
+          echo "Generated files match the commit; ${#docs[@]} doc pages."
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Terraform Provider Acceptance Tests
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
     env:
       # GitHub gives no repository secrets to pull requests from forks or to runs
       # whose actor is Dependabot, whatever the event and re-runs included, so those
@@ -179,6 +259,20 @@ jobs:
         ${{ github.actor != 'dependabot[bot]' &&
         (github.event_name != 'pull_request' ||
         github.event.pull_request.head.repo.full_name == github.repository) }}
+    # Each Terraform version's leg uses its own fixed Permit environment, so only one
+    # leg per version runs at a time across all refs. This group never cancels a
+    # running leg, and the workflow has no run-level group, so a new push does not
+    # cancel one either. GitHub keeps one waiting leg per group: a newer leg from any
+    # ref cancels the waiting one, and that run's CI fails until it is re-run.
+    # Runs without the API key reach no environment and get a group per ref. The
+    # condition repeats HAS_PERMIT_SECRETS because env is not available here.
+    concurrency:
+      group: >-
+        acceptance-${{ (github.actor != 'dependabot[bot]' &&
+        (github.event_name != 'pull_request' ||
+        github.event.pull_request.head.repo.full_name == github.repository))
+        && 'permit' || github.ref }}-${{ matrix.terraform }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -196,14 +290,16 @@ jobs:
           echo "::notice title=Acceptance tests skipped::This run was started by
           Dependabot or comes from a fork, so it gets no Permit API key. A maintainer
           can run the acceptance tests with Run workflow on a branch of this repository."
-      - uses: actions/checkout@v4.1.1  # zizmor: ignore[unpinned-uses,artipacked]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         if: env.HAS_PERMIT_SECRETS == 'true'
-      - uses: actions/setup-go@v5.0.0  # zizmor: ignore[unpinned-uses]
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         if: env.HAS_PERMIT_SECRETS == 'true'
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@v2.0.3  # zizmor: ignore[unpinned-uses]
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
         if: env.HAS_PERMIT_SECRETS == 'true'
         with:
           terraform_version: ${{ matrix.terraform }}
@@ -250,3 +346,38 @@ jobs:
           PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_4 }}
           PERMITIO_TIMEOUT: 20
         run: go test -count=1 -v -cover -coverpkg=./... ./internal/provider/
+
+  # The one check to require. It runs whatever happened to the jobs it needs, since
+  # a skipped required check counts as passing, and fails unless each of them
+  # succeeded: a failed, cancelled or skipped job fails it. Acceptance runs without
+  # the API key succeed with their steps skipped. Exits 1 when a job did not
+  # succeed, and 2 when the results of fewer or more than EXPECTED_JOBS jobs arrive.
+  # Change EXPECTED_JOBS when you change needs.
+  ci:
+    name: CI
+    if: always()
+    needs: [build, generate, prek, test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check the needed jobs
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EXPECTED_JOBS: 4
+        run: |
+          if ! results=$(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"$NEEDS"); then
+            echo "::error title=CI::Could not read the job results."
+            exit 2
+          fi
+          printf '%s\n' "$results"
+          count=$(grep -c . <<<"$results" || true)
+          if [[ $count -ne $EXPECTED_JOBS ]]; then
+            echo "::error title=CI::${count} job results, expected ${EXPECTED_JOBS}."
+            exit 2
+          fi
+          failed=$(grep -v ' success$' <<<"$results" || true)
+          if [[ -n $failed ]]; then
+            echo "::error title=CI::Jobs that did not succeed: ${failed//$'\n'/, }"
+            exit 1
+          fi
