@@ -5,18 +5,26 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/permitio/permit-golang/pkg/api"
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
+	"github.com/permitio/permit-golang/pkg/openapi"
 	"github.com/permitio/permit-golang/pkg/permit"
 	conditionsetrules "github.com/permitio/terraform-provider-permit-io/internal/provider/conditionset_rules"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/conditionsets"
 	globalconfig "github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 	group_resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/group_resource_instance_role_assignments"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/httpclient"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/proxy_configs"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/relations"
 	resource_instance_role_assignments "github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instance_role_assignments"
@@ -174,8 +182,15 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "permitio_api_key")
 
 	tflog.Debug(ctx, "Instantiating Permit.io client")
-	clientConfig := permitConfig.NewConfigBuilder(apiKey).WithApiUrl(apiUrl).WithDebug(debug).WithTimeout(time.Duration(timeout)).Build()
-	permitClient := permit.NewPermit(clientConfig)
+	clientConfig := newClientConfig(apiKey, apiUrl, time.Duration(timeout), p.version).
+		WithDebug(debug)
+	permitContext, err := resolveAPIKeyScope(ctx, clientConfig)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read the Permit.io API key scope",
+			err.Error()+"\n\n"+scopeErrorHint(err))
+		return
+	}
+	permitClient := permit.NewPermit(clientConfig.WithContext(permitContext).Build())
 
 	// Store config globally for resources that need direct HTTP access
 	globalconfig.SetGlobalConfig(apiUrl, apiKey)
@@ -184,6 +199,101 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	resp.ResourceData = permitClient
 
 	tflog.Info(ctx, "Permit.io client configured", map[string]any{"success": true})
+}
+
+// newClientConfig returns the SDK configuration for the Permit API at apiURL. Its
+// HTTP client retries rate-limited and failed requests and names this provider
+// version in the User-Agent. The client is set before the timeout because
+// WithTimeout sets the timeout on the client the configuration has.
+func newClientConfig(
+	apiKey, apiURL string, timeout time.Duration, version string,
+) *permitConfig.PermitConfig {
+	return permitConfig.NewConfigBuilder(apiKey).
+		WithApiUrl(apiURL).
+		WithHTTPClient(httpclient.New(version)).
+		WithTimeout(timeout)
+}
+
+// apiKeyScopePath is where the Permit API reports an API key's scope.
+const apiKeyScopePath = "/v2/api-key/scope"
+
+// resolveAPIKeyScope asks the Permit API which organization, project and
+// environment the API key belongs to. The SDK needs the answer for every call.
+// Unless it is given one, the SDK asks on the first call, and again on every call
+// that starts before an answer arrives, with no lock around where it keeps the
+// answer, and it reports a failure without the API's status or message.
+func resolveAPIKeyScope(
+	ctx context.Context, cfg *permitConfig.PermitConfig,
+) (*permitConfig.PermitContext, error) {
+	client := openapi.NewAPIClient(api.NewClientConfig(cfg))
+	scope, httpResp, err := client.APIKeysApi.GetApiKeyScope(ctx).Execute()
+	if err != nil {
+		var apiErr *openapi.GenericOpenAPIError
+		if httpResp != nil && httpResp.StatusCode >= http.StatusMultipleChoices &&
+			errors.As(err, &apiErr) {
+			err = &apiStatusError{
+				code:    httpResp.StatusCode,
+				status:  httpResp.Status,
+				message: apiErrorMessage(apiErr.Body()),
+			}
+		}
+		return nil, fmt.Errorf("GET %s: %w", apiKeyScopePath, err)
+	}
+	return permitConfig.NewPermitContext(permitConfig.GetApiKeyLevel(scope),
+		scope.GetProjectId(), scope.GetEnvironmentId()), nil
+}
+
+// apiStatusError is an error answer of the Permit API.
+type apiStatusError struct {
+	code    int
+	status  string
+	message string
+}
+
+func (e *apiStatusError) Error() string {
+	return fmt.Sprintf("the Permit.io API answered %s: %s", e.status, e.message)
+}
+
+// scopeErrorHint says what to check when reading the API key scope failed with err.
+func scopeErrorHint(err error) string {
+	var statusErr *apiStatusError
+	if errors.As(err, &statusErr) {
+		switch {
+		case statusErr.code == http.StatusUnauthorized || statusErr.code == http.StatusForbidden:
+			return "The Permit.io API rejected the API key. Check the api_key argument or " +
+				"the PERMITIO_API_KEY environment variable."
+		case statusErr.code == http.StatusTooManyRequests ||
+			statusErr.code >= http.StatusInternalServerError:
+			return "The Permit.io API is busy or unavailable. Try again later, or raise " +
+				"the timeout argument or the PERMITIO_TIMEOUT environment variable so " +
+				"that the provider retries for longer."
+		}
+	}
+	return "Check the api_url argument or the PERMITIO_API_URL environment variable, " +
+		"and the api_key argument or the PERMITIO_API_KEY environment variable."
+}
+
+// maxErrorBodyBytes caps how much of an error body without a message, such as the
+// HTML page of a proxy, goes into an error.
+const maxErrorBodyBytes = 512
+
+// apiErrorMessage returns the message of a Permit API error body, or else the start
+// of the body.
+func apiErrorMessage(body []byte) string {
+	var apiError struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &apiError); err == nil && apiError.Message != "" {
+		return apiError.Message
+	}
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" {
+		return "(empty response body)"
+	}
+	if len(trimmed) > maxErrorBodyBytes {
+		return strings.ToValidUTF8(trimmed[:maxErrorBodyBytes], "") + "... (truncated)"
+	}
+	return trimmed
 }
 
 func (p *PermitProvider) Resources(_ context.Context) []func() resource.Resource {

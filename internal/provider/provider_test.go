@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/httpclient"
 )
 
 // testAccProtoV6ProviderFactories are used to instantiate a provider during
@@ -62,8 +63,9 @@ func testAccPermitClient() (*permit.Client, error) {
 }
 
 // testAccPermitConfig reads PERMITIO_API_KEY, PERMITIO_API_URL and PERMITIO_TIMEOUT
-// the way the provider does, so checks made outside Terraform get the same API and
-// the same time to wait out a 429 as the provider under test.
+// the way the provider does, and builds the provider's HTTP client, so checks made
+// outside Terraform get the same API, retries and time to wait out a 429 as the
+// provider under test.
 func testAccPermitConfig() (permitConfig.PermitConfig, error) {
 	apiURL := os.Getenv("PERMITIO_API_URL")
 	if apiURL == "" {
@@ -78,8 +80,7 @@ func testAccPermitConfig() (permitConfig.PermitConfig, error) {
 		}
 		timeout = time.Duration(seconds) * time.Second
 	}
-	return permitConfig.NewConfigBuilder(os.Getenv("PERMITIO_API_KEY")).
-		WithApiUrl(apiURL).WithTimeout(timeout).Build(), nil
+	return newClientConfig(os.Getenv("PERMITIO_API_KEY"), apiURL, timeout, "test").Build(), nil
 }
 
 // fatalRecorder stands in for a test's testing.TB and records a call to Fatal
@@ -143,6 +144,11 @@ func TestPermitConfigReadsProviderEnv(t *testing.T) {
 			}
 			if got := cfg.GetHTTPClient().Timeout; got != tt.wantTimeout {
 				t.Errorf("HTTP client timeout = %s, want %s", got, tt.wantTimeout)
+			}
+			transport := cfg.GetHTTPClient().Transport
+			if _, ok := transport.(*httpclient.Transport); !ok {
+				t.Errorf("HTTP client transport = %T, want the provider's retrying "+
+					"*httpclient.Transport", transport)
 			}
 		})
 	}
