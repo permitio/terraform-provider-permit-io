@@ -2,7 +2,9 @@
 // tests. It serves only the routes a test asks for, keeps the objects the provider
 // creates in memory, and records every request so a test can assert what went over
 // the wire. A request to a route the fake does not serve, or with an empty or dot
-// path segment, fails the test.
+// path segment, fails the test. So does a request whose effect on the real API is
+// unconfirmed, such as a resource PATCH that leaves out an action: the fake does
+// not guess.
 package mockpermit
 
 import (
@@ -34,6 +36,9 @@ const (
 // timestamp is the creation, update and last-action time of every object, so
 // responses do not change between runs.
 const timestamp = "2026-01-01T00:00:00Z"
+
+// scopePath is where the SDK asks for the API key's scope.
+const scopePath = "/v2/api-key/scope"
 
 // Request is one HTTP request the fake received.
 type Request struct {
@@ -73,10 +78,14 @@ func compactJSON(value any) string {
 }
 
 // route is one API operation the fake serves. The pattern is an http.ServeMux
-// pattern with a method, written with the path parameter names the SDK uses.
+// pattern with a method, written with the path parameter names the SDK uses. The
+// operation is the permit-golang call that sends the request, written as
+// Group.Method on the client's Api, such as "Resources.Create". The coverage tests
+// check each operation against the SDK and against the provider's call sites.
 type route struct {
-	pattern string
-	handle  func(s *Server, w http.ResponseWriter, r *http.Request)
+	pattern   string
+	operation string
+	handle    func(s *Server, w http.ResponseWriter, r *http.Request)
 }
 
 // Routes is a set of operations to pass to New, one set per Permit object type.
@@ -110,7 +119,8 @@ func New(t testing.TB, sets ...Routes) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.unknownRoute)
-	s.handle(mux, route{"GET /v2/api-key/scope", (*Server).getAPIKeyScope})
+	// The SDK asks for the scope on its own, so this route names no operation.
+	s.handle(mux, route{pattern: "GET " + scopePath, handle: (*Server).getAPIKeyScope})
 	for _, set := range sets {
 		for _, rt := range set {
 			s.handle(mux, rt)
@@ -289,10 +299,16 @@ func (s *Server) collection(name string) map[string]map[string]any {
 	return objects
 }
 
-// newID returns a fresh object ID in UUID form. The caller holds s.mu.
+// ObjectID returns the ID, in UUID form, that the fake gives the nth object it
+// creates. Nested objects, such as a resource's actions, get IDs too.
+func ObjectID(n int) string {
+	return fmt.Sprintf("00000000-0000-4000-8000-%012d", n)
+}
+
+// newID returns a fresh object ID. The caller holds s.mu.
 func (s *Server) newID() string {
 	s.lastID++
-	return fmt.Sprintf("00000000-0000-4000-8000-%012d", s.lastID)
+	return ObjectID(s.lastID)
 }
 
 func (s *Server) writeJSON(w http.ResponseWriter, status int, value any) {

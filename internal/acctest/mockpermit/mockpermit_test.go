@@ -191,6 +191,22 @@ func TestRoutesAreServedOnlyWhenRequested(t *testing.T) {
 	}
 }
 
+// TestAllRouteSetsTogether checks that every route set can be served by one mock,
+// which a test with every resource type needs: none of their patterns conflict.
+func TestAllRouteSetsTogether(t *testing.T) {
+	var sets []Routes
+	for _, name := range slices.Sorted(maps.Keys(routeSets)) {
+		sets = append(sets, routeSets[name])
+	}
+	m := New(t, sets...)
+
+	send(t, m, http.MethodPost, resourcesPath, `{"key": "file", "name": "File", "actions": {}}`,
+		http.StatusOK)
+	send(t, m, http.MethodPost, rolesPath, `{"key": "admin", "name": "Admin"}`, http.StatusOK)
+
+	wantStoredKeys(t, m, "resources/file", "roles/admin")
+}
+
 func TestWrongAuthorizationFailsTheTest(t *testing.T) {
 	for _, authorization := range []string{"", "bearer " + APIKey, "Bearer other-key", APIKey} {
 		t.Run(fmt.Sprintf("%q", authorization), func(t *testing.T) {

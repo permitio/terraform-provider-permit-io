@@ -14,10 +14,10 @@ const (
 // Tenants serves the tenant operations permitio_tenant calls: create, get, update
 // and delete by key.
 var Tenants = Routes{
-	{"POST " + tenantsPattern, (*Server).createTenant},
-	{"GET " + tenantPattern, (*Server).getTenant},
-	{"PATCH " + tenantPattern, (*Server).updateTenant},
-	{"DELETE " + tenantPattern, (*Server).deleteTenant},
+	{"POST " + tenantsPattern, "Tenants.Create", (*Server).createTenant},
+	{"GET " + tenantPattern, "Tenants.Get", (*Server).getTenant},
+	{"PATCH " + tenantPattern, "Tenants.Update", (*Server).updateTenant},
+	{"DELETE " + tenantPattern, "Tenants.Delete", (*Server).deleteTenant},
 }
 
 func (s *Server) createTenant(w http.ResponseWriter, r *http.Request) {
@@ -37,15 +37,8 @@ func (s *Server) createTenant(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusConflict, "DUPLICATE_ENTITY", "tenant "+key+" already exists")
 		return
 	}
-	tenant := map[string]any{
-		"id":              s.newID(),
-		"organization_id": OrganizationID,
-		"project_id":      ProjectID,
-		"environment_id":  EnvironmentID,
-		"created_at":      timestamp,
-		"updated_at":      timestamp,
-		"last_action_at":  timestamp,
-	}
+	tenant := s.newObject()
+	tenant["last_action_at"] = timestamp
 	maps.Copy(tenant, body)
 	tenants[key] = tenant
 	s.writeJSON(w, http.StatusOK, tenant)
