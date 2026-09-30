@@ -12,7 +12,45 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/permitio/terraform-provider-permit-io/internal/acctest/mockpermit"
 )
+
+// TestHTTPRoutesMatchTheClient sends each request the client builds itself to a
+// mock that serves only the route for it, and checks that the route receives it.
+// The group and the other keys are placeholders: the mock answers 404 for them.
+func TestHTTPRoutesMatchTheClient(t *testing.T) {
+	model := GroupResourceInstanceRoleAssignmentModel{
+		Group:            types.StringValue("x"),
+		Role:             types.StringValue("x"),
+		Resource:         types.StringValue("x"),
+		ResourceInstance: types.StringValue("x"),
+		Tenant:           types.StringValue("x"),
+	}
+	client := func(url string) *groupResourceInstanceRoleAssignmentClient {
+		return &groupResourceInstanceRoleAssignmentClient{
+			cachedProjectId: mockpermit.ProjectID,
+			cachedEnvId:     mockpermit.EnvironmentID,
+			cachedApiUrl:    url,
+			cachedToken:     mockpermit.APIKey,
+		}
+	}
+	const pkg = "group_resource_instance_role_assignments."
+
+	mockpermit.CheckHTTPRoutes(t, mockpermit.GroupRoles,
+		map[string]func(ctx context.Context, url string){
+			pkg + "Create (HTTP)": func(ctx context.Context, url string) {
+				plan := model
+				_ = client(url).Create(ctx, &plan)
+			},
+			pkg + "listRolesPage (HTTP)": func(ctx context.Context, url string) {
+				_, _ = client(url).Read(ctx, model)
+			},
+			pkg + "Delete (HTTP)": func(ctx context.Context, url string) {
+				plan := model
+				_ = client(url).Delete(ctx, &plan)
+			},
+		})
+}
 
 type groupRole struct {
 	key, resource, instance string
@@ -106,6 +144,19 @@ func TestRead(t *testing.T) {
 			role:      "r100",
 			deleteR0:  true,
 			wantPages: []int{1, 2, 1},
+		},
+		// Page 1 returns 99 rows (r5 omitted) with total_count 99, although r100 still
+		// exists, so the first walk ends on that single short page without asking for
+		// page 2. r0 is then deleted, which moves r100 onto page 1, where only the second
+		// walk finds it: skipping the second walk after a short page drops a live role.
+		{
+			name:      "short single page, count skewed",
+			roles:     groupRoles(101),
+			dropKey:   "r5",
+			role:      "r100",
+			deleteR0:  true,
+			totalBias: -2,
+			wantPages: []int{1, 1},
 		},
 		// The same role on another instance or resource is not a match.
 		{

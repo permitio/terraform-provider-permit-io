@@ -24,6 +24,7 @@ import (
 var routeSets = map[string]Routes{
 	"ConditionSetRules":  ConditionSetRules,
 	"ConditionSets":      ConditionSets,
+	"GroupRoles":         GroupRoles,
 	"ImplicitGrants":     ImplicitGrants,
 	"ProxyConfigs":       ProxyConfigs,
 	"ResourceAttributes": ResourceAttributes,
@@ -31,8 +32,11 @@ var routeSets = map[string]Routes{
 	"ResourceRelations":  ResourceRelations,
 	"ResourceRoles":      ResourceRoles,
 	"Resources":          Resources,
+	"RoleAssignments":    RoleAssignments,
 	"Roles":              Roles,
+	"TenantList":         TenantList,
 	"Tenants":            Tenants,
+	"Users":              Users,
 }
 
 // providerDir is the provider's source, relative to this package.
@@ -100,43 +104,62 @@ func exportedRouteSets(file *ast.File) []string {
 // TestRoutesMatchTheSDK calls each route's operation through the SDK, against a
 // mock that serves only that route, and checks that the SDK sent exactly one
 // request and that the route received it. The arguments are placeholders: the
-// request only has to reach the route, not succeed.
+// request only has to reach the route, not succeed. A route for a request the
+// provider builds itself is checked by CheckHTTPRoutes in the tests of the provider
+// package that builds it instead, which TestProviderCallSitesHaveRoutes requires.
 func TestRoutesMatchTheSDK(t *testing.T) {
+	sdkRoutes := 0
 	for _, setName := range slices.Sorted(maps.Keys(routeSets)) {
 		for _, rt := range routeSets[setName] {
+			if strings.HasSuffix(rt.operation, httpSuffix) {
+				continue
+			}
+			sdkRoutes++
 			t.Run(rt.operation, func(t *testing.T) {
-				rec := &errorRecorder{TB: t}
-				m := New(rec, Routes{rt})
-				call, err := sdkCall(t.Context(), m.URL, rt.operation)
-				if err != nil {
-					t.Fatalf("route %q: %v", rt.pattern, err)
-				}
-
-				call()
-
-				m.mu.Lock()
-				var sent []string
-				for _, request := range m.requests {
-					if request.Path != scopePath {
-						sent = append(sent, request.Method+" "+request.Path)
+				checkRouteCall(t, rt, func(url string) {
+					call, err := sdkCall(t.Context(), url, rt.operation)
+					if err != nil {
+						t.Fatalf("route %q: %v", rt.pattern, err)
 					}
-				}
-				hits := m.hits[rt.pattern]
-				m.mu.Unlock()
-				if len(sent) != 1 || hits != 1 {
-					t.Errorf("%s sent %q; want one request, to %q", rt.operation, sent, rt.pattern)
-				}
-				if errs := rec.take(); len(errs) > 0 {
-					t.Errorf("%s: the mock failed the request: %q", rt.operation, errs)
-				}
+					call()
+				})
 			})
 		}
+	}
+	if sdkRoutes == 0 {
+		t.Errorf("found no SDK routes in the route sets %q", slices.Sorted(maps.Keys(routeSets)))
+	}
+}
+
+// TestRoutesWithOnePatternShareAHandler checks that routes the fake serves once,
+// because they have the same pattern, are also served the same way.
+func TestRoutesWithOnePatternShareAHandler(t *testing.T) {
+	handlers := map[string]uintptr{}
+	shared := 0
+	for _, setName := range slices.Sorted(maps.Keys(routeSets)) {
+		for _, rt := range routeSets[setName] {
+			handler := reflect.ValueOf(rt.handle).Pointer()
+			first, seen := handlers[rt.pattern]
+			switch {
+			case !seen:
+				handlers[rt.pattern] = handler
+			case first != handler:
+				t.Errorf("%s route %q for %s has another handler than an earlier route with "+
+					"the same pattern", setName, rt.pattern, rt.operation)
+			default:
+				shared++
+			}
+		}
+	}
+	if shared == 0 {
+		t.Errorf("found no routes that share a pattern; the check has nothing to check")
 	}
 }
 
 // sdkCall returns a call of an SDK operation, written Group.Method, on a client of
 // the mock at url. Its arguments are placeholders: ctx for the context, "x" for
-// strings, and zero values for the rest.
+// strings, 1 for integers, which the SDK's list methods take as page numbers and
+// sizes, and zero values for the rest.
 func sdkCall(ctx context.Context, url, operation string) (func(), error) {
 	group, method, ok := strings.Cut(operation, ".")
 	if !ok {
@@ -167,6 +190,8 @@ func sdkCall(ctx context.Context, url, operation string) (func(), error) {
 			args[i] = reflect.ValueOf(ctx)
 		case argType.Kind() == reflect.String:
 			args[i] = reflect.ValueOf("x").Convert(argType)
+		case argType.Kind() == reflect.Int:
+			args[i] = reflect.ValueOf(1).Convert(argType)
 		case argType.Kind() == reflect.Pointer:
 			args[i] = reflect.New(argType.Elem())
 		default:
@@ -188,11 +213,13 @@ type callSite struct {
 
 // TestProviderCallSitesHaveRoutes finds every call site in the provider's source
 // that sends a request to the API, through the SDK or directly, and checks the
-// route table against them. A package whose tests use this mock must have a route
-// for every call it makes, and every route must be for a call the provider makes.
-// The test logs how many call sites the routes cover.
+// route table against them. Every call site must have a route, and the tests of
+// every package with a call site must start this mock. Every route must be for a
+// call the provider makes, and the tests of the package that builds a request
+// itself must check its routes with CheckHTTPRoutes. The test logs how many call
+// sites and operations the routes cover.
 func TestProviderCallSitesHaveRoutes(t *testing.T) {
-	sites, tested := walkProvider(t)
+	sites, tests := walkProvider(t)
 	if len(sites) == 0 {
 		t.Fatalf("found no call sites under %s", providerDir)
 	}
@@ -204,19 +231,21 @@ func TestProviderCallSitesHaveRoutes(t *testing.T) {
 	}
 
 	called := map[string]bool{}
+	untested := map[string]bool{}
 	coveredSites := 0
-	uncovered := map[string]bool{}
 	for _, site := range sites {
 		called[site.operation] = true
 		if served[site.operation] {
 			coveredSites++
-			continue
+		} else {
+			t.Errorf("%s: %s has no route in mockpermit", site.position, site.operation)
 		}
-		uncovered[site.pkg+": "+site.operation] = true
-		if tested[site.pkg] {
-			t.Errorf("%s: %s has no route in mockpermit, but the tests of %s use the mock",
-				site.position, site.operation, site.pkg)
+		if !tests.startMock[site.pkg] {
+			untested[site.pkg] = true
 		}
+	}
+	for _, pkg := range slices.Sorted(maps.Keys(untested)) {
+		t.Errorf("%s calls the API, but none of its tests start mockpermit", pkg)
 	}
 	for _, setName := range slices.Sorted(maps.Keys(routeSets)) {
 		for _, rt := range routeSets[setName] {
@@ -224,30 +253,34 @@ func TestProviderCallSitesHaveRoutes(t *testing.T) {
 				t.Errorf("%s route %q is for %q, which the provider never calls",
 					setName, rt.pattern, rt.operation)
 			}
+			pkg, _, _ := strings.Cut(rt.operation, ".")
+			if strings.HasSuffix(rt.operation, httpSuffix) && !tests.checkHTTPRoutes[pkg] {
+				t.Errorf("%s route %q is for %q, but none of the tests of %s check it with "+
+					"mockpermit.CheckHTTPRoutes", setName, rt.pattern, rt.operation, pkg)
+			}
 		}
 	}
 
-	coveredOperations := 0
-	for operation := range called {
-		if served[operation] {
-			coveredOperations++
-		}
-	}
-	t.Logf("mockpermit has routes for %d of %d provider call sites (%d%%) and %d of %d "+
-		"operations", coveredSites, len(sites), coveredSites*100/len(sites), coveredOperations,
-		len(called))
-	t.Logf("operations without a route:\n%s",
-		strings.Join(slices.Sorted(maps.Keys(uncovered)), "\n"))
+	t.Logf("mockpermit has routes for %d of %d provider call sites (%d%%), of %d operations",
+		coveredSites, len(sites), coveredSites*100/len(sites), len(called))
+}
+
+// providerTests are the provider packages whose tests call mockpermit functions.
+type providerTests struct {
+	// startMock has the packages whose tests call New.
+	startMock map[string]bool
+	// checkHTTPRoutes has the packages whose tests call CheckHTTPRoutes.
+	checkHTTPRoutes map[string]bool
 }
 
 // walkProvider parses the provider's source and returns its call sites and the
-// packages whose tests start this mock. It fails the test on any use of an Api
-// field it cannot attribute to an operation.
-func walkProvider(t *testing.T) ([]callSite, map[string]bool) {
+// packages whose tests start this mock or check HTTP routes with it. It fails the
+// test on any use of an Api field it cannot attribute to an operation.
+func walkProvider(t *testing.T) ([]callSite, providerTests) {
 	t.Helper()
 	fset := token.NewFileSet()
 	var sites []callSite
-	tested := map[string]bool{}
+	tests := providerTests{startMock: map[string]bool{}, checkHTTPRoutes: map[string]bool{}}
 	err := filepath.WalkDir(providerDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -267,8 +300,11 @@ func walkProvider(t *testing.T) ([]callSite, map[string]bool) {
 			return err
 		}
 		if strings.HasSuffix(path, "_test.go") {
-			if startsMock(file) {
-				tested[pkg] = true
+			if callsMock(file, "New") {
+				tests.startMock[pkg] = true
+			}
+			if callsMock(file, "CheckHTTPRoutes") {
+				tests.checkHTTPRoutes[pkg] = true
 			}
 			return nil
 		}
@@ -283,7 +319,7 @@ func walkProvider(t *testing.T) ([]callSite, map[string]bool) {
 	if err != nil {
 		t.Fatalf("walking %s: %v", providerDir, err)
 	}
-	return sites, tested
+	return sites, tests
 }
 
 // callSites returns the call sites in file: calls written x.Api.Group.Method(...),
@@ -357,8 +393,8 @@ func isHTTPRequest(call *ast.CallExpr) bool {
 		function.Sel.Name)
 }
 
-// startsMock reports whether file calls mockpermit.New.
-func startsMock(file *ast.File) bool {
+// callsMock reports whether file calls the mockpermit function with this name.
+func callsMock(file *ast.File, name string) bool {
 	found := false
 	ast.Inspect(file, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -370,7 +406,7 @@ func startsMock(file *ast.File) bool {
 			return !found
 		}
 		pkg, ok := function.X.(*ast.Ident)
-		if ok && pkg.Name == "mockpermit" && function.Sel.Name == "New" {
+		if ok && pkg.Name == "mockpermit" && function.Sel.Name == name {
 			found = true
 		}
 		return !found
@@ -424,15 +460,27 @@ var request, _ = http.NewRequest("GET", "u", nil)
 	}
 }
 
-func TestStartsMock(t *testing.T) {
+func TestCallsMock(t *testing.T) {
 	tests := []struct {
-		name string
-		body string
-		want bool
+		name     string
+		body     string
+		function string
+		want     bool
 	}{
-		{name: "starts the mock", body: `m := mockpermit.New(t, mockpermit.Tenants)`, want: true},
-		{name: "uses the mock package only", body: `id := mockpermit.ObjectID(1)`},
-		{name: "starts another package's New", body: `m := other.New(t)`},
+		{
+			name: "starts the mock", body: `m := mockpermit.New(t, mockpermit.Tenants)`,
+			function: "New", want: true,
+		},
+		{name: "uses the mock package only", body: `id := mockpermit.ObjectID(1)`, function: "New"},
+		{name: "starts another package's New", body: `m := other.New(t)`, function: "New"},
+		{
+			name: "checks HTTP routes", body: `mockpermit.CheckHTTPRoutes(t, set, calls)`,
+			function: "CheckHTTPRoutes", want: true,
+		},
+		{
+			name: "starts the mock without checking HTTP routes", body: `mockpermit.New(t)`,
+			function: "CheckHTTPRoutes",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -442,8 +490,8 @@ func TestStartsMock(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parsing the sample: %v", err)
 			}
-			if got := startsMock(file); got != tt.want {
-				t.Errorf("startsMock() = %v, want %v", got, tt.want)
+			if got := callsMock(file, tt.function); got != tt.want {
+				t.Errorf("callsMock(%q) = %v, want %v", tt.function, got, tt.want)
 			}
 		})
 	}

@@ -2,6 +2,7 @@ package mockpermit
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -43,6 +44,18 @@ func (s *Server) CheckEmpty(*terraform.State) error {
 		return fmt.Errorf("objects left in the mock after destroy: %q", keys)
 	}
 	return nil
+}
+
+// CheckStored returns a CheckDestroy function that fails unless the fake holds
+// exactly the objects in want, written "collection/key" as StoredKeys lists them,
+// such as the users a test added itself with AddUser.
+func (s *Server) CheckStored(want ...string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		if keys := s.StoredKeys(); !slices.Equal(keys, slices.Sorted(slices.Values(want))) {
+			return fmt.Errorf("objects in the mock after destroy: %q, want %q", keys, want)
+		}
+		return nil
+	}
 }
 
 func bodies(requests []Request) string {

@@ -80,8 +80,13 @@ func compactJSON(value any) string {
 // route is one API operation the fake serves. The pattern is an http.ServeMux
 // pattern with a method, written with the path parameter names the SDK uses. The
 // operation is the permit-golang call that sends the request, written as
-// Group.Method on the client's Api, such as "Resources.Create". The coverage tests
-// check each operation against the SDK and against the provider's call sites.
+// Group.Method on the client's Api, such as "Resources.Create", or, for a request
+// the provider builds itself with net/http, "<pkg>.<function> (HTTP)" after the
+// provider package and function that build it. The coverage tests check each
+// operation against the SDK, or the provider function, and against the provider's
+// call sites. Two operations that send the same request, such as the SDK's
+// Users.AssignRole and Users.AssignResourceRole, are two routes with the same
+// pattern and handler, and the fake serves the pattern once.
 type route struct {
 	pattern   string
 	operation string
@@ -219,6 +224,9 @@ func (s *Server) StoredKeys() []string {
 }
 
 func (s *Server) handle(mux *http.ServeMux, rt route) {
+	if _, served := s.hits[rt.pattern]; served {
+		return
+	}
 	s.hits[rt.pattern] = 0
 	mux.HandleFunc(rt.pattern, func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()

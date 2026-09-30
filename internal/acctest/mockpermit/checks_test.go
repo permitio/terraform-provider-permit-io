@@ -76,3 +76,27 @@ func TestCheckEmpty(t *testing.T) {
 		t.Errorf("CheckEmpty() after the delete = %v, want nil", err)
 	}
 }
+
+func TestCheckStored(t *testing.T) {
+	m := New(t, Tenants, Users)
+	m.AddUser(`{"key": "alice"}`)
+	send(t, m, http.MethodPost, tenantsPath, `{"key": "acme", "name": "Acme"}`, http.StatusOK)
+
+	if err := m.CheckStored("users/alice")(nil); err == nil ||
+		!strings.Contains(err.Error(), "tenants/acme") {
+		t.Errorf("CheckStored(users/alice) with a tenant stored too = %v, want an error "+
+			"naming tenants/acme", err)
+	}
+	if err := m.CheckStored("users/alice", "users/bob")(nil); err == nil {
+		t.Errorf("CheckStored(users/alice, users/bob) without bob = nil, want an error")
+	}
+	if err := m.CheckStored("users/alice", "tenants/acme")(nil); err != nil {
+		t.Errorf("CheckStored() in any order = %v, want nil", err)
+	}
+
+	send(t, m, http.MethodDelete, tenantsPath+"/acme", "", http.StatusNoContent)
+
+	if err := m.CheckStored("users/alice")(nil); err != nil {
+		t.Errorf("CheckStored(users/alice) after the delete = %v, want nil", err)
+	}
+}

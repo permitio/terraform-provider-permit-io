@@ -22,22 +22,9 @@ const (
 	resourceRolesPath = schemaPath + "/resources/document/roles"
 )
 
-// The document resource the roles grant permissions on. The second version adds
-// the delete action that the editor role is then given.
-const (
-	documentConfig = `
-resource "permitio_resource" "document" {
-  key         = "document"
-  name        = "Document"
-  description = "A text document"
-  urn         = "prn:test:document"
-  actions = {
-    read  = { name = "Read" }
-    write = { name = "Write" }
-  }
-}
-`
-	documentWithDeleteConfig = `
+// documentConfig is the document resource the roles grant permissions on. No step
+// changes it: the delete action is there for the editor role to be given later.
+const documentConfig = `
 resource "permitio_resource" "document" {
   key         = "document"
   name        = "Document"
@@ -50,7 +37,6 @@ resource "permitio_resource" "document" {
   }
 }
 `
-)
 
 // The viewer and reviewer roles, which no step changes: the editor role extends
 // one of them, then the other. The resource version scopes them to the document.
@@ -147,7 +133,7 @@ resource "permitio_role" "editor" {
 				),
 			},
 			{
-				Config: documentWithDeleteConfig + viewerAndReviewerConfig + `
+				Config: documentConfig + viewerAndReviewerConfig + `
 resource "permitio_role" "editor" {
   key         = "editor"
   name        = "Chief editor"
@@ -163,6 +149,8 @@ resource "permitio_role" "editor" {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(address, plancheck.ResourceActionUpdate),
 						plancheck.ExpectResourceAction("permitio_role.viewer",
+							plancheck.ResourceActionNoop),
+						plancheck.ExpectResourceAction("permitio_resource.document",
 							plancheck.ResourceActionNoop),
 					},
 				},
@@ -193,7 +181,7 @@ resource "permitio_role" "editor" {
 		},
 	})
 
-	m.AssertAllRoutesHit()
+	m.AssertRoutesHit(mockpermit.Roles)
 }
 
 // TestResourceRoleCreateUpdateImportDestroy runs a permitio_role scoped to a
@@ -243,7 +231,7 @@ resource "permitio_role" "editor" {
 				),
 			},
 			{
-				Config: documentWithDeleteConfig + resourceViewerAndReviewerConfig + `
+				Config: documentConfig + resourceViewerAndReviewerConfig + `
 resource "permitio_role" "editor" {
   key         = "editor"
   name        = "Chief editor"
@@ -257,6 +245,8 @@ resource "permitio_role" "editor" {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(address, plancheck.ResourceActionUpdate),
 						plancheck.ExpectResourceAction("permitio_role.viewer",
+							plancheck.ResourceActionNoop),
+						plancheck.ExpectResourceAction("permitio_resource.document",
 							plancheck.ResourceActionNoop),
 					},
 				},
@@ -287,5 +277,5 @@ resource "permitio_role" "editor" {
 		},
 	})
 
-	m.AssertAllRoutesHit()
+	m.AssertRoutesHit(mockpermit.ResourceRoles)
 }

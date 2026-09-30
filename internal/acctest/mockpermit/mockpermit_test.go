@@ -8,37 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 )
 
 const tenantsPath = "/v2/facts/" + ProjectID + "/" + EnvironmentID + "/tenants"
-
-// errorRecorder stands in for a test's testing.TB and records Errorf calls instead
-// of failing the test, so a test can check that the mock fails the test it serves.
-type errorRecorder struct {
-	testing.TB
-	mu         sync.Mutex
-	testErrors []string
-}
-
-func (r *errorRecorder) Helper() {}
-
-func (r *errorRecorder) Errorf(format string, args ...any) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.testErrors = append(r.testErrors, fmt.Sprintf(format, args...))
-}
-
-func (r *errorRecorder) take() []string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	testErrors := r.testErrors
-	r.testErrors = nil
-	return testErrors
-}
 
 // call sends a request to the mock and returns the status code and body.
 func call(t *testing.T, m *Server, method, path, authorization, body string) (int, string) {
@@ -425,6 +401,7 @@ func TestTenantState(t *testing.T) {
 		"id": "00000000-0000-4000-8000-000000000001", "key": "acme", "name": "Acme",
 		"description": "d", "organization_id": OrganizationID, "project_id": ProjectID,
 		"environment_id": EnvironmentID, "created_at": timestamp, "last_action_at": timestamp,
+		"attributes": map[string]any{},
 	}
 
 	other := map[string]any{
@@ -438,6 +415,11 @@ func TestTenantState(t *testing.T) {
 	check(http.MethodGet, tenantsPath+"/beta", "", http.StatusOK, other)
 	check(http.MethodGet, tenantsPath+"/missing", "", http.StatusNotFound, nil)
 	check(http.MethodPost, tenantsPath, `{"key":"acme","name":"Again"}`, http.StatusConflict, nil)
+	check(http.MethodPatch, tenantsPath+"/acme", `{"key":"acme2"}`,
+		http.StatusUnprocessableEntity, nil)
+	check(http.MethodPatch, tenantsPath+"/acme", `{"attributes":"{}"}`,
+		http.StatusUnprocessableEntity, nil)
+	check(http.MethodGet, tenantsPath+"/acme", "", http.StatusOK, created)
 	check(http.MethodPatch, tenantsPath+"/acme", `{"name":"Acme 2"}`, http.StatusOK,
 		map[string]any{"name": "Acme 2", "description": "d"})
 	check(http.MethodGet, tenantsPath+"/acme", "", http.StatusOK,
@@ -465,6 +447,28 @@ func TestTenantState(t *testing.T) {
 	}
 }
 
+func TestTenantList(t *testing.T) {
+	m := New(t, Tenants, TenantList)
+	wantIDs(t, sendForList(t, m, tenantsPath, http.StatusOK))
+	for _, key := range []string{"acme", "beta", "gamma"} {
+		send(t, m, http.MethodPost, tenantsPath, `{"key": "`+key+`", "name": "`+key+`"}`,
+			http.StatusOK)
+	}
+
+	all := sendForList(t, m, tenantsPath, http.StatusOK)
+
+	wantIDs(t, all, ObjectID(1), ObjectID(2), ObjectID(3))
+	acme := send(t, m, http.MethodGet, tenantsPath+"/acme", "", http.StatusOK)
+	if !reflect.DeepEqual(all[0], acme) {
+		t.Errorf("listed %v, want the tenant as stored: %v", all[0], acme)
+	}
+	wantIDs(t, sendForList(t, m, tenantsPath+"?page=2&per_page=2", http.StatusOK), ObjectID(3))
+	wantIDs(t, sendForList(t, m, tenantsPath+"?page=3&per_page=2", http.StatusOK))
+	wantIDs(t, sendForList(t, m, tenantsPath+"?page=1&per_page=1", http.StatusOK), ObjectID(1))
+	sendForList(t, m, tenantsPath+"?per_page=101", http.StatusUnprocessableEntity)
+	sendForList(t, m, tenantsPath+"?page=x", http.StatusUnprocessableEntity)
+}
+
 func TestTenantBodyErrors(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -475,6 +479,15 @@ func TestTenantBodyErrors(t *testing.T) {
 		{name: "not JSON", body: `key=acme`, wantStatus: http.StatusUnprocessableEntity, wantErrors: 1},
 		{name: "JSON null", body: `null`, wantStatus: http.StatusUnprocessableEntity, wantErrors: 1},
 		{name: "no key", body: `{"name":"Acme"}`, wantStatus: http.StatusUnprocessableEntity},
+		{name: "no name", body: `{"key":"acme"}`, wantStatus: http.StatusUnprocessableEntity},
+		{
+			name: "an unknown field", body: `{"key":"acme","name":"Acme","tier":"gold"}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name: "attributes not an object", body: `{"key":"acme","name":"Acme","attributes":[]}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

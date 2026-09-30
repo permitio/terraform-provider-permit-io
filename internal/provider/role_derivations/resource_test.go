@@ -46,8 +46,7 @@ func TestRoleDerivationCreateDestroy(t *testing.T) {
 		),
 		Steps: []resource.TestStep{
 			{
-				Config: derivationConfig(`read  = { name = "Read" }
-    write = { name = "Write" }`, "Edits a file", `["read", "write"]`),
+				Config: derivationConfig("Edits a file", `["read", "write"]`),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(manager, "resource", "file"),
 					resource.TestCheckResourceAttr(manager, "to_role", "editor"),
@@ -63,13 +62,13 @@ func TestRoleDerivationCreateDestroy(t *testing.T) {
 				),
 			},
 			{
-				Config: derivationConfig(`read  = { name = "Read" }
-    write = { name = "Write" }
-    share = { name = "Share" }`, "Edits and shares a file", `["write", "share"]`),
+				Config: derivationConfig("Edits and shares a file", `["write", "share"]`),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction("permitio_role.editor",
 							plancheck.ResourceActionUpdate),
+						plancheck.ExpectResourceAction("permitio_resource.file",
+							plancheck.ResourceActionNoop),
 						plancheck.ExpectResourceAction(manager, plancheck.ResourceActionNoop),
 						plancheck.ExpectResourceAction(owner, plancheck.ResourceActionNoop),
 					},
@@ -84,14 +83,14 @@ func TestRoleDerivationCreateDestroy(t *testing.T) {
 		},
 	})
 
-	m.AssertAllRoutesHit()
+	m.AssertRoutesHit(mockpermit.ImplicitGrants)
 }
 
 // derivationConfig returns folders with their manager and owner roles, files in
 // folders with their editor role, and the two derivations that make a folder's
-// manager and owner editors of its files. fileActions is the body of the file's
-// actions; the editor role gets editorDescription and editorPermissions.
-func derivationConfig(fileActions, editorDescription, editorPermissions string) string {
+// manager and owner editors of its files. The editor role gets editorDescription
+// and editorPermissions, from the file's read, write and share actions.
+func derivationConfig(editorDescription, editorPermissions string) string {
 	return fmt.Sprintf(`
 resource "permitio_resource" "folder" {
   key         = "folder"
@@ -127,7 +126,9 @@ resource "permitio_resource" "file" {
   description = "A file in a folder"
   urn         = "prn:test:file"
   actions = {
-    %s
+    read  = { name = "Read" }
+    write = { name = "Write" }
+    share = { name = "Share" }
   }
 }
 
@@ -163,5 +164,5 @@ resource "permitio_role_derivation" "owner_edits_files" {
   role        = permitio_role.owner.key
   linked_by   = permitio_relation.parent.key
 }
-`, fileActions, editorDescription, editorPermissions)
+`, editorDescription, editorPermissions)
 }
