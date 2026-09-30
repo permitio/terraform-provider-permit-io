@@ -30,7 +30,7 @@ const (
 
 // minInvalidFixtures is the fewest must-fail cases invalid/ may hold. Raise it
 // when you add a case, so that a deleted case fails the test.
-const minInvalidFixtures = 14
+const minInvalidFixtures = 15
 
 // blockHeader matches the header of a top-level resource or data block in a
 // configuration formatted by terraform fmt.
