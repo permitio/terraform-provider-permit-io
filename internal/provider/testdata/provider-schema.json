@@ -6,17 +6,23 @@
         "type": "string",
         "optional": true,
         "sensitive": true,
-        "description": "The API key for Permit.io API (Required)"
+        "description": "An environment-level API key for the Permit.io API; the provider manages the environment the key belongs to. Can also be set with the `PERMITIO_API_KEY` environment variable; a value set here takes precedence. The provider needs a key from one of the two."
       },
       "api_url": {
         "type": "string",
         "optional": true,
-        "description": "The URL of Permit.io API"
+        "description": "The base URL of the Permit.io API, an absolute `http` or `https` URL. Defaults to `https://api.permit.io`. Can also be set with the `PERMITIO_API_URL` environment variable; a value set here takes precedence.",
+        "validators": [
+          "value must be an absolute http or https URL"
+        ]
       },
       "timeout": {
         "type": "number",
         "optional": true,
-        "description": "Timeout for the requests to Permit.io API - default is 10 seconds"
+        "description": "The time limit, in seconds, for each request to the Permit.io API, including its retries after a 429, 502, 503 or 504 response. Must be greater than 0. Defaults to `10`. Can also be set with the `PERMITIO_TIMEOUT` environment variable; a value set here takes precedence.",
+        "validators": [
+          "value must be between 1 and 9223372036"
+        ]
       }
     }
   },

@@ -8,13 +8,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/permitio/permit-golang/pkg/api"
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
@@ -77,23 +82,44 @@ func (p *PermitProvider) Schema(ctx context.Context, req provider.SchemaRequest,
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"api_url": schema.StringAttribute{
-				Optional:            true,
-				MarkdownDescription: "The URL of Permit.io API",
-				// TODO: Add validation for URL
+				Optional: true,
+				MarkdownDescription: "The base URL of the Permit.io API, an absolute `http` or " +
+					"`https` URL. Defaults to `" + DefaultApiUrl + "`. Can also be set with the `" +
+					apiURLEnvVar + "` environment variable; a value set here takes precedence.",
+				Validators: []validator.String{apiURLValidator{}},
 			},
 			"api_key": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
-				// TODO: Add support in more API key levels
-				MarkdownDescription: "The API key for Permit.io API (Required)",
+				MarkdownDescription: "An environment-level API key for the Permit.io API; the " +
+					"provider manages the environment the key belongs to. Can also be set with " +
+					"the `" + apiKeyEnvVar + "` environment variable; a value set here takes " +
+					"precedence. The provider needs a key from one of the two.",
 			},
 			"timeout": schema.Int64Attribute{
-				Optional:            true,
-				MarkdownDescription: "Timeout for the requests to Permit.io API - default is 10 seconds",
+				Optional: true,
+				MarkdownDescription: "The time limit, in seconds, for each request to the " +
+					"Permit.io API, including its retries after a 429, 502, 503 or 504 response. " +
+					"Must be greater than 0. Defaults to `10`. Can also be set with the `" +
+					timeoutEnvVar + "` environment variable; a value set here takes precedence.",
+				Validators: []validator.Int64{int64validator.Between(1, maxTimeoutSeconds)},
 			},
 		},
 	}
 }
+
+// The environment variables that set the API key, API URL and timeout when the
+// provider block leaves them out.
+const (
+	apiKeyEnvVar  = "PERMITIO_API_KEY"
+	apiURLEnvVar  = "PERMITIO_API_URL"
+	timeoutEnvVar = "PERMITIO_TIMEOUT"
+)
+
+// maxTimeoutSeconds is the largest timeout, in seconds, that fits in a
+// time.Duration. A larger one would wrap to a negative Duration, which
+// http.Client treats as no time limit.
+const maxTimeoutSeconds = math.MaxInt64 / int64(time.Second)
 
 func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config PermitProviderModel
@@ -105,85 +131,41 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		return
 	}
 
-	if config.ApiUrl.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("api_url"),
-			"Unknown Permit.io API URL",
-			"The provider cannot create the Permit.io API client as there is an unknown configuration value for the Permit.io API URL. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the PERMITIO_API_URL environment variable.",
-		)
+	for _, setting := range []struct {
+		attribute, envVar string
+		unknown           bool
+	}{
+		{"api_url", apiURLEnvVar, config.ApiUrl.IsUnknown()},
+		{"api_key", apiKeyEnvVar, config.ApiKey.IsUnknown()},
+		{"timeout", timeoutEnvVar, config.Timeout.IsUnknown()},
+	} {
+		if setting.unknown {
+			resp.Diagnostics.AddAttributeError(path.Root(setting.attribute),
+				"Unknown Permit.io provider "+setting.attribute,
+				"The provider cannot create the Permit.io API client, because "+
+					setting.attribute+" depends on a value that is not known yet. Apply the "+
+					"source of the value first with -target, set "+setting.attribute+
+					" to a known value, or leave "+setting.attribute+" out and set the "+
+					setting.envVar+" environment variable.")
+		}
 	}
-
-	if config.ApiKey.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("api_key"),
-			"Unknown Permit.io API Key",
-			"The provider cannot create the Permit.io API client as there is an unknown configuration value for the Permit.io API Key. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the PERMITIO_API_KEY environment variable.",
-		)
-	}
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	debug := os.Getenv("PERMITIO_DEBUG") == "true"
-	apiKey, apiKeyExist := os.LookupEnv("PERMITIO_API_KEY")
-	tflog.Debug(ctx, "API Key exists in env var 'PERMITIO_API_KEY': "+strconv.FormatBool(apiKeyExist))
-	if !apiKeyExist {
-		if config.ApiKey.IsNull() {
-			resp.Diagnostics.AddError(
-				"Missing Permit.io API Key",
-				"The provider cannot create the Permit.io API client as there is an unknown configuration value for the Permit.io API Key."+
-					"Either target apply the source of the value first, set the value statically in the configuration, or use the PERMITIO_API_KEY environment variable.")
-		} else {
-			apiKey = config.ApiKey.ValueString()
-		}
-	}
-
-	apiUrl, apiUrlExist := os.LookupEnv("PERMITIO_API_URL")
-	if !apiUrlExist {
-		if config.ApiUrl.IsNull() {
-			apiUrl = DefaultApiUrl
-		} else {
-			apiUrl = config.ApiUrl.ValueString()
-		}
-	}
-
-	var timeout int64
-	timeoutStr, timeoutExist := os.LookupEnv("PERMITIO_TIMEOUT")
-	if timeoutExist {
-		timeoutInt, err := strconv.ParseInt(timeoutStr, 10, 64)
-		if err != nil {
-			tflog.Debug(ctx, "Error parsing timeout from env var 'PERMITIO_TIMEOUT': "+err.Error())
-			resp.Diagnostics.AddAttributeError(
-				path.Root("timeout"),
-				"Timeout is not a valid integer",
-				"The provider cannot create the Permit.io API client as the timeout value is not a valid integer.",
-			)
-			return
-		}
-		timeout = timeoutInt * int64(time.Second)
-	} else {
-		if config.Timeout.IsNull() {
-			timeout = int64(DefaultTimeout)
-		} else {
-			timeout = config.Timeout.ValueInt64() * int64(time.Second)
-		}
-	}
-
+	settings, diags := resolveSettings(config)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	ctx = tflog.SetField(ctx, "permitio_api_url", apiUrl)
-	ctx = tflog.SetField(ctx, "permitio_api_key", apiKey)
-	ctx = tflog.SetField(ctx, "permitio_timeout", timeout)
+	ctx = tflog.SetField(ctx, "permitio_api_url", settings.apiURL)
+	ctx = tflog.SetField(ctx, "permitio_api_key", settings.apiKey)
+	ctx = tflog.SetField(ctx, "permitio_timeout", settings.timeout.String())
 	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "permitio_api_key")
 
 	tflog.Debug(ctx, "Instantiating Permit.io client")
-	clientConfig := newClientConfig(apiKey, apiUrl, time.Duration(timeout), p.version).
-		WithDebug(debug)
+	clientConfig := newClientConfig(settings.apiKey, settings.apiURL, settings.timeout, p.version)
 	permitContext, err := resolveAPIKeyScope(ctx, clientConfig)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read the Permit.io API key scope",
@@ -193,12 +175,101 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	permitClient := permit.NewPermit(clientConfig.WithContext(permitContext).Build())
 
 	// Store config globally for resources that need direct HTTP access
-	globalconfig.SetGlobalConfig(apiUrl, apiKey)
+	globalconfig.SetGlobalConfig(settings.apiURL, settings.apiKey)
 
 	resp.DataSourceData = permitClient
 	resp.ResourceData = permitClient
 
 	tflog.Info(ctx, "Permit.io client configured", map[string]any{"success": true})
+}
+
+// providerSettings are the API key, API URL and timeout of the provider's client.
+type providerSettings struct {
+	apiKey  string
+	apiURL  string
+	timeout time.Duration
+}
+
+// resolveSettings takes each setting from the provider block in config, else from
+// its environment variable, else from its default; an empty environment variable
+// counts as unset. It checks the environment variables it reads, since the
+// schema's validators check only the block, and it reports a missing API key.
+// config must have no unknown values.
+func resolveSettings(config PermitProviderModel) (providerSettings, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	settings := providerSettings{apiURL: DefaultApiUrl, timeout: DefaultTimeout}
+
+	if !config.ApiKey.IsNull() {
+		settings.apiKey = config.ApiKey.ValueString()
+	} else {
+		settings.apiKey = os.Getenv(apiKeyEnvVar)
+	}
+	if settings.apiKey == "" {
+		diags.AddAttributeError(path.Root("api_key"), "Missing Permit.io API key",
+			"The provider needs an environment-level Permit.io API key. Set api_key in the "+
+				"provider block, or leave api_key out and set the "+apiKeyEnvVar+
+				" environment variable. Neither may be empty.")
+	}
+
+	if !config.ApiUrl.IsNull() {
+		settings.apiURL = config.ApiUrl.ValueString()
+	} else if value := os.Getenv(apiURLEnvVar); value != "" {
+		if isAbsoluteHTTPURL(value) {
+			settings.apiURL = value
+		} else {
+			diags.AddError("Invalid "+apiURLEnvVar+" environment variable",
+				fmt.Sprintf("%s is %q, which is not an absolute http or https URL such as %s. "+
+					"It sets api_url when the provider block leaves api_url out.",
+					apiURLEnvVar, value, DefaultApiUrl))
+		}
+	}
+
+	if !config.Timeout.IsNull() {
+		settings.timeout = time.Duration(config.Timeout.ValueInt64()) * time.Second
+	} else if value := os.Getenv(timeoutEnvVar); value != "" {
+		seconds, err := strconv.ParseInt(value, 10, 64)
+		if err == nil && seconds >= 1 && seconds <= maxTimeoutSeconds {
+			settings.timeout = time.Duration(seconds) * time.Second
+		} else {
+			diags.AddError("Invalid "+timeoutEnvVar+" environment variable",
+				fmt.Sprintf("%s is %q, which is not a whole number of seconds from 1 to %d. "+
+					"It sets timeout when the provider block leaves timeout out.",
+					timeoutEnvVar, value, maxTimeoutSeconds))
+		}
+	}
+
+	return settings, diags
+}
+
+// isAbsoluteHTTPURL reports whether value is an absolute http or https URL.
+func isAbsoluteHTTPURL(value string) bool {
+	parsed, err := url.Parse(value)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") &&
+		parsed.Host != ""
+}
+
+// apiURLValidator rejects an api_url that is not an absolute http or https URL.
+type apiURLValidator struct{}
+
+func (apiURLValidator) Description(context.Context) string {
+	return "value must be an absolute http or https URL"
+}
+
+func (v apiURLValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (apiURLValidator) ValidateString(
+	_ context.Context, req validator.StringRequest, resp *validator.StringResponse,
+) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if value := req.ConfigValue.ValueString(); !isAbsoluteHTTPURL(value) {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid Permit.io API URL",
+			fmt.Sprintf("api_url is %q, which is not an absolute http or https URL such as %s.",
+				value, DefaultApiUrl))
+	}
 }
 
 // newClientConfig returns the SDK configuration for the Permit API at apiURL. Its

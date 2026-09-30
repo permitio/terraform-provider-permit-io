@@ -46,6 +46,6 @@ provider "permitio" {
 
 ### Optional
 
-- `api_key` (String, Sensitive) The API key for Permit.io API (Required)
-- `api_url` (String) The URL of Permit.io API
-- `timeout` (Number) Timeout for the requests to Permit.io API - default is 10 seconds
+- `api_key` (String, Sensitive) An environment-level API key for the Permit.io API; the provider manages the environment the key belongs to. Can also be set with the `PERMITIO_API_KEY` environment variable; a value set here takes precedence. The provider needs a key from one of the two.
+- `api_url` (String) The base URL of the Permit.io API, an absolute `http` or `https` URL. Defaults to `https://api.permit.io`. Can also be set with the `PERMITIO_API_URL` environment variable; a value set here takes precedence.
+- `timeout` (Number) The time limit, in seconds, for each request to the Permit.io API, including its retries after a 429, 502, 503 or 504 response. Must be greater than 0. Defaults to `10`. Can also be set with the `PERMITIO_TIMEOUT` environment variable; a value set here takes precedence.

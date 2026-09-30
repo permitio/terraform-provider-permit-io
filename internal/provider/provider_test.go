@@ -4,14 +4,15 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	permitConfig "github.com/permitio/permit-golang/pkg/config"
 	"github.com/permitio/permit-golang/pkg/permit"
@@ -63,24 +64,23 @@ func testAccPermitClient() (*permit.Client, error) {
 }
 
 // testAccPermitConfig reads PERMITIO_API_KEY, PERMITIO_API_URL and PERMITIO_TIMEOUT
-// the way the provider does, and builds the provider's HTTP client, so checks made
-// outside Terraform get the same API, retries and time to wait out a 429 as the
-// provider under test.
+// the way the provider does for the empty provider block of the acceptance tests,
+// and builds the provider's HTTP client, so checks made outside Terraform get the
+// same API, retries and time to wait out a 429 as the provider under test.
 func testAccPermitConfig() (permitConfig.PermitConfig, error) {
-	apiURL := os.Getenv("PERMITIO_API_URL")
-	if apiURL == "" {
-		apiURL = DefaultApiUrl
-	}
-	timeout := DefaultTimeout
-	if value, ok := os.LookupEnv("PERMITIO_TIMEOUT"); ok {
-		seconds, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return permitConfig.PermitConfig{}, fmt.Errorf(
-				"PERMITIO_TIMEOUT must be a whole number of seconds, got %q: %w", value, err)
+	settings, diags := resolveSettings(PermitProviderModel{
+		ApiUrl:  types.StringNull(),
+		ApiKey:  types.StringNull(),
+		Timeout: types.Int64Null(),
+	})
+	if diags.HasError() {
+		var problems []string
+		for _, d := range diags.Errors() {
+			problems = append(problems, d.Summary()+": "+d.Detail())
 		}
-		timeout = time.Duration(seconds) * time.Second
+		return permitConfig.PermitConfig{}, errors.New(strings.Join(problems, "; "))
 	}
-	return newClientConfig(os.Getenv("PERMITIO_API_KEY"), apiURL, timeout, "test").Build(), nil
+	return newClientConfig(settings.apiKey, settings.apiURL, settings.timeout, "test").Build(), nil
 }
 
 // fatalRecorder stands in for a test's testing.TB and records a call to Fatal

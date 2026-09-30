@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,18 +24,26 @@ import (
 // API URL, key and timeout come from the environment.
 func configure(t *testing.T) *fwprovider.ConfigureResponse {
 	t.Helper()
+	return configureBlock(t, nil)
+}
+
+// configureBlock runs the provider's Configure with a provider block that sets the
+// attributes in block and leaves the others out.
+func configureBlock(t *testing.T, block map[string]tftypes.Value) *fwprovider.ConfigureResponse {
+	t.Helper()
 	ctx := t.Context()
 	p := New("test")()
 	var schemaResp fwprovider.SchemaResponse
 	p.Schema(ctx, fwprovider.SchemaRequest{}, &schemaResp)
+	values := map[string]tftypes.Value{
+		"api_url": tftypes.NewValue(tftypes.String, nil),
+		"api_key": tftypes.NewValue(tftypes.String, nil),
+		"timeout": tftypes.NewValue(tftypes.Number, nil),
+	}
+	maps.Copy(values, block)
 	config := tfsdk.Config{
 		Schema: schemaResp.Schema,
-		Raw: tftypes.NewValue(schemaResp.Schema.Type().TerraformType(ctx),
-			map[string]tftypes.Value{
-				"api_url": tftypes.NewValue(tftypes.String, nil),
-				"api_key": tftypes.NewValue(tftypes.String, nil),
-				"timeout": tftypes.NewValue(tftypes.Number, nil),
-			}),
+		Raw:    tftypes.NewValue(schemaResp.Schema.Type().TerraformType(ctx), values),
 	}
 	resp := &fwprovider.ConfigureResponse{}
 	p.Configure(ctx, fwprovider.ConfigureRequest{Config: config}, resp)

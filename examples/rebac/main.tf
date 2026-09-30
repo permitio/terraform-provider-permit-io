@@ -6,9 +6,8 @@ terraform {
   }
 }
 
-provider "permitio" {
-  api_key = "SET ENV - PERMITIO_API_KEY"
-}
+# The provider reads its API key from the PERMITIO_API_KEY environment variable.
+provider "permitio" {}
 
 resource "permitio_resource" "file" {
   key  = "file"

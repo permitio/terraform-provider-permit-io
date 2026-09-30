@@ -33,10 +33,12 @@ terraform {
 ### Configure the Provider
 
 ```hcl
-provider "permitio" {
-    api_url = "https://api.permit.io" # Defaults to - "https://api.permit.io - Can be set as an environment variable PERMITIO_API_URL
-    api_key = "YOUR_API_KEY" # Can be set as an environment variable PERMITIO_API_KEY
-}
+# Set the API key in api_key or in the PERMITIO_API_KEY environment variable.
+# api_url (default https://api.permit.io) and timeout (seconds, default 10) can
+# also be set with PERMITIO_API_URL and PERMITIO_TIMEOUT. A value set in this
+# block takes precedence over its environment variable, so leave an argument out
+# to use the environment variable.
+provider "permitio" {}
 ```
 
 ### Creating Objects in Permitio
