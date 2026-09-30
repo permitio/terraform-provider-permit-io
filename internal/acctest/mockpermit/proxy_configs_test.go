@@ -136,6 +136,16 @@ func TestProxyConfigRequestErrors(t *testing.T) {
 				{"url": "u", "http_method": "get", "resource": "r", "regex": true}]}`,
 		},
 		{
+			name: "create with an empty url_type", method: http.MethodPost,
+			body: `{"key": "k", "name": "N", "secret": "t", "mapping_rules": [
+				{"url": "u", "http_method": "get", "resource": "r", "url_type": ""}]}`,
+		},
+		{
+			name: "create with a url_type other than regex", method: http.MethodPost,
+			body: `{"key": "k", "name": "N", "secret": "t", "mapping_rules": [
+				{"url": "u", "http_method": "get", "resource": "r", "url_type": "glob"}]}`,
+		},
+		{
 			name: "create with mapping rule headers not strings", method: http.MethodPost,
 			body: `{"key": "k", "name": "N", "secret": "t", "mapping_rules": [
 				{"url": "u", "http_method": "get", "resource": "r", "headers": {"a": 1}}]}`,

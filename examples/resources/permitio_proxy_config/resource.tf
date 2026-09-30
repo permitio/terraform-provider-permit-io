@@ -24,5 +24,12 @@ resource "permitio_proxy_config" "billing" {
       resource    = "invoice"
       action      = "create"
     },
+    {
+      url         = "^https://billing\\.example\\.com/v1/invoices/[0-9]+$"
+      url_type    = "regex"
+      http_method = "get"
+      resource    = "invoice"
+      action      = "read"
+    },
   ]
 }

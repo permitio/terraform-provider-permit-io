@@ -1,7 +1,9 @@
 package proxy_configs_test
 
 import (
+	"fmt"
 	"net/http"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -179,4 +181,117 @@ resource "permitio_proxy_config" "billing" {
 	})
 
 	m.AssertAllRoutesHit()
+}
+
+// TestProxyConfigRegexURLType creates a proxy config with a mapping rule whose url
+// is a regular expression and one whose url is a URL, then adds another regular
+// expression rule. The provider must send url_type only for the regular expression
+// rules and read it back, so that neither apply leaves a change to plan.
+func TestProxyConfigRegexURLType(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.ProxyConfigs)
+	const address = "permitio_proxy_config.billing"
+	const rules = `
+    {
+      url         = "^https://billing\\.example\\.com/v1/invoices/[0-9]+$"
+      url_type    = "regex"
+      http_method = "get"
+      resource    = "invoice"
+    },
+    {
+      url         = "https://billing.example.com/v1/invoices"
+      http_method = "post"
+      resource    = "invoice"
+    },`
+	const sentRules = `
+		{"url": "^https://billing\\.example\\.com/v1/invoices/[0-9]+$", "url_type": "regex",
+		 "http_method": "get", "resource": "invoice"},
+		{"url": "https://billing.example.com/v1/invoices", "http_method": "post",
+		 "resource": "invoice"}`
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{
+				Config: proxyConfigWithRules(rules),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(address, "mapping_rules.0.url_type", "regex"),
+					resource.TestCheckNoResourceAttr(address, "mapping_rules.1.url_type"),
+					m.CheckRequests(http.MethodPost, proxyConfigsPath, `{
+						"key": "billing", "name": "Billing API", "auth_mechanism": "Bearer",
+						"secret": "example-bearer-token", "mapping_rules": [`+sentRules+`]
+					}`),
+				),
+			},
+			{
+				Config: proxyConfigWithRules(rules + `
+    {
+      url         = "^https://billing\\.example\\.com/v1/refunds/.+$"
+      url_type    = "regex"
+      http_method = "delete"
+      resource    = "refund"
+    },`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(address, "mapping_rules.0.url_type", "regex"),
+					resource.TestCheckNoResourceAttr(address, "mapping_rules.1.url_type"),
+					resource.TestCheckResourceAttr(address, "mapping_rules.2.url_type", "regex"),
+					m.CheckRequests(http.MethodPatch, proxyConfigsPath+"/billing", `{
+						"name": "Billing API", "auth_mechanism": "Bearer",
+						"secret": "example-bearer-token", "mapping_rules": [`+sentRules+`,
+						{"url": "^https://billing\\.example\\.com/v1/refunds/.+$",
+						 "url_type": "regex", "http_method": "delete", "resource": "refund"}]
+					}`),
+				),
+			},
+		},
+	})
+}
+
+// TestProxyConfigRejectsURLType checks that a plan fails on a url_type other than
+// regex, before the provider sends anything: the API takes only regex, or no
+// url_type for a URL.
+func TestProxyConfigRejectsURLType(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.ProxyConfigs)
+
+	for _, urlType := range []string{"", "Regex", "glob"} {
+		t.Run(fmt.Sprintf("%q", urlType), func(t *testing.T) {
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: providerFactories,
+				Steps: []resource.TestStep{
+					{
+						Config: proxyConfigWithRules(fmt.Sprintf(`
+    {
+      url         = "https://billing.example.com/v1/invoices"
+      url_type    = %q
+      http_method = "get"
+      resource    = "invoice"
+    },`, urlType)),
+						ExpectError: regexp.MustCompile(
+							`url_type\s+value\s+must\s+be\s+one\s+of:\s+\["regex"\]`),
+					},
+				},
+			})
+		})
+	}
+
+	if requests := m.Requests(http.MethodPost, proxyConfigsPath); len(requests) != 0 {
+		t.Errorf("the provider sent %d creates, want none", len(requests))
+	}
+}
+
+// proxyConfigWithRules returns the configuration of a Bearer proxy config with the
+// mapping rules in rules, written as the elements of an HCL list.
+func proxyConfigWithRules(rules string) string {
+	return `
+resource "permitio_proxy_config" "billing" {
+  key            = "billing"
+  name           = "Billing API"
+  auth_mechanism = "Bearer"
+  auth_secret = {
+    bearer = "example-bearer-token"
+  }
+  mapping_rules = [` + rules + `
+  ]
+}
+`
 }

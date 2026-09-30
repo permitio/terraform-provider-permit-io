@@ -226,6 +226,14 @@
           "type": "string",
           "required": true
         },
+        "mapping_rules.url_type": {
+          "type": "string",
+          "optional": true,
+          "description": "How `url` matches the request URL. Set to `regex` to match it as a regular expression; omit it to match `url` as a URL. The API checks that `url` is a valid URL, or a valid regular expression, only when it creates the proxy config: an update stores `url` without checking it.",
+          "validators": [
+            "value must be one of: [\"regex\"]"
+          ]
+        },
         "name": {
           "type": "string",
           "required": true,

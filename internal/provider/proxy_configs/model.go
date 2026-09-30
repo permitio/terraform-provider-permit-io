@@ -9,6 +9,7 @@ import (
 
 type mappingRuleModel struct {
 	Url        types.String `tfsdk:"url"`
+	UrlType    types.String `tfsdk:"url_type"`
 	HttpMethod types.String `tfsdk:"http_method"`
 	Resource   types.String `tfsdk:"resource"`
 	Action     types.String `tfsdk:"action"`
@@ -44,6 +45,11 @@ func (model *proxyConfigModel) toProxyConfigCreate(ctx context.Context) (models.
 			HttpMethod: models.Methods(rule.HttpMethod.ValueString()),
 			Resource:   rule.Resource.ValueString(),
 			Action:     rule.Action.ValueStringPointer(),
+		}
+
+		if !rule.UrlType.IsNull() {
+			urlType := models.UrlMatchType(rule.UrlType.ValueString())
+			mappingRules[i].UrlType = &urlType
 		}
 
 		if !rule.Priority.IsNull() {
@@ -136,6 +142,12 @@ func (model *proxyConfigModel) fromProxyConfigRead(sdkModel *models.ProxyConfigR
 			Url:        types.StringValue(rule.Url),
 			HttpMethod: types.StringValue(string(rule.HttpMethod)),
 			Resource:   types.StringValue(rule.Resource),
+		}
+
+		if rule.IsRegexUrl() {
+			resultRules[i].UrlType = types.StringValue(string(models.URLMatchTypeRegex))
+		} else {
+			resultRules[i].UrlType = types.StringNull()
 		}
 
 		if rule.Action != nil {

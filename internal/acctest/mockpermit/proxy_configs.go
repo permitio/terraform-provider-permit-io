@@ -181,7 +181,8 @@ func checkSecret(mechanism, secret any) error {
 }
 
 // readMappingRules reads the mapping rules of a request body: a list of objects,
-// each with a url, an http_method and a resource. It gives a rule without headers
+// each with a url, an http_method and a resource, and a url_type of regex or null
+// if any; the API rejects any other url_type, "" too. It gives a rule without headers
 // the spec's default of none. A missing or null list is empty.
 func readMappingRules(value any) ([]any, error) {
 	rules := []any{}
@@ -207,6 +208,9 @@ func readMappingRules(value any) ([]any, error) {
 			!slices.Contains(httpMethods, str(rule, "http_method")) {
 			return nil, fmt.Errorf("mapping_rules[%d] needs a url, a resource and one of the "+
 				"http_method values %q", i, httpMethods)
+		}
+		if urlType, given := rule["url_type"]; given && urlType != nil && urlType != "regex" {
+			return nil, fmt.Errorf("mapping_rules[%d].url_type must be regex or null", i)
 		}
 		rule = maps.Clone(rule)
 		if _, given := rule["headers"]; !given {

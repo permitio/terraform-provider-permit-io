@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -132,6 +133,17 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 					Attributes: map[string]schema.Attribute{
 						"url": schema.StringAttribute{
 							Required: true,
+						},
+						"url_type": schema.StringAttribute{
+							Optional: true,
+							MarkdownDescription: "How `url` matches the request URL. Set to " +
+								"`regex` to match it as a regular expression; omit it to match " +
+								"`url` as a URL. The API checks that `url` is a valid URL, or a " +
+								"valid regular expression, only when it creates the proxy " +
+								"config: an update stores `url` without checking it.",
+							Validators: []validator.String{
+								stringvalidator.OneOf(string(models.URLMatchTypeRegex)),
+							},
 						},
 						"http_method": schema.StringAttribute{
 							Required: true,

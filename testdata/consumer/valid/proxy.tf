@@ -28,5 +28,12 @@ resource "permitio_proxy_config" "reports" {
         "x-request-source" = "permit-proxy"
       }
     },
+    {
+      url         = "^https://reports\\.example\\.com/documents/[0-9]+/pages$"
+      url_type    = "regex"
+      http_method = "get"
+      resource    = permitio_resource.document.key
+      action      = "read"
+    },
   ]
 }
