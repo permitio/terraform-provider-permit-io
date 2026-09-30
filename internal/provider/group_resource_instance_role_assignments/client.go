@@ -4,104 +4,61 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 
-	"github.com/permitio/permit-golang/pkg/permit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 )
 
 type groupResourceInstanceRoleAssignmentClient struct {
-	client *permit.Client
-	// Cache context info after first retrieval
-	cachedProjectId string
-	cachedEnvId     string
-	cachedApiUrl    string
-	cachedToken     string
+	// api is the provider's connection to the Permit API, which every request of
+	// this client goes through. It is nil when the provider has not been configured.
+	api *config.API
 }
 
-// getContextInfo extracts project and environment IDs from a tenant API call.
-func (c *groupResourceInstanceRoleAssignmentClient) getContextInfo(ctx context.Context) (projectId, envId, apiUrl, token string, err error) {
-	// Return cached values if available
-	if c.cachedProjectId != "" && c.cachedEnvId != "" {
-		return c.cachedProjectId, c.cachedEnvId, c.cachedApiUrl, c.cachedToken, nil
+// errNotConfigured is the error of a request made before the provider was
+// configured, when there is no API URL, API key or HTTP client to send it with.
+var errNotConfigured = errors.New("the Permit.io provider is not configured, so there is " +
+	"no API URL, API key or HTTP client to send the request with")
+
+// errNoEnvironment is the error of a request made with an API key that is not
+// scoped to one environment, which the group roles path must name.
+var errNoEnvironment = errors.New("the Permit.io API key is not scoped to an environment, " +
+	"so there is no project and environment to send the group role request to; use an " +
+	"environment API key")
+
+// rolesURL returns the URL of the roles of group, in the project and environment
+// of the provider's API key. It fails when the provider has not been configured or
+// its API key is not scoped to an environment.
+func (c *groupResourceInstanceRoleAssignmentClient) rolesURL(group string) (string, error) {
+	if c.api == nil || c.api.HTTPClient == nil {
+		return "", errNotConfigured
 	}
-
-	// Call Tenants.List() to get at least one tenant which contains project_id and environment_id
-	tenants, err := c.client.Api.Tenants.List(ctx, 1, 1)
-	if err != nil {
-		err = fmt.Errorf("failed to get context info from tenants API: %w", err)
-		return
+	if c.api.ProjectID == "" || c.api.EnvironmentID == "" {
+		return "", errNoEnvironment
 	}
-
-	if len(tenants) == 0 {
-		err = fmt.Errorf("no tenants found - cannot determine project_id and environment_id. Make sure at least one tenant exists in your Permit environment")
-		return
-	}
-
-	// Extract project_id and environment_id from the first tenant
-	firstTenant := tenants[0]
-	projectId = firstTenant.ProjectId
-	envId = firstTenant.EnvironmentId
-
-	// Use cached token and API URL if available (set during Configure)
-	if c.cachedToken != "" {
-		token = c.cachedToken
-		apiUrl = c.cachedApiUrl
-		if apiUrl == "" {
-			apiUrl = "https://api.permit.io"
-		}
-	} else {
-		// Fallback: try environment variables
-		token = getTokenFromEnv()
-		apiUrl = "https://api.permit.io"
-		if token == "" {
-			err = fmt.Errorf("API token not found - ensure provider is configured with api_key")
-			return
-		}
-	}
-
-	// Cache the values
-	c.cachedProjectId = projectId
-	c.cachedEnvId = envId
-	c.cachedApiUrl = apiUrl
-	c.cachedToken = token
-
-	return
+	return fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles",
+		strings.TrimSuffix(c.api.URL, "/"), url.PathEscape(c.api.ProjectID),
+		url.PathEscape(c.api.EnvironmentID), url.PathEscape(group)), nil
 }
 
-// getTokenFromEnv gets the API token from environment variables.
-func getTokenFromEnv() string {
-	// Check the same environment variable the provider uses
-	if token := getEnv("PERMITIO_API_KEY"); token != "" {
-		return token
-	}
-	if token := getEnv("PERMIT_API_KEY"); token != "" {
-		return token
-	}
-	return ""
-}
-
-func getEnv(key string) string {
-	return strings.TrimSpace(os.Getenv(key))
+// authorize sets the provider's API key and the JSON content type on req.
+func (c *groupResourceInstanceRoleAssignmentClient) authorize(req *http.Request) {
+	req.Header.Set("Authorization", "Bearer "+c.api.Key)
+	req.Header.Set("Content-Type", "application/json")
 }
 
 func (c *groupResourceInstanceRoleAssignmentClient) Create(ctx context.Context, plan *GroupResourceInstanceRoleAssignmentModel) error {
-	projectId, envId, apiUrl, token, err := c.getContextInfo(ctx)
+	rolesURL, err := c.rolesURL(plan.Group.ValueString())
 	if err != nil {
 		return err
 	}
-
-	httpClient := http.DefaultClient
-
-	apiUrl = strings.TrimSuffix(apiUrl, "/")
-	rolesURL := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles",
-		apiUrl, projectId, envId, plan.Group.ValueString())
 
 	// Prepare request body
 	body := GroupAddRole{
@@ -117,16 +74,15 @@ func (c *groupResourceInstanceRoleAssignmentClient) Create(ctx context.Context, 
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", rolesURL, bytes.NewBuffer(bodyJSON))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rolesURL,
+		bytes.NewBuffer(bodyJSON))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	req.Header.Set("Content-Type", "application/json")
+	c.authorize(req)
 
 	// Execute request
-	resp, err := httpClient.Do(req)
+	resp, err := c.api.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -147,23 +103,22 @@ func (c *groupResourceInstanceRoleAssignmentClient) Create(ctx context.Context, 
 	return nil
 }
 
+// Read returns data when the group has the role on the instance, with id set to
+// the group key, which an import leaves unset.
 func (c *groupResourceInstanceRoleAssignmentClient) Read(ctx context.Context, data GroupResourceInstanceRoleAssignmentModel) (GroupResourceInstanceRoleAssignmentModel, error) {
-	projectId, envId, apiUrl, token, err := c.getContextInfo(ctx)
+	rolesURL, err := c.rolesURL(data.Group.ValueString())
 	if err != nil {
 		return GroupResourceInstanceRoleAssignmentModel{}, err
 	}
 
-	apiUrl = strings.TrimSuffix(apiUrl, "/")
-	rolesURL := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles",
-		apiUrl, projectId, envId, data.Group.ValueString())
-
-	found, err := findRole(ctx, rolesURL, token, data)
-	// Paging runs outside any snapshot: a delete that commits mid-walk shifts later roles
-	// onto pages already read, and one that commits between the backend's data and count
-	// queries for a page ends the walk early. Either hides a role that still exists, so a
-	// miss gets one more walk before the assignment counts as gone.
+	found, err := c.findRole(ctx, rolesURL, data)
+	// The pages are not a snapshot of the group's roles. A role removed during the
+	// walk shifts later roles onto pages already read, and a page's total_count can
+	// already leave out a role that its data still holds, which ends the walk early.
+	// Either hides a role that still exists, so a miss gets one more walk before the
+	// assignment counts as gone.
 	if err == nil && !found {
-		found, err = findRole(ctx, rolesURL, token, data)
+		found, err = c.findRole(ctx, rolesURL, data)
 	}
 	if err != nil {
 		return GroupResourceInstanceRoleAssignmentModel{}, err
@@ -173,16 +128,25 @@ func (c *groupResourceInstanceRoleAssignmentClient) Read(ctx context.Context, da
 			fmt.Errorf("group resource instance role assignment %w", common.ErrNotFound)
 	}
 
+	data.Id = data.Group
 	return data, nil
 }
 
-// findRole walks the group's roles page by page and reports whether the assignment is there.
-func findRole(ctx context.Context, rolesURL, token string,
+// maxGroupRolePages bounds how many pages findRole reads, so that an API that
+// keeps answering with pages of roles cannot keep a refresh listing forever. It
+// allows 100,000 roles of one group.
+const maxGroupRolePages = 1000
+
+// findRole walks the group's roles page by page and reports whether the assignment
+// is there. The walk ends on an empty page, or once it has seen as many roles as
+// the total_count of a page that has one. A page can hold fewer roles than it was
+// asked for and still not be the last, since total_count counts roles that the
+// API leaves out of the pages, so a short page does not end the walk.
+func (c *groupResourceInstanceRoleAssignmentClient) findRole(ctx context.Context, rolesURL string,
 	data GroupResourceInstanceRoleAssignmentModel) (bool, error) {
-	// page_count is optional in the API response, so stop on total_count instead.
 	seen := 0
-	for page := 1; ; page++ {
-		result, err := listRolesPage(ctx, rolesURL, token, page)
+	for page := 1; page <= maxGroupRolePages; page++ {
+		result, err := c.listRolesPage(ctx, rolesURL, page)
 		if err != nil {
 			return false, fmt.Errorf(
 				"list roles of group %q (page %d): %w", data.Group.ValueString(), page, err)
@@ -197,10 +161,13 @@ func findRole(ctx context.Context, rolesURL, token string,
 		}
 
 		seen += len(result.Data)
-		if len(result.Data) == 0 || seen >= *result.TotalCount {
+		if len(result.Data) == 0 || result.TotalCount != nil && seen >= *result.TotalCount {
 			return false, nil
 		}
 	}
+	return false, fmt.Errorf("list roles of group %q: stopped after %d pages of up to %d "+
+		"roles without reaching the last page",
+		data.Group.ValueString(), maxGroupRolePages, groupRolesPerPage)
 }
 
 // groupRolesPerPage is the largest page size the group roles endpoint accepts.
@@ -216,13 +183,14 @@ type groupRolesPage struct {
 			Key string `json:"key"`
 		} `json:"resource"`
 	} `json:"data"`
+	// TotalCount is nil when the response leaves total_count out.
 	TotalCount *int `json:"total_count"`
 }
 
 // listRolesPage fetches one page of up to groupRolesPerPage roles from rolesURL.
-func listRolesPage(ctx context.Context, rolesURL, token string, page int) (groupRolesPage, error) {
-	httpClient := http.DefaultClient
-
+func (c *groupResourceInstanceRoleAssignmentClient) listRolesPage(
+	ctx context.Context, rolesURL string, page int,
+) (groupRolesPage, error) {
 	query := url.Values{
 		"page":     {strconv.Itoa(page)},
 		"per_page": {strconv.Itoa(groupRolesPerPage)},
@@ -232,11 +200,9 @@ func listRolesPage(ctx context.Context, rolesURL, token string, page int) (group
 	if err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to create request: %w", err)
 	}
+	c.authorize(req)
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := httpClient.Do(req)
+	resp, err := c.api.HTTPClient.Do(req)
 	if err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -256,26 +222,15 @@ func listRolesPage(ctx context.Context, rolesURL, token string, page int) (group
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return groupRolesPage{}, fmt.Errorf("failed to parse response: %w", err)
 	}
-	// Defaulting total_count to 0 would end the walk after page 1, so an assignment on a
-	// later page would read as a miss and be dropped from state.
-	if result.TotalCount == nil {
-		return groupRolesPage{}, fmt.Errorf("failed to parse response: missing total_count")
-	}
 
 	return result, nil
 }
 
 func (c *groupResourceInstanceRoleAssignmentClient) Delete(ctx context.Context, plan *GroupResourceInstanceRoleAssignmentModel) error {
-	projectId, envId, apiUrl, token, err := c.getContextInfo(ctx)
+	rolesURL, err := c.rolesURL(plan.Group.ValueString())
 	if err != nil {
 		return err
 	}
-
-	httpClient := http.DefaultClient
-
-	apiUrl = strings.TrimSuffix(apiUrl, "/")
-	rolesURL := fmt.Sprintf("%s/v2/schema/%s/%s/groups/%s/roles",
-		apiUrl, projectId, envId, plan.Group.ValueString())
 
 	// Prepare request body
 	body := GroupAddRole{
@@ -291,16 +246,15 @@ func (c *groupResourceInstanceRoleAssignmentClient) Delete(ctx context.Context, 
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "DELETE", rolesURL, bytes.NewBuffer(bodyJSON))
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, rolesURL,
+		bytes.NewBuffer(bodyJSON))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	req.Header.Set("Content-Type", "application/json")
+	c.authorize(req)
 
 	// Execute request
-	resp, err := httpClient.Do(req)
+	resp, err := c.api.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to execute request: %w", err)
 	}

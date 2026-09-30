@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -118,6 +119,41 @@ func TestRoleAssignmentState(t *testing.T) {
 	wantIDs(t, sendForList(t, m, roleAssignmentsPath, http.StatusOK))
 	wantStoredKeys(t, m, "resource_instances/document:handbook", "resource_roles/document:reader",
 		"resources/document", "roles/editor", "tenants/acme", "tenants/beta", "users/alice")
+}
+
+// TestAddInstanceRoleAssignments seeds assignments of the reader role on new
+// documents to alice and checks that the list pages through them, with the
+// assignment made after them on the last page.
+func TestAddInstanceRoleAssignments(t *testing.T) {
+	m := newAssignmentFixture(t, t)
+
+	added := m.AddInstanceRoleAssignments("alice", "reader", "document", "acme", 3)
+	send(t, m, http.MethodPost, aliceRolesPath, readerOfHandbook, http.StatusOK)
+
+	wantAdded := []string{
+		"resource_instances/document:seed-1", "resource_instances/document:seed-2",
+		"resource_instances/document:seed-3",
+		"role_assignments/alice:reader:acme:document:seed-1",
+		"role_assignments/alice:reader:acme:document:seed-2",
+		"role_assignments/alice:reader:acme:document:seed-3",
+	}
+	if !slices.Equal(added, wantAdded) {
+		t.Errorf("AddInstanceRoleAssignments() = %q, want %q", added, wantAdded)
+	}
+	if requests := m.Requests(http.MethodPost, aliceRolesPath); len(requests) != 1 {
+		t.Errorf("POST %s: %d requests recorded, want only the test's own", aliceRolesPath,
+			len(requests))
+	}
+	// Seeding makes the instances 8, 10 and 12, and the assignments 9, 11 and 13.
+	query := roleAssignmentsPath + "?user=alice&role=reader&tenant=acme&per_page=2"
+	wantIDs(t, sendForList(t, m, query+"&page=1", http.StatusOK), ObjectID(9), ObjectID(11))
+	onLastPage := sendForList(t, m, query+"&page=2", http.StatusOK)
+	wantIDs(t, onLastPage, ObjectID(13), ObjectID(14))
+	if object, _ := onLastPage[1].(map[string]any); str(object, "resource_instance") !=
+		"document:handbook" {
+		t.Errorf("last listed assignment = %v, want the one on document:handbook", object)
+	}
+	wantIDs(t, sendForList(t, m, query+"&page=3", http.StatusOK))
 }
 
 func TestRoleAssignmentRequestErrors(t *testing.T) {

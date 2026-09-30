@@ -9,8 +9,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/permitio/terraform-provider-permit-io/internal/acctest/mockpermit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/httpclient"
 )
 
 var providerFactories = map[string]func() (tfprotov6.ProviderServer, error){
@@ -32,12 +34,15 @@ const (
 // to the group and remove it. Every attribute of an assignment forces a replacement,
 // so the second step changes the role and checks that the provider removes the old
 // one and assigns the new one. The import reads the assignment back as
-// group:role:resource:resource_instance:tenant. The provider reads the project and
-// environment IDs from the tenant list. The group is added to the mock, since the
-// provider cannot create one, and is the only object left after destroy.
+// group:role:resource:resource_instance:tenant, with the group key as its id. The
+// provider sends its group role requests to the project and environment of its API
+// key's scope, without listing tenants, which the mock does not serve here, and
+// through its own HTTP client, which names the provider in the User-Agent. The
+// group is added to the mock, since the provider cannot create one, and is the only
+// object left after destroy.
 func TestGroupResourceInstanceRoleAssignmentCreateImportDestroy(t *testing.T) {
 	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ResourceRoles, mockpermit.Tenants,
-		mockpermit.TenantList, mockpermit.ResourceInstances, mockpermit.GroupRoles)
+		mockpermit.ResourceInstances, mockpermit.GroupRoles)
 	m.AddGroup("developers", "acme")
 	const address = "permitio_group_resource_instance_role_assignment.developers"
 
@@ -46,6 +51,7 @@ func TestGroupResourceInstanceRoleAssignmentCreateImportDestroy(t *testing.T) {
 		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
 			m.CheckStored("groups/developers"),
 			m.CheckRequests(http.MethodDelete, developerRolesPath, editorBody, viewerBody),
+			checkUserAgent(m, developerRolesPath),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -79,15 +85,31 @@ func TestGroupResourceInstanceRoleAssignmentCreateImportDestroy(t *testing.T) {
 				ImportState:       true,
 				ImportStateId:     "developers:viewer:workspace:ws-1:acme",
 				ImportStateVerify: true,
-				// The import leaves id unset, a known bug (PER-16457), so the check
-				// matches the imported assignment by group and does not compare ids.
-				ImportStateVerifyIdentifierAttribute: "group",
-				ImportStateVerifyIgnore:              []string{"id"},
 			},
 		},
 	})
 
-	m.AssertRoutesHit(mockpermit.GroupRoles, mockpermit.TenantList)
+	m.AssertRoutesHit(mockpermit.GroupRoles)
+}
+
+// checkUserAgent returns a check that passes when every POST, GET and DELETE
+// request to urlPath, and at least one of each, has the provider's User-Agent.
+func checkUserAgent(m *mockpermit.Server, urlPath string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		want := httpclient.UserAgent("test")
+		for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+			requests := m.Requests(method, urlPath)
+			if len(requests) == 0 {
+				return fmt.Errorf("no %s %s request was sent", method, urlPath)
+			}
+			for _, request := range requests {
+				if got := request.Header.Get("User-Agent"); got != want {
+					return fmt.Errorf("%s %s: User-Agent = %q, want %q", method, urlPath, got, want)
+				}
+			}
+		}
+		return nil
+	}
 }
 
 // groupAssignmentConfig returns a workspace resource with editor and viewer roles,

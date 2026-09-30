@@ -1,8 +1,10 @@
 package mockpermit
 
 import (
+	"fmt"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 )
@@ -31,6 +33,56 @@ var RoleAssignments = Routes{
 	{"DELETE " + userRolesPattern, "Users.UnassignRole", (*Server).unassignUserRole},
 	{"DELETE " + userRolesPattern, "Users.UnassignResourceRole", (*Server).unassignUserRole},
 	{"GET " + roleAssignmentsPattern, "RoleAssignments.List", (*Server).listRoleAssignments},
+}
+
+// AddInstanceRoleAssignments makes count instances of the resource in the tenant,
+// seed-1 to seed-<count>, and assigns the role on each of them to the user, the way
+// changes outside Terraform would. The user, the resource, its role and the tenant
+// must exist. A test uses it to put the assignment it reads on a later page of the
+// user's assignments of the role. It returns the objects it stored, written
+// "collection/key" as StoredKeys lists them, and fails the test on a request the
+// fake would answer with an error.
+func (s *Server) AddInstanceRoleAssignments(user, role, resource, tenant string,
+	count int,
+) []string {
+	s.t.Helper()
+	if count < 1 {
+		s.t.Fatalf("mockpermit: AddInstanceRoleAssignments: count is %d, want at least 1", count)
+	}
+	before := s.StoredKeys()
+	for i := 1; i <= count; i++ {
+		key := fmt.Sprintf("seed-%d", i)
+		s.serveSeed((*Server).createResourceInstance, nil, fmt.Sprintf(
+			`{"key": %q, "resource": %q, "tenant": %q}`, key, resource, tenant))
+		s.serveSeed((*Server).assignUserRole, map[string]string{"user_id": user}, fmt.Sprintf(
+			`{"role": %q, "tenant": %q, "resource_instance": %q}`,
+			role, tenant, childKey(resource, key)))
+	}
+	var added []string
+	for _, key := range s.StoredKeys() {
+		if !slices.Contains(before, key) {
+			added = append(added, key)
+		}
+	}
+	return added
+}
+
+// serveSeed runs a route's handler on a request made in the test process instead of
+// one sent to the fake, so that the fake stores exactly what the API would, and
+// fails the test unless the handler answers 200. The request is not recorded.
+func (s *Server) serveSeed(handle func(*Server, http.ResponseWriter, *http.Request),
+	pathValues map[string]string, body string,
+) {
+	s.t.Helper()
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	for name, value := range pathValues {
+		r.SetPathValue(name, value)
+	}
+	w := httptest.NewRecorder()
+	handle(s, w, r)
+	if w.Code != http.StatusOK {
+		s.t.Fatalf("mockpermit: seeding %s: status %d, body %s", body, w.Code, w.Body)
+	}
 }
 
 func (s *Server) assignUserRole(w http.ResponseWriter, r *http.Request) {

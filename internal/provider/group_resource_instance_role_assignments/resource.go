@@ -34,8 +34,7 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Configure(_ context.Contex
 		return
 	}
 
-	permitClient, ok := request.ProviderData.(*permit.Client)
-	if !ok {
+	if _, ok := request.ProviderData.(*permit.Client); !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
 			fmt.Sprintf("Expected *permit.Client, got: %T.", request.ProviderData),
@@ -43,14 +42,9 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Configure(_ context.Contex
 		return
 	}
 
-	// Get the global config set by the provider
-	r.client = groupResourceInstanceRoleAssignmentClient{
-		client:          permitClient,
-		cachedApiUrl:    config.GetGlobalApiUrl(),
-		cachedToken:     config.GetGlobalApiKey(),
-		cachedProjectId: "",
-		cachedEnvId:     "",
-	}
+	// The requests go through the connection the provider's Configure stored with
+	// the SDK client, not through the SDK.
+	r.client = groupResourceInstanceRoleAssignmentClient{api: config.GetAPI()}
 }
 
 func (r *GroupResourceInstanceRoleAssignmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

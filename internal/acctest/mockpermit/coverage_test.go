@@ -42,6 +42,12 @@ var routeSets = map[string]Routes{
 // providerDir is the provider's source, relative to this package.
 const providerDir = "../../provider"
 
+// releasedOnly are the operations that the provider no longer calls but the
+// release the provider's upgrade test starts from does, so that test serves their
+// routes. That release's permitio_group_resource_instance_role_assignment reads the
+// project and environment IDs from the tenant list.
+var releasedOnly = map[string]bool{"Tenants.List": true}
+
 func TestRouteSetsAreListed(t *testing.T) {
 	sources, err := filepath.Glob("*.go")
 	if err != nil {
@@ -215,9 +221,10 @@ type callSite struct {
 // that sends a request to the API, through the SDK or directly, and checks the
 // route table against them. Every call site must have a route, and the tests of
 // every package with a call site must start this mock. Every route must be for a
-// call the provider makes, and the tests of the package that builds a request
-// itself must check its routes with CheckHTTPRoutes. The test logs how many call
-// sites and operations the routes cover.
+// call the provider makes, or else for an operation in releasedOnly, and the tests
+// of the package that builds a request itself must check its routes with
+// CheckHTTPRoutes. The test logs how many call sites and operations the routes
+// cover.
 func TestProviderCallSitesHaveRoutes(t *testing.T) {
 	sites, tests := walkProvider(t)
 	if len(sites) == 0 {
@@ -247,11 +254,20 @@ func TestProviderCallSitesHaveRoutes(t *testing.T) {
 	for _, pkg := range slices.Sorted(maps.Keys(untested)) {
 		t.Errorf("%s calls the API, but none of its tests start mockpermit", pkg)
 	}
+	for _, operation := range slices.Sorted(maps.Keys(releasedOnly)) {
+		if !served[operation] {
+			t.Errorf("releasedOnly lists %q, which no route serves", operation)
+		}
+	}
 	for _, setName := range slices.Sorted(maps.Keys(routeSets)) {
 		for _, rt := range routeSets[setName] {
-			if !called[rt.operation] {
+			switch {
+			case !called[rt.operation] && !releasedOnly[rt.operation]:
 				t.Errorf("%s route %q is for %q, which the provider never calls",
 					setName, rt.pattern, rt.operation)
+			case called[rt.operation] && releasedOnly[rt.operation]:
+				t.Errorf("%s route %q is for %q, which the provider calls, so releasedOnly "+
+					"must not list it", setName, rt.pattern, rt.operation)
 			}
 			pkg, _, _ := strings.Cut(rt.operation, ".")
 			if strings.HasSuffix(rt.operation, httpSuffix) && !tests.checkHTTPRoutes[pkg] {

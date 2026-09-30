@@ -174,8 +174,16 @@ func (p *PermitProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	}
 	permitClient := permit.NewPermit(clientConfig.WithContext(permitContext).Build())
 
-	// Store config globally for resources that need direct HTTP access
-	globalconfig.SetGlobalConfig(settings.apiURL, settings.apiKey)
+	// The group role resource sends its own requests, through the SDK client's
+	// HTTP client, to the same URL with the same key, in the same project and
+	// environment.
+	globalconfig.SetAPI(globalconfig.API{
+		HTTPClient:    clientConfig.GetHTTPClient(),
+		URL:           clientConfig.GetApiUrl(),
+		Key:           clientConfig.GetToken(),
+		ProjectID:     permitContext.GetProject(),
+		EnvironmentID: permitContext.GetEnvironment(),
+	})
 
 	resp.DataSourceData = permitClient
 	resp.ResourceData = permitClient

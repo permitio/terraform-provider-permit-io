@@ -21,10 +21,11 @@ var Tenants = Routes{
 	{"DELETE " + tenantPattern, "Tenants.Delete", (*Server).deleteTenant},
 }
 
-// TenantList serves the tenant list that
-// permitio_group_resource_instance_role_assignment reads the project and
-// environment IDs from. It is not in Tenants because permitio_tenant never lists
-// tenants, and a test of it requires every route of Tenants.
+// TenantList serves the tenant list that the
+// permitio_group_resource_instance_role_assignment of earlier releases reads the
+// project and environment IDs from, for a test that starts from such a release.
+// It is not in Tenants because permitio_tenant never lists tenants, and a test of
+// it requires every route of Tenants.
 var TenantList = Routes{
 	{"GET " + tenantsPattern, "Tenants.List", (*Server).listTenants},
 }
