@@ -1,0 +1,14 @@
+# Findings that were in release.yml before the zizmor hook was added, one entry
+# per finding's line. test.yml's are ignored by inline comments on their lines.
+# The workflow hardening (PER-16457) fixes them and removes these ignores; every
+# other finding, including a new one of these rules, still fails the hook.
+rules:
+  artipacked:
+    ignore:
+      - release.yml:20
+  cache-poisoning:
+    ignore:
+      - release.yml:24
+  unpinned-uses:
+    ignore:
+      - release.yml:36

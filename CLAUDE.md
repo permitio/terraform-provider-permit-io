@@ -8,7 +8,11 @@ Terraform provider for Permit.io - manages Permit.io resources (resources, roles
 GOTOOLCHAIN=auto go build ./...                    # Build
 GOTOOLCHAIN=auto go test -count=1 -skip '^TestAcc' ./...  # Unit and offline tests (mock Permit API, no key needed)
 PERMITIO_API_KEY=<key> GOTOOLCHAIN=auto TF_ACC=1 go test ./internal/provider/ -run <TestName> -v -timeout 300s  # Acceptance tests
+prek install && prek run --all-files               # Hooks, as the CI prek job runs them (prek >= 0.5.3)
+GOTOOLCHAIN=auto go tool govulncheck ./...         # Vulnerability scan
 ```
+- Tool versions: golangci-lint, actionlint, zizmor and shellcheck in `.pre-commit-config.yaml` (Dependabot updates the SHAs and `# frozen:` tags), tfplugindocs and govulncheck in go.mod's `tool` directive. release.yml still pins its own govulncheck until the release workflow moves to `go tool govulncheck`.
+- The zizmor findings the workflows already had are ignored one by one: inline `# zizmor: ignore[...]` comments in test.yml, line entries in `.github/zizmor.yml` for release.yml. Remove an ignore when its fix lands.
 
 ## Offline tests
 - Offline provider tests run Terraform against `internal/acctest/mockpermit`, a fake Permit API. Set `TF_ACC_TERRAFORM_PATH=/path/to/terraform` or put `terraform` on `PATH`; otherwise terraform-plugin-testing downloads the latest Terraform release.

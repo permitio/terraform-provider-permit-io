@@ -25,8 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4.1.1
-      - uses: actions/setup-go@v5.0.0
+      - uses: actions/checkout@v4.1.1  # zizmor: ignore[unpinned-uses,artipacked]
+      - uses: actions/setup-go@v5.0.0  # zizmor: ignore[unpinned-uses]
         with:
           go-version-file: 'go.mod'
       - run: go mod download
@@ -94,20 +94,69 @@ jobs:
             1) echo "::warning title=Breaking schema changes::See the job summary." ;;
             *) exit "$status" ;;
           esac
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
+      # golangci-lint runs in the prek job; govulncheck's version comes from go.mod.
+      - run: go tool govulncheck ./...
+
+  # Runs every hook in .pre-commit-config.yaml on every file. The golangci-lint
+  # version is set only there. The checksum is the release's .sha256 asset for
+  # linux x86_64, which matches the one prek-action records for this version.
+  prek:
+    name: prek
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PREK_VERSION: 0.5.3
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
-          version: v2.14.0
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+          persist-credentials: false
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491  # v5.0.0
+        id: go
+        with:
+          go-version-file: 'go.mod'
+      - name: Install prek
+        env:
+          PREK_SHA256: c1475ddc56df0003c780557d9b52273d9eb19c9ef8d91143f3ce03511182a36e
+        run: |
+          asset=prek-x86_64-unknown-linux-gnu
+          archive="$RUNNER_TEMP/$asset.tar.gz"
+          curl -fsSL --retry 3 --retry-connrefused -o "$archive" \
+            "https://github.com/j178/prek/releases/download/v${PREK_VERSION}/${asset}.tar.gz"
+          echo "${PREK_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$asset" >>"$GITHUB_PATH"
+      # Hook binaries are built with the job's Go, so its version is in the key.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/prek
+          key: >-
+            prek-${{ runner.os }}-go${{ steps.go.outputs.go-version }}-${{ env.PREK_VERSION }}-${{
+            hashFiles('.pre-commit-config.yaml') }}
+      # Exits 1 when a hook fails, and 2 when fewer than EXPECTED_HOOKS hooks pass
+      # (a hook skipped, through SKIP or for want of files, or removed from the
+      # config). Change EXPECTED_HOOKS when you add or remove a hook.
+      - name: Run hooks
+        shell: bash
+        env:
+          EXPECTED_HOOKS: 7
+        run: |
+          prek run --all-files --show-diff-on-failure --color=never |
+            tee "$RUNNER_TEMP/prek.txt"
+          passed=$(grep -c 'Passed$' "$RUNNER_TEMP/prek.txt" || true)
+          if [[ $passed -ne $EXPECTED_HOOKS ]]; then
+            echo "::error title=prek::${passed} of ${EXPECTED_HOOKS} hooks passed; see the log."
+            exit 2
+          fi
 
   generate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.1.1
-      - uses: actions/setup-go@v5.0.0
+      - uses: actions/checkout@v4.1.1  # zizmor: ignore[unpinned-uses,artipacked]
+      - uses: actions/setup-go@v5.0.0  # zizmor: ignore[unpinned-uses]
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3  # zizmor: ignore[unpinned-uses]
         with:
           terraform_version: 1.4.0
       - run: go generate ./...
@@ -147,14 +196,14 @@ jobs:
           echo "::notice title=Acceptance tests skipped::This run was started by
           Dependabot or comes from a fork, so it gets no Permit API key. A maintainer
           can run the acceptance tests with Run workflow on a branch of this repository."
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4.1.1  # zizmor: ignore[unpinned-uses,artipacked]
         if: env.HAS_PERMIT_SECRETS == 'true'
-      - uses: actions/setup-go@v5.0.0
+      - uses: actions/setup-go@v5.0.0  # zizmor: ignore[unpinned-uses]
         if: env.HAS_PERMIT_SECRETS == 'true'
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@v2.0.3
+      - uses: hashicorp/setup-terraform@v2.0.3  # zizmor: ignore[unpinned-uses]
         if: env.HAS_PERMIT_SECRETS == 'true'
         with:
           terraform_version: ${{ matrix.terraform }}
