@@ -66,8 +66,10 @@ jobs:
           unzip -q "$zip" -d "$RUNNER_TEMP/terraform"
       # Unit tests and offline provider tests; the acceptance tests (TestAcc*) need
       # the Permit API and run in the test job. checkgotest exits 1 when a test fails
-      # or skips, and 2 when no test runs or the tenant test against the mock never
-      # runs. It is built first because go run turns every non-zero exit into 1.
+      # or skips, and 2 when no test runs or a required test never runs: the tenant
+      # test against the mock, or the upgrade test from v0.0.25, which a rename would
+      # otherwise drop without notice. It is built first because go run turns every
+      # non-zero exit into 1.
       - name: Run offline tests
         shell: bash
         env:
@@ -75,10 +77,14 @@ jobs:
           REQUIRED_TEST: >-
             github.com/permitio/terraform-provider-permit-io/internal/provider/tenants
             TestTenantCreateUpdateDestroy
+          REQUIRED_UPGRADE_TEST: >-
+            github.com/permitio/terraform-provider-permit-io/internal/provider
+            TestUpgradeFromV0025
         run: |
           go build -o "$RUNNER_TEMP/checkgotest" ./internal/acctest/checkgotest
           go test -count=1 -json -skip '^TestAcc' ./... |
-            "$RUNNER_TEMP/checkgotest" -require "$REQUIRED_TEST"
+            "$RUNNER_TEMP/checkgotest" -require "$REQUIRED_TEST" \
+              -require "$REQUIRED_UPGRADE_TEST"
       # Lists the provider schema changes a pull request makes, labelled BREAKING or
       # non-breaking, in the job summary. Breaking changes are expected while 1.0.0 is
       # prepared, so they are reported, not failed. schemadiff exits 0 (no breaking
@@ -262,6 +268,28 @@ jobs:
             exit 2
           fi
           echo "Generated files match the commit; ${#docs[@]} doc pages."
+      # tfplugindocs 0.16 validate checks the file layout only: which files and
+      # directories templates/ and docs/ hold, such as a stray docs/notes.md or a
+      # .html.md page. go generate above fails on a template syntax or field error.
+      # validate checks docs/ only when there is no templates/, so it runs a second
+      # time in a copy of docs/ alone. Exits 1 when templates/ or docs/ holds a file
+      # or directory tfplugindocs does not expect there, and 2 when
+      # templates/index.md.tmpl or docs/index.md is missing.
+      - name: Validate the doc templates and pages
+        run: |
+          for file in templates/index.md.tmpl docs/index.md; do
+            if [[ ! -f $file ]]; then
+              echo "::error title=tfplugindocs validate::No ${file} to validate."
+              exit 2
+            fi
+          done
+          go tool tfplugindocs validate
+          go build -o "$RUNNER_TEMP/tfplugindocs" \
+            github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
+          pages="$RUNNER_TEMP/doc-pages"
+          mkdir "$pages"
+          cp -R docs "$pages/"
+          (cd "$pages" && "$RUNNER_TEMP/tfplugindocs" validate)
 
   # On pull requests that change how a release is made (.goreleaser.yml, the
   # release workflow or its files check) or what it compiles (go.mod, go.sum),

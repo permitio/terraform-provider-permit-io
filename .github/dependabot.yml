@@ -28,6 +28,13 @@ updates:
       - dependency-name: "google.golang.org/grpc"
         versions:
           - "1.84.x"
+      # tfplugindocs 0.17 and later cannot keep the doc page names: with
+      # --provider-name terraform-provider-permit-io (as main.go passes), generation
+      # fails, and with "permitio" every page loses its permitio_ prefix, which would
+      # change the registry doc URLs. Revisit together with a decision on those URLs.
+      - dependency-name: "github.com/hashicorp/terraform-plugin-docs"
+        versions:
+          - ">= 0.17.0"
   - package-ecosystem: "pre-commit"
     directory: "/"
     schedule:
