@@ -156,6 +156,36 @@ func TestAddInstanceRoleAssignments(t *testing.T) {
 	wantIDs(t, sendForList(t, m, query+"&page=3", http.StatusOK))
 }
 
+// TestRoleAssignmentListMixesLevels gives alice the reader role of documents on the
+// handbook and then a top-level role with the same key in acme, and checks that the
+// list of her reader assignments in acme holds both, the one on the handbook first.
+func TestRoleAssignmentListMixesLevels(t *testing.T) {
+	m := newAssignmentFixture(t, t)
+	send(t, m, http.MethodPost, rolesPath, `{"key": "reader", "name": "Reader"}`, http.StatusOK)
+	send(t, m, http.MethodPost, aliceRolesPath, readerOfHandbook, http.StatusOK)
+	send(t, m, http.MethodPost, aliceRolesPath, `{"role": "reader", "tenant": "acme"}`,
+		http.StatusOK)
+
+	listed := sendForList(t, m, roleAssignmentsPath+"?user=alice&role=reader&tenant=acme",
+		http.StatusOK)
+
+	wantIDs(t, listed, ObjectID(9), ObjectID(10))
+	if len(listed) != 2 {
+		t.FailNow()
+	}
+	onInstance, _ := listed[0].(map[string]any)
+	inTenant, _ := listed[1].(map[string]any)
+	if str(onInstance, "resource_instance") != "document:handbook" ||
+		str(onInstance, "role_id") != ObjectID(5) {
+		t.Errorf("first listed = %v, want the assignment of the document reader role on "+
+			"the handbook", onInstance)
+	}
+	if _, ok := inTenant["resource_instance"]; ok || str(inTenant, "role_id") != ObjectID(8) {
+		t.Errorf("second listed = %v, want the tenant-level assignment of the top-level "+
+			"reader role", inTenant)
+	}
+}
+
 func TestRoleAssignmentRequestErrors(t *testing.T) {
 	tests := []struct {
 		name       string

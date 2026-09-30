@@ -25,8 +25,11 @@ const (
 // and IDs of all of them, as the API does. It fails the test rather than guess on an
 // assignment the user already has, and on one on a resource instance that does not
 // exist, which the API creates implicitly, or that is in another tenant. The list
-// includes assignments on resource instances, as the API documents, and fails the
-// test on a matching assignment whose user, role, tenant or instance was deleted.
+// includes assignments on resource instances, as the API does: a role filter
+// matches the tenant-level assignments of the top-level role with that key and the
+// assignments of any resource role with that key on instances, mixed in the order
+// they were made. It fails the test on a matching assignment whose user, role,
+// tenant or instance was deleted.
 var RoleAssignments = Routes{
 	{"POST " + userRolesPattern, "Users.AssignRole", (*Server).assignUserRole},
 	{"POST " + userRolesPattern, "Users.AssignResourceRole", (*Server).assignUserRole},
