@@ -32,16 +32,16 @@ func TestAccProxyConfigMappingRules(t *testing.T) {
 	resourceKey := testID + "-invoice"
 	proxyKey := testID + "-billing"
 	const (
-		address     = "permitio_proxy_config.billing"
-		invoices    = "https://billing.example.com/v1/invoices"
-		invoiceByID = "https://billing.example.com/v1/invoices/{invoice_id}"
+		address        = "permitio_proxy_config.billing"
+		invoices       = "https://billing.example.com/v1/invoices"
+		invoiceArchive = "https://billing.example.com/v1/invoices/archive"
 	)
 	a := testAccMappingRule{invoices, "get", resourceKey, "read"}
 	b := testAccMappingRule{invoices, "post", resourceKey, "write"}
 	bPut := testAccMappingRule{invoices, "put", resourceKey, "write"}
-	c := testAccMappingRule{invoiceByID, "get", resourceKey, "read"}
-	cWrite := testAccMappingRule{invoiceByID, "get", resourceKey, "write"}
-	d := testAccMappingRule{invoiceByID, "delete", resourceKey, "write"}
+	c := testAccMappingRule{invoiceArchive, "get", resourceKey, "read"}
+	cWrite := testAccMappingRule{invoiceArchive, "get", resourceKey, "write"}
+	d := testAccMappingRule{invoiceArchive, "delete", resourceKey, "write"}
 
 	config := func(rules ...testAccMappingRule) string {
 		var ruleBlocks strings.Builder
