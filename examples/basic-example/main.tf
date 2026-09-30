@@ -116,12 +116,18 @@ resource "permitio_condition_set_rule" "allow_privileged_users_to_read_secret_do
   permission   = "document:read"
 }
 
+variable "documents_api_credentials" {
+  description = "The user:password the Permit Proxy sends to the documents API."
+  type        = string
+  sensitive   = true
+}
+
 resource "permitio_proxy_config" "foaz" {
   key            = "foaz"
   name           = "Boaz"
   auth_mechanism = "Basic"
   auth_secret = {
-    basic = "hello:world"
+    basic = var.documents_api_credentials
   }
   mapping_rules = [
     {

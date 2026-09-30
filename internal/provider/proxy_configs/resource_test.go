@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/permitio/terraform-provider-permit-io/internal/acctest/mockpermit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider"
 )
@@ -33,7 +34,7 @@ const (
 // against the mock Permit API and checks the exact bodies the provider sends. The
 // update changes every attribute a proxy config updates in place: name, the auth
 // mechanism with its secret, from Bearer to Basic, and the mapping rules, by adding
-// one.
+// one. Each plan must mark the secret sensitive, so that Terraform hides it.
 func TestProxyConfigCreateUpdateDestroy(t *testing.T) {
 	m := mockpermit.New(t, mockpermit.ProxyConfigs)
 	const address = "permitio_proxy_config.billing"
@@ -68,6 +69,11 @@ resource "permitio_proxy_config" "billing" {
   ]
 }
 `,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectSensitiveValue(address, tfjsonpath.New("auth_secret")),
+					},
+				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(address, "id", mockpermit.ObjectID(1)),
 					resource.TestCheckResourceAttr(address, "key", "billing"),
@@ -139,6 +145,7 @@ resource "permitio_proxy_config" "billing" {
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(address, plancheck.ResourceActionUpdate),
+						plancheck.ExpectSensitiveValue(address, tfjsonpath.New("auth_secret")),
 					},
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(

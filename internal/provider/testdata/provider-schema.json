@@ -158,7 +158,8 @@
         "auth_secret": {
           "type": "single_nested",
           "required": true,
-          "description": "Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service."
+          "sensitive": true,
+          "description": "Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service. Its values are sensitive: Terraform hides them in plan output, and an output that references one must be marked `sensitive = true`. Terraform still stores them in plain text in the state. Take them from a variable marked `sensitive = true` rather than writing them in the configuration."
         },
         "auth_secret.basic": {
           "type": "string",

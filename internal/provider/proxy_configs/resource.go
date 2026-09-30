@@ -104,8 +104,14 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"auth_secret": schema.SingleNestedAttribute{
-				Required:            true,
-				MarkdownDescription: "Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service.",
+				Required:  true,
+				Sensitive: true,
+				MarkdownDescription: "Proxy config secret is set to enable the Permit Proxy to make " +
+					"proxied requests to the backend service. Its values are sensitive: Terraform " +
+					"hides them in plan output, and an output that references one must be marked " +
+					"`sensitive = true`. Terraform still stores them in plain text in the state. " +
+					"Take them from a variable marked `sensitive = true` rather than writing them " +
+					"in the configuration.",
 				Attributes: map[string]schema.Attribute{
 					"bearer": schema.StringAttribute{
 						Optional: true,
