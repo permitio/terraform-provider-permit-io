@@ -10,6 +10,15 @@ description: |-
 
 [Permit.io](https://www.permit.io) is an authorization service. This provider manages the authorization policy of one Permit.io environment as Terraform configuration: resources with their actions and attributes, roles, relations and role derivations, condition sets and their rules, user attributes, tenants, resource instances, role assignments and proxy configs. Its data sources read existing resources, roles, condition sets, user attributes and users. The provider works on the environment its API key belongs to, so it needs an environment-level API key, set in `api_key` or in the `PERMITIO_API_KEY` environment variable.
 
+## Supported versions
+
+The provider needs one of:
+
+- Terraform 1.5.7 or later. The offline tests, against a mock of the Permit API, run on 1.5.7 and 1.16.
+- OpenTofu 1.11 or later. The offline tests run on 1.11 and 1.12.
+
+Each release is published for 13 platforms: `darwin_amd64`, `darwin_arm64`, `freebsd_386`, `freebsd_amd64`, `freebsd_arm`, `freebsd_arm64`, `linux_386`, `linux_amd64`, `linux_arm`, `linux_arm64`, `windows_386`, `windows_amd64` and `windows_arm64`. The offline tests run on `linux_amd64` with each of those Terraform and OpenTofu versions, and on `darwin_arm64` and `windows_amd64` with Terraform 1.16; the other platforms are cross-compiled and not tested. On macOS the provider needs macOS 12 (Monterey) or later, because it is built with Go 1.26.
+
 ## Example Usage
 
 ```terraform

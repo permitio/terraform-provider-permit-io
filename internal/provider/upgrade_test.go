@@ -113,11 +113,13 @@ func TestUpgradeFromV0025(t *testing.T) {
 	checkUpgradeExpectations(t)
 	t.Setenv("TF_CLI_CONFIG_FILE", upgradeMirrorConfig(t))
 	// This build must serve the address v0.0.25 wrote into the state, so the
-	// testing framework reattaches it as registry.terraform.io/permitio/permit-io.
+	// testing framework reattaches it as registry.terraform.io/permitio/permit-io,
+	// also in the OpenTofu lanes, which set registry.opentofu.org for other tests.
 	// Step 2 also excludes v0.0.25 by its version constraint, which Terraform
 	// ignores for a reattached provider: if this build is not reattached at that
 	// address, terraform init fails instead of installing v0.0.25 from the mirror
 	// and comparing the release with itself.
+	t.Setenv("TF_ACC_PROVIDER_HOST", upgradeRegistryHost)
 	t.Setenv("TF_ACC_PROVIDER_NAMESPACE", upgradeNamespace)
 
 	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ResourceAttributes,

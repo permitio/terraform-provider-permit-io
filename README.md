@@ -105,8 +105,22 @@ resource "permitio_tenant" "acme_corp" {
 
 ## Requirements
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.26
+To use the provider, one of:
+
+- [Terraform](https://developer.hashicorp.com/terraform/install) 1.5.7 or later. The offline
+  tests, against a mock of the Permit API, run on 1.5.7 and 1.16.
+- [OpenTofu](https://opentofu.org/docs/intro/install/) 1.11 or later. The offline tests run on
+  1.11 and 1.12.
+
+To build the provider from source: [Go](https://go.dev/doc/install) 1.26 or later.
+
+Each release is published for 13 platforms: `darwin_amd64`, `darwin_arm64`,
+`freebsd_386`, `freebsd_amd64`, `freebsd_arm`, `freebsd_arm64`, `linux_386`,
+`linux_amd64`, `linux_arm`, `linux_arm64`, `windows_386`, `windows_amd64` and
+`windows_arm64`. The offline tests run on `linux_amd64` with each of those Terraform and
+OpenTofu versions, and on `darwin_arm64` and `windows_amd64` with Terraform 1.16; the
+other platforms are cross-compiled and not tested. On macOS the provider needs
+macOS 12 (Monterey) or later, because it is built with Go 1.26.
 
 ## Building The Provider
 

@@ -27,13 +27,14 @@ permissions: {}
 
 # Concurrency is set per job, not for the whole run: cancelling a run would also
 # cancel an acceptance leg that is already running against its Permit environment.
-# Build, prek and generate each run once per ref at a time. A new push to a pull
-# request cancels the older run of these jobs; on main, and for manual runs, the
-# new one waits for it instead.
+# Build, each offline leg, prek, generate and goreleaser run once per ref at a time.
+# A new push to a pull request cancels the older run of these jobs; on main, and
+# for manual runs, the new one waits for it instead.
 
-# The Terraform that the offline tests (Build) and go generate (generate) use. The
-# checksum is the linux_amd64 line of the release's SHA256SUMS, whose HashiCorp
-# signature was verified when the version was pinned.
+# The Terraform that go generate (generate) uses. The offline job's Terraform legs
+# above the floor use the same version, and the prek job fails when they do not;
+# change them together. The checksum is the linux_amd64 line of the release's
+# SHA256SUMS, whose HashiCorp signature was verified when the version was pinned.
 env:
   TERRAFORM_VERSION: 1.16.3
   TERRAFORM_SHA256: 093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8
@@ -56,35 +57,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - run: go mod download
-      - name: Install Terraform
-        run: |
-          release="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
-          zip="$RUNNER_TEMP/terraform.zip"
-          curl -fsSL --retry 3 --retry-connrefused -o "$zip" \
-            "${release}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-          echo "${TERRAFORM_SHA256}  ${zip}" | sha256sum --check --strict
-          unzip -q "$zip" -d "$RUNNER_TEMP/terraform"
-      # Unit tests and offline provider tests; the acceptance tests (TestAcc*) need
-      # the Permit API and run in the test job. checkgotest exits 1 when a test fails
-      # or skips, and 2 when no test runs or a required test never runs: the tenant
-      # test against the mock, or the upgrade test from v0.0.25, which a rename would
-      # otherwise drop without notice. It is built first because go run turns every
-      # non-zero exit into 1.
-      - name: Run offline tests
-        shell: bash
-        env:
-          TF_ACC_TERRAFORM_PATH: ${{ runner.temp }}/terraform/terraform
-          REQUIRED_TEST: >-
-            github.com/permitio/terraform-provider-permit-io/internal/provider/tenants
-            TestTenantCreateUpdateDestroy
-          REQUIRED_UPGRADE_TEST: >-
-            github.com/permitio/terraform-provider-permit-io/internal/provider
-            TestUpgradeFromV0025
-        run: |
-          go build -o "$RUNNER_TEMP/checkgotest" ./internal/acctest/checkgotest
-          go test -count=1 -json -skip '^TestAcc' ./... |
-            "$RUNNER_TEMP/checkgotest" -require "$REQUIRED_TEST" \
-              -require "$REQUIRED_UPGRADE_TEST"
       # Lists the provider schema changes a pull request makes, labelled BREAKING or
       # non-breaking, in the job summary. Breaking changes are expected while 1.0.0 is
       # prepared, so they are reported, not failed. schemadiff exits 0 (no breaking
@@ -130,6 +102,135 @@ jobs:
           go build -o "$RUNNER_TEMP/vulnscan" ./internal/acctest/vulnscan
           "$RUNNER_TEMP/vulnscan" -mode source -accept .github/vulnscan-accept.txt ./...
 
+  # Unit tests and offline provider tests, against the mock Permit API, on the
+  # Terraform floor and latest line, OpenTofu 1.11 and 1.12, and on Linux, macOS and
+  # Windows; the acceptance tests (TestAcc*) need the Permit API and run in the test
+  # job. The legs cover the Terraform floor (1.5.7) and the pinned 1.16 release
+  # (TERRAFORM_VERSION), a pinned OpenTofu 1.11 and 1.12 release, and the pinned
+  # Terraform on macOS arm64 and Windows amd64; the other published platforms are
+  # cross-compiled, not tested.
+  # Each checksum is the leg's line of the release's SHA256SUMS, whose signature
+  # (HashiCorp's or OpenTofu's) was verified when the version was pinned.
+  offline:
+    name: Offline tests (${{ matrix.cli }} ${{ matrix.version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: >-
+        ${{ github.workflow }}-${{ github.ref }}-offline-${{ matrix.os }}-${{
+        matrix.cli }}-${{ matrix.version }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            cli: terraform
+            version: 1.5.7
+            platform: linux_amd64
+            sha256: c0ed7bc32ee52ae255af9982c8c88a7a4c610485cf1d55feeb037eab75fa082c
+          - os: ubuntu-24.04
+            cli: terraform
+            version: 1.16.3
+            platform: linux_amd64
+            sha256: 093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8
+          - os: ubuntu-24.04
+            cli: tofu
+            version: 1.11.14
+            platform: linux_amd64
+            sha256: 8279a6c6d4044899ae77190fc50c40c147615a76aca13ea605d68320c424c2a6
+          - os: ubuntu-24.04
+            cli: tofu
+            version: 1.12.6
+            platform: linux_amd64
+            sha256: 5dc43da4f750f33873dc25e94587128709e819e544b7be9016b255316153c3a8
+          - os: macos-15
+            cli: terraform
+            version: 1.16.3
+            platform: darwin_arm64
+            sha256: c2c45425ea4568da9803e127e589186cb3798a5944d9aff5a5bc15dd18267560
+          - os: windows-2025
+            cli: terraform
+            version: 1.16.3
+            platform: windows_amd64
+            sha256: 6f908a90e5637afe72705290afd1cd71fc4f2877303ca77f05a8c6ead196b11c
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Git on Windows turns LF into CRLF on checkout, and the tests compare
+      # committed files byte for byte.
+      - name: Keep committed line endings
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+      - run: go mod download
+      # Runs in RUNNER_TEMP with relative paths, which bash reads the same way on
+      # every runner. The sha256sum on macOS takes no --check or --strict, so the
+      # macOS leg uses shasum.
+      - name: Install ${{ matrix.cli }} ${{ matrix.version }}
+        working-directory: ${{ runner.temp }}
+        env:
+          CLI: ${{ matrix.cli }}
+          CLI_VERSION: ${{ matrix.version }}
+          PLATFORM: ${{ matrix.platform }}
+          CLI_SHA256: ${{ matrix.sha256 }}
+        run: |
+          case $CLI in
+            terraform)
+              release="https://releases.hashicorp.com/terraform/${CLI_VERSION}"
+              ;;
+            tofu)
+              release="https://github.com/opentofu/opentofu/releases/download/v${CLI_VERSION}"
+              ;;
+            *)
+              echo "::error title=Install::Unknown CLI ${CLI}."
+              exit 2
+              ;;
+          esac
+          curl -fsSL --retry 3 --retry-connrefused -o cli.zip \
+            "${release}/${CLI}_${CLI_VERSION}_${PLATFORM}.zip"
+          if [[ $RUNNER_OS == macOS ]]; then
+            echo "${CLI_SHA256}  cli.zip" | shasum -a 256 --check --strict
+          else
+            echo "${CLI_SHA256}  cli.zip" | sha256sum --check --strict
+          fi
+          unzip -q cli.zip -d cli
+      # checkgotest exits 1 when a test fails or skips, and 2 when no test runs or a
+      # required test never runs: the tenant test against the mock, or the upgrade
+      # test from v0.0.25, which a rename would otherwise drop without notice. The
+      # upgrade test downloads v0.0.25 for the runner's platform from the Terraform
+      # registry; v0.0.25 was published for every leg's platform, so the test is
+      # required on every leg. checkgotest is built first because go run turns every
+      # non-zero exit into 1. OpenTofu reads a provider source without a hostname as
+      # registry.opentofu.org, so its legs attach this build there.
+      - name: Run offline tests
+        env:
+          CLI: ${{ matrix.cli }}
+          TF_ACC_PROVIDER_HOST: >-
+            ${{ matrix.cli == 'tofu' && 'registry.opentofu.org' || 'registry.terraform.io' }}
+          REQUIRED_TEST: >-
+            github.com/permitio/terraform-provider-permit-io/internal/provider/tenants
+            TestTenantCreateUpdateDestroy
+          REQUIRED_UPGRADE_TEST: >-
+            github.com/permitio/terraform-provider-permit-io/internal/provider
+            TestUpgradeFromV0025
+        run: |
+          exe=$(go env GOEXE)
+          export TF_ACC_TERRAFORM_PATH="$RUNNER_TEMP/cli/$CLI$exe"
+          "$TF_ACC_TERRAFORM_PATH" version
+          go build -o "$RUNNER_TEMP/checkgotest$exe" ./internal/acctest/checkgotest
+          go test -count=1 -json -skip '^TestAcc' ./... |
+            "$RUNNER_TEMP/checkgotest$exe" -require "$REQUIRED_TEST" \
+              -require "$REQUIRED_UPGRADE_TEST"
+
   # Runs every hook in .pre-commit-config.yaml on every file. The golangci-lint
   # version is set only there. The checksum is the release's .sha256 asset for
   # linux x86_64, which matches the one prek-action records for this version.
@@ -167,6 +268,35 @@ jobs:
             exit 1
           fi
           echo "CI needs every other job: ${jobs//$'\n'/, }."
+      # The offline job's Terraform legs run two versions: the floor, which is the
+      # lower, and TERRAFORM_VERSION, whose linux_amd64 leg has TERRAFORM_SHA256.
+      # Exits 1 when they do not, and 2 when no Terraform leg is read.
+      - name: Check that the offline job tests the pinned Terraform
+        shell: bash
+        env:
+          WORKFLOW: .github/workflows/test.yml
+        run: |
+          legs='.jobs.offline.strategy.matrix.include[] | select(.cli == "terraform")'
+          linux='select(.version == strenv(TERRAFORM_VERSION) and .platform == "linux_amd64")'
+          versions=$(yq "$legs | .version" "$WORKFLOW" | sort -uV)
+          if [[ -z $versions ]]; then
+            echo "::error title=Terraform legs::No Terraform legs read from $WORKFLOW."
+            exit 2
+          fi
+          count=$(wc -l <<<"$versions")
+          highest=$(tail -n 1 <<<"$versions")
+          pinned=$(yq "$legs | $linux | .sha256" "$WORKFLOW")
+          if [[ $count -ne 2 || $highest != "$TERRAFORM_VERSION" ]]; then
+            echo "::error title=Terraform legs::The Terraform legs run ${versions//$'\n'/, };" \
+              "expected the floor and ${TERRAFORM_VERSION}."
+            exit 1
+          fi
+          if [[ $pinned != "$TERRAFORM_SHA256" ]]; then
+            echo "::error title=Terraform legs::The linux_amd64 leg of ${TERRAFORM_VERSION}" \
+              "has checksum '${pinned}', expected TERRAFORM_SHA256."
+            exit 1
+          fi
+          echo "The Terraform legs run ${versions//$'\n'/ and }."
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         id: go
         with:
@@ -229,7 +359,8 @@ jobs:
         with:
           go-version-file: src/go.mod
           cache-dependency-path: src/go.sum
-      # The same Terraform as Build, on PATH for terraform fmt and tfplugindocs.
+      # The pinned Terraform (TERRAFORM_VERSION, as in the offline job's legs above
+      # the floor), on PATH for terraform fmt and tfplugindocs.
       - name: Install Terraform
         run: |
           release="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
@@ -347,10 +478,14 @@ jobs:
           goreleaser release --snapshot --clean --skip=sign
           .github/scripts/check-release-artifacts.sh dist
 
-  # Run acceptance tests in a matrix with Terraform CLI versions
+  # Runs the acceptance tests against the Permit API on Terraform 1.0 to 1.4, below
+  # the supported floor (1.5.7): extra coverage, not a support claim. Each version
+  # has its own Permit environment and API key, and the check names stay as they
+  # are. These legs will move to one Terraform version with scratch environments
+  # once PER-16580 lands. They start only after the offline tests pass.
   test:
     name: Terraform Provider Acceptance Tests
-    needs: build
+    needs: [build, offline]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -380,7 +515,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # list whatever Terraform versions here you would like to support
         terraform:
           - '1.0.*'
           - '1.1.*'
@@ -460,7 +594,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [build, generate, goreleaser, prek, test]
+    needs: [build, generate, goreleaser, offline, prek, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -468,7 +602,7 @@ jobs:
         shell: bash
         env:
           NEEDS: ${{ toJSON(needs) }}
-          EXPECTED_JOBS: 5
+          EXPECTED_JOBS: 6
         run: |
           if ! results=$(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"$NEEDS"); then
             echo "::error title=CI::Could not read the job results."
