@@ -1,0 +1,103 @@
+# Mutation tests with gremlins, run through internal/acctest/mutationgate. On a
+# pull request it mutates the Go lines the pull request adds or changes and fails
+# when the tests detect fewer than 90% of the mutants that ran. Every Monday it
+# mutates the whole module on main and reports the result. Both runs bound every
+# test process to at most 3 minutes, 4096 MiB (RLIMIT_AS, as ulimit -v sets) and
+# 64 MiB of output, test 2 mutants at a time and run gremlins' unmutated coverage
+# run with go test -p 2. The gate checks that the kernel enforces the memory limit
+# before it starts. Mutants that do not compile are not counted. The report,
+# surviving mutants included, is in the job summary.
+#
+# Not part of the CI check in test.yml: its run time grows with the change, and a
+# change with 650 mutants took 13 minutes on a laptop, longer than the other jobs.
+name: Mutation tests
+
+on:
+  pull_request:
+  schedule:
+    - cron: '43 4 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+# gremlins' version and the SHA-256 of its linux_amd64 archive, from the release's
+# checksums.txt. Dependabot does not update them: change both together, to a
+# release at least 7 days old.
+env:
+  GREMLINS_VERSION: 0.6.0
+  GREMLINS_SHA256: b02a42e47935f891c9a411d68c07e211c7082609e79c2435b67c85ee9658c538
+
+jobs:
+  mutation:
+    name: >-
+      Mutation tests (${{ github.event_name == 'pull_request' && 'changed lines' || 'whole module' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 60 || 120 }}
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      # On a pull request, the merge commit and its first parent, the base branch,
+      # which the gate diffs against as HEAD^1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+      - run: go mod download
+      # The offline tests run Terraform: the version test.yml pins, with its
+      # checksum, read from test.yml so that the two cannot differ.
+      - name: Install Terraform
+        shell: bash
+        env:
+          WORKFLOW: .github/workflows/test.yml
+        run: |
+          version=$(yq '.env.TERRAFORM_VERSION' "$WORKFLOW")
+          sha256=$(yq '.env.TERRAFORM_SHA256' "$WORKFLOW")
+          if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! $sha256 =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error title=Install Terraform::Cannot read TERRAFORM_VERSION and" \
+              "TERRAFORM_SHA256 from $WORKFLOW."
+            exit 2
+          fi
+          release="https://releases.hashicorp.com/terraform/${version}"
+          zip="$RUNNER_TEMP/terraform.zip"
+          curl -fsSL --retry 3 --retry-connrefused -o "$zip" \
+            "${release}/terraform_${version}_linux_amd64.zip"
+          echo "${sha256}  ${zip}" | sha256sum --check --strict
+          unzip -q "$zip" -d "$RUNNER_TEMP/terraform"
+          "$RUNNER_TEMP/terraform/terraform" version
+      - name: Install gremlins
+        shell: bash
+        run: |
+          release="https://github.com/go-gremlins/gremlins/releases/download/v${GREMLINS_VERSION}"
+          archive="$RUNNER_TEMP/gremlins.tar.gz"
+          curl -fsSL --retry 3 --retry-connrefused -o "$archive" \
+            "${release}/gremlins_${GREMLINS_VERSION}_linux_amd64.tar.gz"
+          echo "${GREMLINS_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir "$RUNNER_TEMP/gremlins"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/gremlins" gremlins
+          "$RUNNER_TEMP/gremlins/gremlins" --version
+      # mutationgate exits 0 (passed, or nothing to mutate), 1 (the tests detect
+      # fewer than -threshold percent of the mutants that ran) or 2 (the run did
+      # not complete, or Go lines changed and no mutant on them ran), and annotates
+      # the result. Test processes skip the acceptance tests (TestAcc*). The weekly
+      # run has no threshold: it reports the whole module's efficacy and fails only
+      # when it does not complete.
+      - name: Run the mutation tests
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          export TF_ACC_TERRAFORM_PATH="$RUNNER_TEMP/terraform/terraform"
+          go build -o "$RUNNER_TEMP/mutationgate" ./internal/acctest/mutationgate
+          if [[ $EVENT == pull_request ]]; then
+            scope=(-base HEAD^1 -threshold 90)
+          else
+            scope=(-all -threshold 0)
+          fi
+          "$RUNNER_TEMP/mutationgate" "${scope[@]}" -gremlins "$RUNNER_TEMP/gremlins/gremlins" \
+            -workers 2 -timeout-coefficient 5 -cap 3m -memory-mib 4096
