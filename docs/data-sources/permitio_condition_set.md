@@ -17,19 +17,20 @@ description: |-
 
 ### Required
 
-- `conditions` (String)
 - `key` (String)
-- `name` (String)
-- `type` (String)
 
 ### Optional
 
+- `conditions` (String)
 - `description` (String)
+- `name` (String)
 - `resource` (String)
+- `type` (String)
 
 ### Read-Only
 
 - `environment_id` (String)
 - `id` (String) The ID of this resource.
 - `organization_id` (String)
+- `parent_id` (String) The ID of the parent condition set, if any.
 - `project_id` (String)

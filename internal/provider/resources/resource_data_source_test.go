@@ -8,9 +8,8 @@ import (
 )
 
 // TestResourceDataSourceRead reads a resource the mock Permit API serves through
-// the permitio_resource data source and checks every attribute it exports. The
-// data source requires name and actions as inputs, so the configuration repeats
-// the resource's own.
+// the permitio_resource data source, by key only, and checks every attribute it
+// exports.
 func TestResourceDataSourceRead(t *testing.T) {
 	m := mockpermit.New(t, mockpermit.Resources)
 	const (
@@ -38,11 +37,7 @@ resource "permitio_resource" "document" {
 }
 
 data "permitio_resource" "document" {
-  key  = permitio_resource.document.key
-  name = "Document"
-  actions = {
-    read = { name = "Read", description = "Read a document" }
-  }
+  key = permitio_resource.document.key
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(

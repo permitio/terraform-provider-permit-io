@@ -1006,8 +1006,12 @@
         },
         "description": {
           "type": "string",
-          "required": true,
-          "description": "The description of the attribute"
+          "optional": true,
+          "computed": true,
+          "description": "The description of the attribute. Leaving it out keeps the current description; set it to `\"\"` to clear it.",
+          "plan_modifiers": [
+            "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
+          ]
         },
         "environment_id": {
           "type": "string",
@@ -1155,7 +1159,8 @@
       "attributes": {
         "conditions": {
           "type": "string",
-          "required": true
+          "optional": true,
+          "computed": true
         },
         "description": {
           "type": "string",
@@ -1176,11 +1181,17 @@
         },
         "name": {
           "type": "string",
-          "required": true
+          "optional": true,
+          "computed": true
         },
         "organization_id": {
           "type": "string",
           "computed": true
+        },
+        "parent_id": {
+          "type": "string",
+          "computed": true,
+          "description": "The ID of the parent condition set, if any."
         },
         "project_id": {
           "type": "string",
@@ -1188,11 +1199,13 @@
         },
         "resource": {
           "type": "string",
-          "optional": true
+          "optional": true,
+          "computed": true
         },
         "type": {
           "type": "string",
-          "required": true
+          "optional": true,
+          "computed": true
         }
       }
     },
@@ -1201,11 +1214,13 @@
       "attributes": {
         "actions": {
           "type": "map_nested",
-          "required": true
+          "optional": true,
+          "computed": true
         },
         "actions.description": {
           "type": "string",
-          "optional": true
+          "optional": true,
+          "computed": true
         },
         "actions.id": {
           "type": "string",
@@ -1213,15 +1228,18 @@
         },
         "actions.name": {
           "type": "string",
-          "required": true
+          "optional": true,
+          "computed": true
         },
         "attributes": {
           "type": "map_nested",
-          "optional": true
+          "optional": true,
+          "computed": true
         },
         "attributes.description": {
           "type": "string",
-          "optional": true
+          "optional": true,
+          "computed": true
         },
         "attributes.type": {
           "type": "string",
@@ -1253,7 +1271,8 @@
         },
         "name": {
           "type": "string",
-          "required": true
+          "optional": true,
+          "computed": true
         },
         "organization_id": {
           "type": "string",
@@ -1306,7 +1325,8 @@
         },
         "name": {
           "type": "string",
-          "required": true
+          "optional": true,
+          "computed": true
         },
         "organization_id": {
           "type": "string",

@@ -5,6 +5,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
@@ -59,8 +61,13 @@ func (c *UserAttributeResource) Schema(_ context.Context, _ resource.SchemaReque
 		},
 	}
 	attributes["description"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "The description of the attribute",
+		Optional: true,
+		Computed: true,
+		MarkdownDescription: "The description of the attribute. Leaving it out keeps the " +
+			"current description; set it to `\"\"` to clear it.",
+		PlanModifiers: []planmodifier.String{
+			stringplanmodifier.UseNonNullStateForUnknown(),
+		},
 	}
 
 	response.Schema = schema.Schema{

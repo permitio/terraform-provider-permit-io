@@ -17,14 +17,14 @@ description: |-
 
 ### Required
 
-- `actions` (Attributes Map) (see [below for nested schema](#nestedatt--actions))
 - `key` (String)
-- `name` (String)
 
 ### Optional
 
+- `actions` (Attributes Map) (see [below for nested schema](#nestedatt--actions))
 - `attributes` (Attributes Map) (see [below for nested schema](#nestedatt--attributes))
 - `description` (String)
+- `name` (String)
 - `updated_at` (String)
 - `urn` (String)
 
@@ -39,13 +39,10 @@ description: |-
 <a id="nestedatt--actions"></a>
 ### Nested Schema for `actions`
 
-Required:
-
-- `name` (String)
-
 Optional:
 
 - `description` (String)
+- `name` (String)
 
 Read-Only:
 

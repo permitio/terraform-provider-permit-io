@@ -8,9 +8,8 @@ import (
 )
 
 // TestRoleDataSourceRead reads a top-level role and a role of a resource that the
-// mock Permit API serves through the permitio_role data source, and checks every
-// attribute it exports. The data source requires name as an input, so the
-// configuration repeats each role's own.
+// mock Permit API serves through the permitio_role data source, by key and, for
+// the resource role, resource, and checks every attribute it exports.
 func TestRoleDataSourceRead(t *testing.T) {
 	m := mockpermit.New(t, mockpermit.Resources, mockpermit.Roles, mockpermit.ResourceRoles)
 	const (
@@ -50,13 +49,11 @@ resource "permitio_role" "reader" {
 }
 
 data "permitio_role" "editor" {
-  key  = permitio_role.editor.key
-  name = "Editor"
+  key = permitio_role.editor.key
 }
 
 data "permitio_role" "reader" {
   key      = permitio_role.reader.key
-  name     = "Reader"
   resource = permitio_resource.document.key
 }
 `,

@@ -17,12 +17,12 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/User-Attributes/opera
 
 ### Required
 
-- `description` (String) The description of the attribute
 - `key` (String) The key of the attribute
 - `type` (String) The type of the attribute
 
 ### Optional
 
+- `description` (String) The description of the attribute. Leaving it out keeps the current description; set it to `""` to clear it.
 - `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
 
 ### Read-Only

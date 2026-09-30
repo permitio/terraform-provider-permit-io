@@ -18,12 +18,12 @@ description: |-
 ### Required
 
 - `key` (String)
-- `name` (String)
 
 ### Optional
 
 - `description` (String)
 - `extends` (Set of String)
+- `name` (String)
 - `permissions` (Set of String)
 - `resource` (String)
 - `updated_at` (String)

@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -28,39 +29,6 @@ type actionsModel struct {
 	Id          types.String `tfsdk:"id"`
 	Name        types.String `tfsdk:"name"`
 	Description types.String `tfsdk:"description"`
-}
-
-type attributeTypeValidator struct{}
-
-func (a attributeTypeValidator) Description(ctx context.Context) string {
-	return "The type of the attribute in the resource."
-}
-
-func (a attributeTypeValidator) MarkdownDescription(ctx context.Context) string {
-	return "The type of the attribute in the resource."
-}
-
-func (a attributeTypeValidator) ValidateString(ctx context.Context, request validator.StringRequest, response *validator.StringResponse) {
-	if request.ConfigValue.IsUnknown() {
-		response.Diagnostics.AddError("Unable to read resource attribute type",
-			fmt.Sprintf("Unable to read resource attribute type: %s", request.Path.String()),
-		)
-		return
-	}
-	if request.ConfigValue.IsNull() {
-		response.Diagnostics.AddError("Invalid resource attribute type",
-			fmt.Sprintf("Invalid null resource attribute type: %s", request.Path.String()),
-		)
-		return
-	}
-
-	value := request.ConfigValue.ValueString()
-	if !models.AttributeType(value).IsValid() {
-		response.Diagnostics.AddError("Invalid resource attribute type",
-			fmt.Sprintf("Invalid resource attribute type: %s", value),
-		)
-		return
-	}
 }
 
 type attributeModel struct {
@@ -173,7 +141,8 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				Required: true,
 			},
 			"name": schema.StringAttribute{
-				Required: true,
+				Optional: true,
+				Computed: true,
 			},
 			"urn": schema.StringAttribute{
 				Optional: true,
@@ -190,14 +159,17 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 							Computed: true,
 						},
 						"name": schema.StringAttribute{
-							Required: true,
+							Optional: true,
+							Computed: true,
 						},
 						"description": schema.StringAttribute{
 							Optional: true,
+							Computed: true,
 						},
 					},
 				},
-				Required: true,
+				Optional: true,
+				Computed: true,
 			},
 			"attributes": schema.MapNestedAttribute{
 				NestedObject: schema.NestedAttributeObject{
@@ -205,15 +177,17 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 						"type": schema.StringAttribute{
 							Required: true,
 							Validators: []validator.String{
-								attributeTypeValidator{},
+								common.AttributeTypeValidator{},
 							},
 						},
 						"description": schema.StringAttribute{
 							Optional: true,
+							Computed: true,
 						},
 					},
 				},
 				Optional: true,
+				Computed: true,
 			},
 		},
 	}

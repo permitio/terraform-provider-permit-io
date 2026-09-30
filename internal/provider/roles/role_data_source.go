@@ -69,7 +69,8 @@ func (d *RoleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 				Required: true,
 			},
 			"name": schema.StringAttribute{
-				Required: true,
+				Optional: true,
+				Computed: true,
 			},
 			"description": schema.StringAttribute{
 				Optional: true,
