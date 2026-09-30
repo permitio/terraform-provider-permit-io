@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 )
 
@@ -43,5 +44,52 @@ func (v authMechanismValidator) ValidateString(ctx context.Context, request vali
 			fmt.Sprintf("%s, got %s", v.Description(ctx), value),
 		)
 		return
+	}
+}
+
+// uniqueMappingRulesValidator rejects two mapping rules with the same url and
+// http_method, which the API takes as one rule: a create stores both, but an
+// update keeps one, so the state could never match the API. It skips a rule whose
+// url or http_method is not known yet.
+type uniqueMappingRulesValidator struct{}
+
+func (v uniqueMappingRulesValidator) Description(_ context.Context) string {
+	return "no two mapping rules may have the same url and http_method"
+}
+
+func (v uniqueMappingRulesValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v uniqueMappingRulesValidator) ValidateList(
+	_ context.Context, request validator.ListRequest, response *validator.ListResponse,
+) {
+	if request.ConfigValue.IsUnknown() || request.ConfigValue.IsNull() {
+		return
+	}
+
+	first := map[mappingRuleKey]int{}
+	for i, element := range request.ConfigValue.Elements() {
+		rule, ok := element.(types.Object)
+		if !ok || rule.IsUnknown() || rule.IsNull() {
+			continue
+		}
+		url, urlOK := rule.Attributes()["url"].(types.String)
+		httpMethod, methodOK := rule.Attributes()["http_method"].(types.String)
+		if !urlOK || !methodOK || url.IsUnknown() || httpMethod.IsUnknown() {
+			continue
+		}
+		key := mappingRuleKey{url: url.ValueString(), httpMethod: httpMethod.ValueString()}
+		if j, seen := first[key]; seen {
+			response.Diagnostics.AddAttributeError(
+				request.Path.AtListIndex(i),
+				"Duplicate mapping rule",
+				fmt.Sprintf("mapping_rules[%d] has the same url %q and http_method %q as "+
+					"mapping_rules[%d]. The Permit API identifies a mapping rule by its url and "+
+					"http_method, so each pair must be unique.", i, key.url, key.httpMethod, j),
+			)
+			continue
+		}
+		first[key] = i
 	}
 }

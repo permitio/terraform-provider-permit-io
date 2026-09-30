@@ -1,8 +1,10 @@
 package mockpermit
 
 import (
+	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -62,7 +64,7 @@ func TestProxyConfigState(t *testing.T) {
 	wantFields(t, send(t, m, http.MethodPatch, proxyConfigsPath+"/"+ObjectID(1),
 		`{"secret": "other:password"}`, http.StatusOK), `{"name": "Billing 2",
 		"auth_mechanism": "Basic", "secret": "other:password"}`)
-	send(t, m, http.MethodPatch, proxyConfigsPath+"/missing", `{"name": "x"}`,
+	send(t, m, http.MethodPatch, proxyConfigsPath+"/missing", `{"name": "x", "secret": "t"}`,
 		http.StatusNotFound)
 
 	send(t, m, http.MethodDelete, proxyConfigsPath+"/billing", "", http.StatusNoContent)
@@ -155,15 +157,49 @@ func TestProxyConfigRequestErrors(t *testing.T) {
 			body: `{"key": "k", "name": "N", "secret": "t", "mapping_rules": [
 				{"url": "u", "http_method": "get", "resource": "r", "should_delete": false}]}`,
 		},
-		{name: "update with an empty name", method: http.MethodPatch, body: `{"name": ""}`},
-		{name: "update with an unknown field", method: http.MethodPatch, body: `{"key": "k2"}`},
+		{
+			name: "update with an empty name", method: http.MethodPatch,
+			body: `{"name": "", "secret": "token"}`,
+		},
+		{
+			name: "update with an unknown field", method: http.MethodPatch,
+			body: `{"key": "k2", "secret": "token"}`,
+		},
+		{name: "update without a secret", method: http.MethodPatch, body: `{"name": "N"}`},
 		{
 			name: "update to Basic keeping the Bearer secret", method: http.MethodPatch,
 			body: `{"auth_mechanism": "Basic"}`,
 		},
 		{
+			name: "update with a Headers secret and no auth mechanism", method: http.MethodPatch,
+			body: `{"secret": {"x-api-key": "k"}}`,
+		},
+		{
+			name:   "update to Basic with a secret that is not user:password",
+			method: http.MethodPatch, body: `{"auth_mechanism": "Basic", "secret": "token"}`,
+		},
+		{
+			name: "update with null mapping rules", method: http.MethodPatch,
+			body: `{"secret": "token", "mapping_rules": null}`,
+		},
+		{
 			name: "update with an invalid mapping rule", method: http.MethodPatch,
-			body: `{"mapping_rules": [{"url": "u"}]}`,
+			body: `{"secret": "token", "mapping_rules": [{"url": "u"}]}`,
+		},
+		{
+			name: "update with an empty url_type", method: http.MethodPatch,
+			body: `{"secret": "token", "mapping_rules": [
+				{"url": "u", "http_method": "get", "resource": "r", "url_type": ""}]}`,
+		},
+		{
+			name: "update with should_delete not a boolean", method: http.MethodPatch,
+			body: `{"secret": "token", "mapping_rules": [
+				{"url": "u", "http_method": "get", "resource": "r", "should_delete": "yes"}]}`,
+		},
+		{
+			name: "update removing a rule without its resource", method: http.MethodPatch,
+			body: `{"secret": "token", "mapping_rules": [{"url": "https://api.example.com/invoices",
+				"http_method": "get", "should_delete": true}]}`,
 		},
 	}
 	for _, tt := range tests {
@@ -189,128 +225,125 @@ func TestProxyConfigRequestErrors(t *testing.T) {
 	}
 }
 
-// TestProxyConfigPatchUnconfirmedBehaviour checks that the fake fails the test,
-// rather than guess, on a PATCH of mapping rules that the two readings of the spec
-// disagree on.
-func TestProxyConfigPatchUnconfirmedBehaviour(t *testing.T) {
+// TestProxyConfigPatchMergesMappingRules checks that a PATCH merges the mapping
+// rules it sends into the stored ones by url and http_method, as the API does.
+func TestProxyConfigPatchMergesMappingRules(t *testing.T) {
 	const (
-		changedInvoicesRule = `{"url": "https://api.example.com/invoices",
-			"http_method": "get", "resource": "invoice", "action": "list", "priority": 1,
-			"headers": {"x-a": "b"}}`
-		listInvoicesRule = `{"url": "https://api.example.com/invoices", "http_method": "get",
+		storedRefunds = `{"url": "https://api.example.com/refunds", "http_method": "post",
+			"resource": "refund", "headers": {}}`
+		listInvoices = `{"url": "https://api.example.com/invoices", "http_method": "get",
 			"resource": "invoice", "action": "list"}`
-		feesRule = `{"url": "https://api.example.com/fees", "http_method": "get",
+		storedListInvoices = `{"url": "https://api.example.com/invoices", "http_method": "get",
+			"resource": "invoice", "action": "list", "headers": {}}`
+		regexInvoices = `{"url": "https://api.example.com/invoices", "url_type": "regex",
+			"http_method": "get", "resource": "invoice"}`
+		storedRegexInvoices = `{"url": "https://api.example.com/invoices", "url_type": "regex",
+			"http_method": "get", "resource": "invoice", "headers": {}}`
+		fees = `{"url": "https://api.example.com/fees", "http_method": "get",
 			"resource": "fee"}`
-		stored  = "changes, removes or reorders a stored mapping rule"
-		repeats = "two mapping rules with the same url, url_type and http_method"
+		storedFees = `{"url": "https://api.example.com/fees", "http_method": "get",
+			"resource": "fee", "headers": {}}`
 	)
+	// shouldDelete returns rule, which must end with }, with should_delete set.
+	shouldDelete := func(rule string, value bool) string {
+		return fmt.Sprintf(`%s, "should_delete": %t}`, strings.TrimSuffix(rule, "}"), value)
+	}
 	tests := []struct {
-		name      string
-		rules     string
-		wantError string
+		name string
+		// rules are the rules the PATCH sends; "-" sends no mapping_rules.
+		rules string
+		want  string
 	}{
-		{name: "rule removed", rules: refundsRule, wantError: stored},
-		{name: "all rules removed", rules: "", wantError: stored},
 		{
-			name: "rule changed", rules: changedInvoicesRule + `, ` + refundsRule,
-			wantError: stored,
+			name: "rule removed", rules: shouldDelete(refundsRule, true),
+			want: invoicesRule,
 		},
 		{
-			name: "rules reordered", rules: refundsRule + `, ` + invoicesRule,
-			wantError: stored,
+			name: "no rules", rules: "",
+			want: invoicesRule + `, ` + storedRefunds,
 		},
 		{
-			name: "should_delete on a new rule",
-			rules: invoicesRule + `, ` + refundsRule + `, {"url": "https://api.example.com/fees",
-				"http_method": "get", "resource": "fee", "should_delete": true}`,
-			wantError: stored,
+			name: "mapping_rules left out", rules: "-",
+			want: invoicesRule + `, ` + storedRefunds,
 		},
 		{
-			name:      "new rule with the url and method of a stored rule",
-			rules:     invoicesRule + `, ` + refundsRule + `, ` + listInvoicesRule,
-			wantError: repeats,
+			name: "new rule added at the end, the others kept", rules: fees,
+			want: invoicesRule + `, ` + storedRefunds + `, ` + storedFees,
 		},
 		{
-			name:      "two new rules with the same url and method",
-			rules:     invoicesRule + `, ` + refundsRule + `, ` + feesRule + `, ` + feesRule,
-			wantError: repeats,
+			name: "rule replaced where it is", rules: listInvoices,
+			want: storedListInvoices + `, ` + storedRefunds,
+		},
+		{
+			name:  "rules sent in another order keep their places",
+			rules: refundsRule + `, ` + invoicesRule,
+			want:  invoicesRule + `, ` + storedRefunds,
+		},
+		{
+			name:  "rule with should_delete false stored without it",
+			rules: shouldDelete(fees, false),
+			want:  invoicesRule + `, ` + storedRefunds + `, ` + storedFees,
+		},
+		{
+			name: "should_delete of a rule that is not stored", rules: shouldDelete(fees, true),
+			want: invoicesRule + `, ` + storedRefunds,
+		},
+		{
+			name:  "rule removed and sent again moves to the end",
+			rules: shouldDelete(invoicesRule, true) + `, ` + invoicesRule,
+			want:  storedRefunds + `, ` + invoicesRule,
+		},
+		{
+			name:  "two sent rules with the same url and http_method, the last kept",
+			rules: fees + `, ` + listInvoices + `, ` + fees + `, ` + invoicesRule,
+			want:  invoicesRule + `, ` + storedRefunds + `, ` + storedFees,
+		},
+		{
+			name: "url_type does not tell rules apart", rules: regexInvoices,
+			want: storedRegexInvoices + `, ` + storedRefunds,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rec := &errorRecorder{TB: t}
-			m := New(rec, ProxyConfigs)
-			before := send(t, m, http.MethodPost, proxyConfigsPath, `{"key": "billing",
+			m := New(t, ProxyConfigs)
+			send(t, m, http.MethodPost, proxyConfigsPath, `{"key": "billing",
 				"name": "Billing", "secret": "token",
 				"mapping_rules": [`+invoicesRule+`, `+refundsRule+`]}`, http.StatusOK)
-
-			send(t, m, http.MethodPatch, proxyConfigsPath+"/billing",
-				`{"name": "Billing 2", "mapping_rules": [`+tt.rules+`]}`, http.StatusNotImplemented)
-
-			wantUnconfirmed(t, rec, tt.wantError)
-			after := send(t, m, http.MethodGet, proxyConfigsPath+"/billing", "", http.StatusOK)
-			if !reflect.DeepEqual(after, before) {
-				t.Errorf("config after the refused PATCH = %v, want it unchanged: %v",
-					after, before)
+			body := `{"auth_mechanism": "Bearer", "secret": "token", "mapping_rules": [` +
+				tt.rules + `]}`
+			if tt.rules == "-" {
+				body = `{"auth_mechanism": "Bearer", "secret": "token"}`
 			}
+
+			updated := send(t, m, http.MethodPatch, proxyConfigsPath+"/billing", body,
+				http.StatusOK)
+
+			want := `{"mapping_rules": [` + tt.want + `]}`
+			wantFields(t, updated, want)
+			wantFields(t, send(t, m, http.MethodGet, proxyConfigsPath+"/billing", "",
+				http.StatusOK), want)
 		})
 	}
 }
 
-// TestProxyConfigCreateWithRepeatedRule checks that the fake fails the test, rather
-// than guess, on a create with two mapping rules that have the same url, url_type
-// and http_method, and accepts rules that differ in any of the three.
-func TestProxyConfigCreateWithRepeatedRule(t *testing.T) {
-	const invoicesURL = `"url": "https://api.example.com/invoices", "resource": "invoice"`
-	tests := []struct {
-		name    string
-		rules   string
-		repeats bool
-	}{
-		{
-			name: "same url and method",
-			rules: `{` + invoicesURL + `, "http_method": "get", "action": "read"},
-				{` + invoicesURL + `, "http_method": "get", "action": "list"}`,
-			repeats: true,
-		},
-		{
-			name: "same url, url_type and method",
-			rules: `{` + invoicesURL + `, "http_method": "get", "url_type": "regex"},
-				{` + invoicesURL + `, "http_method": "get", "url_type": "regex"}`,
-			repeats: true,
-		},
-		{
-			name: "same url, other method",
-			rules: `{` + invoicesURL + `, "http_method": "get"},
-				{` + invoicesURL + `, "http_method": "post"}`,
-		},
-		{
-			name: "same url and method, other url_type",
-			rules: `{` + invoicesURL + `, "http_method": "get"},
-				{` + invoicesURL + `, "http_method": "get", "url_type": "regex"}`,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rec := &errorRecorder{TB: t}
-			m := New(rec, ProxyConfigs)
-			wantStatus := http.StatusOK
-			if tt.repeats {
-				wantStatus = http.StatusNotImplemented
-			}
+// TestProxyConfigRepeatedRules checks that a create stores two mapping rules with
+// the same url and http_method, as the API does, and that any PATCH of the mapping
+// rules, even an empty list, keeps only the last of the two.
+func TestProxyConfigRepeatedRules(t *testing.T) {
+	const (
+		readInvoices = `{"url": "https://api.example.com/invoices", "http_method": "get",
+			"resource": "invoice", "action": "read", "headers": {}}`
+		listInvoices = `{"url": "https://api.example.com/invoices", "http_method": "get",
+			"resource": "invoice", "action": "list", "headers": {}}`
+	)
+	m := New(t, ProxyConfigs)
 
-			send(t, m, http.MethodPost, proxyConfigsPath, `{"key": "billing", "name": "Billing",
-				"secret": "token", "mapping_rules": [`+tt.rules+`]}`, wantStatus)
+	created := send(t, m, http.MethodPost, proxyConfigsPath, `{"key": "billing",
+		"name": "Billing", "secret": "token",
+		"mapping_rules": [`+readInvoices+`, `+listInvoices+`]}`, http.StatusOK)
+	updated := send(t, m, http.MethodPatch, proxyConfigsPath+"/billing",
+		`{"secret": "token", "mapping_rules": []}`, http.StatusOK)
 
-			if !tt.repeats {
-				if got := rec.take(); len(got) != 0 {
-					t.Errorf("test errors = %q, want none", got)
-				}
-				wantStoredKeys(t, m, "proxy_configs/billing")
-				return
-			}
-			wantUnconfirmed(t, rec, "two mapping rules with the same url, url_type and http_method")
-			wantStoredKeys(t, m)
-		})
-	}
+	wantFields(t, created, `{"mapping_rules": [`+readInvoices+`, `+listInvoices+`]}`)
+	wantFields(t, updated, `{"mapping_rules": [`+listInvoices+`]}`)
 }

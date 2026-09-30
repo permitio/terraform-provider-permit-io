@@ -30,6 +30,13 @@ const (
 		 "headers": {"x-tenant": "required"}},
 		{"url": "https://billing.example.com/v1/invoices", "http_method": "post",
 		 "resource": "invoice"}`
+	// An update removes each rule of the prior state before it sends the planned
+	// rules, so that the API ends up with them in the planned order.
+	removedInvoiceRules = `
+		{"url": "https://billing.example.com/v1/invoices", "http_method": "get",
+		 "resource": "invoice", "should_delete": true},
+		{"url": "https://billing.example.com/v1/invoices", "http_method": "post",
+		 "resource": "invoice", "should_delete": true}`
 )
 
 // TestProxyConfigCreateUpdateDestroy runs permitio_proxy_config through Terraform
@@ -170,7 +177,7 @@ resource "permitio_proxy_config" "billing" {
 						"name": "Billing and refunds API",
 						"auth_mechanism": "Basic",
 						"secret": "example-user:example-password",
-						"mapping_rules": [`+invoiceRules+`,
+						"mapping_rules": [`+removedInvoiceRules+`, `+invoiceRules+`,
 							{"url": "https://billing.example.com/v1/refunds",
 							 "http_method": "post", "resource": "refund", "action": "create",
 							 "priority": 2}]
@@ -207,6 +214,11 @@ func TestProxyConfigRegexURLType(t *testing.T) {
 		 "http_method": "get", "resource": "invoice"},
 		{"url": "https://billing.example.com/v1/invoices", "http_method": "post",
 		 "resource": "invoice"}`
+	const removedRules = `
+		{"url": "^https://billing\\.example\\.com/v1/invoices/[0-9]+$",
+		 "http_method": "get", "resource": "invoice", "should_delete": true},
+		{"url": "https://billing.example.com/v1/invoices", "http_method": "post",
+		 "resource": "invoice", "should_delete": true}`
 
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: providerFactories,
@@ -237,7 +249,8 @@ func TestProxyConfigRegexURLType(t *testing.T) {
 					resource.TestCheckResourceAttr(address, "mapping_rules.2.url_type", "regex"),
 					m.CheckRequests(http.MethodPatch, proxyConfigsPath+"/billing", `{
 						"name": "Billing API", "auth_mechanism": "Bearer",
-						"secret": "example-bearer-token", "mapping_rules": [`+sentRules+`,
+						"secret": "example-bearer-token",
+						"mapping_rules": [`+removedRules+`, `+sentRules+`,
 						{"url": "^https://billing\\.example\\.com/v1/refunds/.+$",
 						 "url_type": "regex", "http_method": "delete", "resource": "refund"}]
 					}`),

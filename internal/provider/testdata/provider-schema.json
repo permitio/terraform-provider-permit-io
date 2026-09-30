@@ -200,7 +200,10 @@
         "mapping_rules": {
           "type": "list_nested",
           "required": true,
-          "description": "Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method."
+          "description": "Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method. The Permit API identifies a rule by its `url` and `http_method`, so no two rules may have the same pair. When a rule leaves the list, or its `url` or `http_method` changes, the provider removes the old rule from Permit. Each create and update leaves Permit with the rules in the list's order. Terraform does not detect rules reordered outside Terraform: the state keeps the list's order, and the next update of the proxy config restores it in Permit.",
+          "validators": [
+            "no two mapping rules may have the same url and http_method"
+          ]
         },
         "mapping_rules.action": {
           "type": "string",

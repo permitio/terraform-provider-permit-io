@@ -1,0 +1,1 @@
+has the same url "https://reports.example.com/documents" and http_method "get" as mapping_rules[0]

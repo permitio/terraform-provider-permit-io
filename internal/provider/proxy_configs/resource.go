@@ -15,6 +15,7 @@ import (
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 	"strings"
 )
 
@@ -50,8 +51,9 @@ func (c *proxyConfigResource) Configure(_ context.Context, request resource.Conf
 		return
 	}
 
-	c.client = proxyConfigClient{client: permitClient}
-
+	// The update goes through the connection the provider's Configure stored with
+	// the SDK client, not through the SDK.
+	c.client = proxyConfigClient{client: permitClient, api: config.GetAPI()}
 }
 
 func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -132,8 +134,18 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"mapping_rules": schema.ListNestedAttribute{
-				Required:            true,
-				MarkdownDescription: "Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method.",
+				Required: true,
+				MarkdownDescription: "Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method. " +
+					"The Permit API identifies a rule by its `url` and `http_method`, so no two " +
+					"rules may have the same pair. When a rule leaves the list, or its `url` or " +
+					"`http_method` changes, the provider removes the old rule from Permit. Each " +
+					"create and update leaves Permit with the rules in the list's order. " +
+					"Terraform does not detect rules reordered outside Terraform: the state keeps " +
+					"the list's order, and the next update of the proxy config restores it in " +
+					"Permit.",
+				Validators: []validator.List{
+					uniqueMappingRulesValidator{},
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"url": schema.StringAttribute{
@@ -264,15 +276,16 @@ func (c *proxyConfigResource) Read(ctx context.Context, request resource.ReadReq
 }
 
 func (c *proxyConfigResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	var model proxyConfigModel
+	var model, prior proxyConfigModel
 
 	response.Diagnostics.Append(request.Plan.Get(ctx, &model)...)
+	response.Diagnostics.Append(request.State.Get(ctx, &prior)...)
 
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	proxyConfig, err := c.client.update(ctx, model)
+	proxyConfig, err := c.client.update(ctx, model, prior)
 
 	if err != nil {
 		response.Diagnostics.AddError(

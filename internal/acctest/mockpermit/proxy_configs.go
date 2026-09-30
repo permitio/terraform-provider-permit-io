@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
-	"reflect"
 	"regexp"
 	"slices"
 )
@@ -14,25 +13,28 @@ const (
 	proxyConfigCollection = "proxy_configs"
 	proxyConfigsPattern   = "/v2/facts/{proj_id}/{env_id}/proxy_configs"
 	proxyConfigPattern    = proxyConfigsPattern + "/{proxy_config_id}"
+	// proxyConfigsPackage is the provider package that sends the proxy config
+	// update with net/http.
+	proxyConfigsPackage = "proxy_configs"
 )
 
 // ProxyConfigs serves the proxy config operations permitio_proxy_config calls:
-// create, and get, update and delete by key or ID. It checks the secret against
-// the auth mechanism as the spec describes it: a non-empty token for Bearer,
-// user:password for Basic and an object of header values for Headers. It returns
-// the secret as sent and the mapping rules in the order sent, with the spec's
-// default of no headers; whether the API masks the secret or reorders the rules is
-// unconfirmed. The spec says a PATCH overwrites the mapping rules it provides, but
-// also gives each rule a should_delete flag, and its example names the rule to
-// delete by its url and http_method. So the fake accepts only a PATCH that keeps
-// the stored rules unchanged and in order and appends new ones, which both
-// readings agree on, and fails the test on any other. Since the API may identify
-// a rule by its url, url_type and http_method, the fake also fails the test on a
-// create or PATCH with two rules that have the same three.
+// create, get and delete by key or ID through the SDK, and the update by key or ID
+// that the provider sends itself with net/http. It checks the secret against the
+// auth mechanism as the API does: a non-empty token for Bearer, user:password for
+// Basic and an object of header values for Headers. It returns the secret as
+// stored, unmasked, as the API does, and a create stores the mapping rules in the
+// order sent, two with the same url and http_method included. An update merges the
+// rules it sends into the stored ones as the API does; see mergeMappingRules. The
+// API rejects an update without a secret, since it takes a missing auth_mechanism
+// as Bearer and requires a secret with it, and one whose mapping_rules is null.
 var ProxyConfigs = Routes{
 	{"POST " + proxyConfigsPattern, "ProxyConfigs.Create", (*Server).createProxyConfig},
 	{"GET " + proxyConfigPattern, "ProxyConfigs.Get", (*Server).getProxyConfig},
-	{"PATCH " + proxyConfigPattern, "ProxyConfigs.Update", (*Server).updateProxyConfig},
+	{
+		"PATCH " + proxyConfigPattern, proxyConfigsPackage + ".update (HTTP)",
+		(*Server).updateProxyConfig,
+	},
 	{"DELETE " + proxyConfigPattern, "ProxyConfigs.Delete", (*Server).deleteProxyConfig},
 }
 
@@ -65,10 +67,6 @@ func (s *Server) createProxyConfig(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", err.Error())
 		return
 	}
-	if repeatsARule(rules) {
-		s.refuseUnconfirmed(w, r, ruleRepeated)
-		return
-	}
 	config["mapping_rules"] = rules
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -94,20 +92,20 @@ func (s *Server) getProxyConfig(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, config)
 }
 
-// updateProxyConfig overwrites each field the body provides, as the API documents
-// for this PATCH, except that mapping rules may only be appended; see
-// ProxyConfigs. A refused PATCH leaves the config as it was.
+// updateProxyConfig overwrites each field the body provides, except the mapping
+// rules, which it merges into the stored ones; see ProxyConfigs. It checks the body
+// before it looks the config up, as the API does, and then the secret against the
+// auth mechanism the config ends up with. A refused PATCH leaves the config as it
+// was.
 func (s *Server) updateProxyConfig(w http.ResponseWriter, r *http.Request) {
 	body, ok := s.decodeObject(w, r)
 	if !ok || !s.knownFieldsOnly(w, body, "secret", "name", "mapping_rules", "auth_mechanism") {
 		return
 	}
-	if _, given := body["name"]; given && str(body, "name") == "" {
-		s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY",
-			"name must be a non-empty string")
+	if err := checkUpdate(body); err != nil {
+		s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", err.Error())
 		return
 	}
-	_, patchesRules := body["mapping_rules"]
 	rules, err := readMappingRules(body["mapping_rules"])
 	if err != nil {
 		s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", err.Error())
@@ -126,22 +124,36 @@ func (s *Server) updateProxyConfig(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", err.Error())
 		return
 	}
-	updated["mapping_rules"] = config["mapping_rules"]
-	if patchesRules {
-		stored, _ := config["mapping_rules"].([]any)
-		if !keepsAndAppends(stored, rules) || slices.ContainsFunc(rules, hasShouldDelete) {
-			s.refuseUnconfirmed(w, r, "the body changes, removes or reorders a stored mapping "+
-				"rule, or sets should_delete")
-			return
-		}
-		if repeatsARule(rules) {
-			s.refuseUnconfirmed(w, r, ruleRepeated)
-			return
-		}
-		updated["mapping_rules"] = rules
+	stored, _ := config["mapping_rules"].([]any)
+	updated["mapping_rules"] = stored
+	if _, patchesRules := body["mapping_rules"]; patchesRules {
+		updated["mapping_rules"] = mergeMappingRules(stored, rules)
 	}
 	s.collection(proxyConfigCollection)[str(config, "key")] = updated
 	s.writeJSON(w, http.StatusOK, updated)
+}
+
+// checkUpdate returns an error for a PATCH body the API rejects whatever config it
+// names: an empty name, no secret or one that does not fit the auth mechanism, which
+// is Bearer when the body has none, or null mapping rules.
+func checkUpdate(body map[string]any) error {
+	if _, given := body["name"]; given && str(body, "name") == "" {
+		return errors.New("name must be a non-empty string")
+	}
+	if body["secret"] == nil {
+		return errors.New("changing the auth_mechanism also requires changing the secret")
+	}
+	mechanism := body["auth_mechanism"]
+	if mechanism == nil {
+		mechanism = "Bearer"
+	}
+	if err := checkSecret(mechanism, body["secret"]); err != nil {
+		return err
+	}
+	if rules, given := body["mapping_rules"]; given && rules == nil {
+		return errors.New("mapping_rules must be a list")
+	}
+	return nil
 }
 
 func (s *Server) deleteProxyConfig(w http.ResponseWriter, r *http.Request) {
@@ -181,9 +193,10 @@ func checkSecret(mechanism, secret any) error {
 }
 
 // readMappingRules reads the mapping rules of a request body: a list of objects,
-// each with a url, an http_method and a resource, and a url_type of regex or null
-// if any; the API rejects any other url_type, "" too. It gives a rule without headers
-// the spec's default of none. A missing or null list is empty.
+// each with a url, an http_method and a resource, a url_type of regex or null if
+// any, since the API rejects any other url_type, "" too, and a boolean
+// should_delete if any. It gives a rule without headers the spec's default of none.
+// A missing or null list is empty.
 func readMappingRules(value any) ([]any, error) {
 	rules := []any{}
 	if value == nil {
@@ -212,6 +225,11 @@ func readMappingRules(value any) ([]any, error) {
 		if urlType, given := rule["url_type"]; given && urlType != nil && urlType != "regex" {
 			return nil, fmt.Errorf("mapping_rules[%d].url_type must be regex or null", i)
 		}
+		if shouldDelete, given := rule["should_delete"]; given {
+			if _, ok := shouldDelete.(bool); !ok {
+				return nil, fmt.Errorf("mapping_rules[%d].should_delete is not a boolean", i)
+			}
+		}
 		rule = maps.Clone(rule)
 		if _, given := rule["headers"]; !given {
 			rule["headers"] = map[string]any{}
@@ -224,45 +242,50 @@ func readMappingRules(value any) ([]any, error) {
 	return rules, nil
 }
 
-// keepsAndAppends reports whether a list of mapping rules starts with the stored
-// rules, unchanged and in order.
-func keepsAndAppends(stored, rules []any) bool {
-	if len(rules) < len(stored) {
-		return false
-	}
-	for i, rule := range stored {
-		if !reflect.DeepEqual(rule, rules[i]) {
-			return false
+// mergeMappingRules returns the mapping rules a config holds after a PATCH that
+// sends rules, merged into the stored ones as the API merges them. The API keys a
+// rule by its url and http_method, so two stored rules with the same pair become
+// one, the last, where the first was. Then, for each sent rule in order, it
+// removes the rule with the same pair when should_delete is true, and otherwise
+// replaces that rule with the sent one, without should_delete, where it is, or adds
+// it at the end. So a rule the PATCH does not mention stays, and an empty list
+// changes nothing.
+func mergeMappingRules(stored, sent []any) []any {
+	var order []string
+	byKey := map[string]any{}
+	put := func(rule any) {
+		key := ruleKey(rule)
+		if _, exists := byKey[key]; !exists {
+			order = append(order, key)
 		}
+		byKey[key] = rule
 	}
-	return true
-}
-
-// ruleRepeated is what a body does when repeatsARule reports true for its rules.
-const ruleRepeated = "the body has two mapping rules with the same url, url_type and " +
-	"http_method, which the API may take as one rule"
-
-// ruleIdentity is what may identify a mapping rule to the API.
-type ruleIdentity struct {
-	url, urlType, httpMethod string
-}
-
-// repeatsARule reports whether two mapping rules from readMappingRules have the
-// same url, url_type and http_method.
-func repeatsARule(rules []any) bool {
-	seen := map[ruleIdentity]bool{}
-	for _, rule := range rules {
+	for _, rule := range stored {
+		put(rule)
+	}
+	for _, rule := range sent {
 		fields, _ := rule.(map[string]any)
-		identity := ruleIdentity{
-			url: str(fields, "url"), urlType: str(fields, "url_type"),
-			httpMethod: str(fields, "http_method"),
+		if fields["should_delete"] == true {
+			key := ruleKey(rule)
+			delete(byKey, key)
+			order = slices.DeleteFunc(order, func(k string) bool { return k == key })
+			continue
 		}
-		if seen[identity] {
-			return true
-		}
-		seen[identity] = true
+		fields = maps.Clone(fields)
+		delete(fields, "should_delete")
+		put(fields)
 	}
-	return false
+	merged := []any{}
+	for _, key := range order {
+		merged = append(merged, byKey[key])
+	}
+	return merged
+}
+
+// ruleKey is what the API identifies a mapping rule by: its url and http_method.
+func ruleKey(rule any) string {
+	fields, _ := rule.(map[string]any)
+	return str(fields, "url") + ":" + str(fields, "http_method")
 }
 
 // hasShouldDelete reports whether a mapping rule from readMappingRules has the
