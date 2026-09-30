@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -39,10 +40,11 @@ func TestMutantTestRun(t *testing.T) {
 }
 
 func TestParseGoShimArgs(t *testing.T) {
+	realGo := filepath.Join(t.TempDir(), "go")
 	opts, err := parseGoShimArgs(
-		[]string{"-real-go=/usr/local/go/bin/go", "-log=/w/events.log", "--", "test", "-v"},
+		[]string{"-real-go=" + realGo, "-log=/w/events.log", "--", "test", "-v"},
 		&bytes.Buffer{})
-	if err != nil || opts.realGo != "/usr/local/go/bin/go" || opts.logPath != "/w/events.log" ||
+	if err != nil || opts.realGo != realGo || opts.logPath != "/w/events.log" ||
 		strings.Join(opts.args, " ") != "test -v" {
 		t.Errorf("got %+v, %v", opts, err)
 	}
