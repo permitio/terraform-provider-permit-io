@@ -1,5 +1,11 @@
 # See GitHub's documentation for more information on this file:
 # https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically/configuration-options-for-dependency-updates
+#
+# Every ecosystem waits 7 days after a release before proposing it, and groups its
+# minor and patch updates into one pull request; each major update gets its own.
+# Go modules wait 14 days for a major update. Dependabot supports a separate wait
+# for majors (semver-major-days) only for Go modules, not for GitHub Actions or
+# pre-commit, where majors wait the default 7 days.
 version: 2
 updates:
   - package-ecosystem: "gomod"
@@ -8,10 +14,20 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+      semver-major-days: 14
     groups:
       go-modules:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # grpc 1.84.x is still affected by GO-2026-6443, which 1.83.2 fixes. Remove
+      # this once a 1.84 release has the fix.
+      - dependency-name: "google.golang.org/grpc"
+        versions:
+          - "1.84.x"
   - package-ecosystem: "pre-commit"
     directory: "/"
     schedule:
@@ -22,3 +38,21 @@ updates:
       pre-commit-hooks:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
+  # The actions are pinned by commit SHA with the release in a comment; Dependabot
+  # updates both.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

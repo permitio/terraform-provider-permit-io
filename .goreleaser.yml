@@ -1,10 +1,11 @@
 # Visit https://goreleaser.com for documentation on how to customize this
 # behavior.
 version: 2
-before:
-  hooks:
-    # this is just an example and not a requirement for provider building/publishing
-    - go mod tidy
+# Set here, not taken from the git remote or the directory, so every clone names
+# the files the same.
+project_name: terraform-provider-permit-io
+# No before hooks: a hook that changes a tracked file makes every binary report
+# a +dirty version.
 builds:
 - env:
     # goreleaser does not work with CGO, it could also complicate
@@ -14,8 +15,9 @@ builds:
   mod_timestamp: '{{ .CommitTimestamp }}'
   flags:
     - -trimpath
+  # The commit is in each binary's build info (go version -m), so no flag sets it.
   ldflags:
-    - '-s -w -X main.version={{.Version}} -X main.commit={{.Commit}}'
+    - '-s -w -X main.version={{.Version}}'
   goos:
     - freebsd
     - windows
@@ -31,8 +33,21 @@ builds:
       goarch: '386'
   binary: '{{ .ProjectName }}_v{{ .Version }}'
 archives:
-- format: zip
+- formats: [zip]
   name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+  # The files carry the commit's time, as the binaries do, so two builds of a commit
+  # make the same zips: the release workflow checks the published build against the
+  # one it scanned.
+  files:
+    - src: 'LICENSE*'
+      info:
+        mtime: '{{ .CommitDate }}'
+    - src: 'README*'
+      info:
+        mtime: '{{ .CommitDate }}'
+    - src: 'CHANGELOG*'
+      info:
+        mtime: '{{ .CommitDate }}'
 checksum:
   extra_files:
     - glob: 'terraform-registry-manifest.json'
@@ -55,7 +70,12 @@ release:
   extra_files:
     - glob: 'terraform-registry-manifest.json'
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
-  # If you want to manually examine the release before its live, uncomment this line:
-  # draft: true
+  # The release workflow publishes the draft once it has checked its files. A new
+  # run of the workflow replaces a draft that an earlier run left.
+  draft: true
+  replace_existing_draft: true
+  # A tag with a prerelease suffix (v1.2.3-rc.1) makes a GitHub prerelease, which
+  # GitHub never marks as the latest release.
+  prerelease: auto
 changelog:
   disable: true

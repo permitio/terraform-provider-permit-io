@@ -1,0 +1,161 @@
+{
+  "config": {
+    "protocol_version": "v1.0.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.8.0",
+    "db": "https://vuln.go.dev",
+    "db_last_modified": "2026-09-28T16:43:40Z",
+    "scan_level": "symbol",
+    "scan_mode": "binary"
+  }
+}
+{
+  "SBOM": {
+    "go_version": "go1.26.8",
+    "modules": [
+      {
+        "path": "github.com/permitio/terraform-provider-permit-io",
+        "version": "v0.0.25+dirty"
+      },
+      {
+        "path": "github.com/fatih/color",
+        "version": "v1.19.0"
+      },
+      {
+        "path": "github.com/golang/protobuf",
+        "version": "v1.5.4"
+      },
+      {
+        "path": "github.com/google/uuid",
+        "version": "v1.6.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-hclog",
+        "version": "v1.6.3"
+      },
+      {
+        "path": "github.com/hashicorp/go-plugin",
+        "version": "v1.8.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-uuid",
+        "version": "v1.0.4"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-framework",
+        "version": "v1.19.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-framework-validators",
+        "version": "v0.19.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-go",
+        "version": "v0.31.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-log",
+        "version": "v0.11.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-registry-address",
+        "version": "v0.5.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-svchost",
+        "version": "v0.2.1"
+      },
+      {
+        "path": "github.com/hashicorp/yamux",
+        "version": "v0.1.2"
+      },
+      {
+        "path": "github.com/mattn/go-colorable",
+        "version": "v0.1.15"
+      },
+      {
+        "path": "github.com/mattn/go-isatty",
+        "version": "v0.0.24"
+      },
+      {
+        "path": "github.com/mitchellh/go-testing-interface",
+        "version": "v1.14.1"
+      },
+      {
+        "path": "github.com/oklog/run",
+        "version": "v1.2.0"
+      },
+      {
+        "path": "github.com/permitio/permit-golang",
+        "version": "v1.2.8"
+      },
+      {
+        "path": "github.com/samber/lo",
+        "version": "v1.53.0"
+      },
+      {
+        "path": "github.com/vmihailenco/msgpack/v5",
+        "version": "v5.4.1"
+      },
+      {
+        "path": "github.com/vmihailenco/tagparser/v2",
+        "version": "v2.0.0"
+      },
+      {
+        "path": "go.uber.org/multierr",
+        "version": "v1.11.0"
+      },
+      {
+        "path": "go.uber.org/zap",
+        "version": "v1.28.0"
+      },
+      {
+        "path": "golang.org/x/net",
+        "version": "v0.59.0"
+      },
+      {
+        "path": "golang.org/x/oauth2",
+        "version": "v0.37.0"
+      },
+      {
+        "path": "golang.org/x/sys",
+        "version": "v0.48.0"
+      },
+      {
+        "path": "golang.org/x/text",
+        "version": "v0.42.0"
+      },
+      {
+        "path": "google.golang.org/genproto/googleapis/rpc",
+        "version": "v0.0.0-20260928230214-8a89bd6388cc"
+      },
+      {
+        "path": "google.golang.org/grpc",
+        "version": "v1.83.2"
+      },
+      {
+        "path": "google.golang.org/protobuf",
+        "version": "v1.36.12"
+      },
+      {
+        "path": "stdlib",
+        "version": "go1.26.8"
+      }
+    ],
+    "roots": [
+      "github.com/permitio/terraform-provider-permit-io"
+    ]
+  }
+}
+{
+  "osv": {
+    "id": "GO-2025-3488",
+    "summary": "Unexpected memory consumption during token parsing in golang.org/x/oauth2"
+  }
+}
+{
+  "osv": {
+    "id": "GO-2024-2611",
+    "summary": "Infinite loop in JSON unmarshaling in google.golang.org/protobuf"
+  }
+}

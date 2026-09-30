@@ -1,14 +1,8 @@
-# Findings that were in release.yml before the zizmor hook was added, one entry
-# per finding's line. The release workflow hardening (PER-16457) fixes them and
-# removes these ignores; every other finding, including a new one of these rules,
-# still fails the hook.
+# The release workflow calls the test workflow as ./.github/workflows/test.yml.
+# zizmor asks for GitHub's self-repository syntax ($/...) instead, but actionlint
+# (v1.7.12) rejects it. Every other finding, including a new one of this rule in
+# another file, fails the hook.
 rules:
-  artipacked:
+  self-repository:
     ignore:
-      - release.yml:20
-  cache-poisoning:
-    ignore:
-      - release.yml:24
-  unpinned-uses:
-    ignore:
-      - release.yml:36
+      - release.yml

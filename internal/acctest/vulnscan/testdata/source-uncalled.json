@@ -1,0 +1,307 @@
+{
+  "config": {
+    "protocol_version": "v1.0.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.8.0",
+    "db": "https://vuln.go.dev",
+    "db_last_modified": "2026-09-28T16:43:40Z",
+    "go_version": "go1.26.8",
+    "scan_level": "symbol",
+    "scan_mode": "source"
+  }
+}
+{
+  "SBOM": {
+    "go_version": "go1.26.8",
+    "modules": [
+      {
+        "path": "github.com/permitio/terraform-provider-permit-io"
+      },
+      {
+        "path": "github.com/ProtonMail/go-crypto",
+        "version": "v1.5.2"
+      },
+      {
+        "path": "github.com/agext/levenshtein",
+        "version": "v1.2.3"
+      },
+      {
+        "path": "github.com/apparentlymart/go-textseg/v15",
+        "version": "v15.0.0"
+      },
+      {
+        "path": "github.com/cloudflare/circl",
+        "version": "v1.6.5"
+      },
+      {
+        "path": "github.com/fatih/color",
+        "version": "v1.19.0"
+      },
+      {
+        "path": "github.com/golang/protobuf",
+        "version": "v1.5.4"
+      },
+      {
+        "path": "github.com/google/go-cmp",
+        "version": "v0.7.0"
+      },
+      {
+        "path": "github.com/google/uuid",
+        "version": "v1.6.0"
+      },
+      {
+        "path": "github.com/hashicorp/errwrap",
+        "version": "v1.1.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-checkpoint",
+        "version": "v0.5.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-cleanhttp",
+        "version": "v0.5.2"
+      },
+      {
+        "path": "github.com/hashicorp/go-cty",
+        "version": "v1.5.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-hclog",
+        "version": "v1.6.3"
+      },
+      {
+        "path": "github.com/hashicorp/go-multierror",
+        "version": "v1.1.1"
+      },
+      {
+        "path": "github.com/hashicorp/go-plugin",
+        "version": "v1.8.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-retryablehttp",
+        "version": "v0.7.8"
+      },
+      {
+        "path": "github.com/hashicorp/go-uuid",
+        "version": "v1.0.4"
+      },
+      {
+        "path": "github.com/hashicorp/go-version",
+        "version": "v1.9.0"
+      },
+      {
+        "path": "github.com/hashicorp/hc-install",
+        "version": "v0.9.5"
+      },
+      {
+        "path": "github.com/hashicorp/hcl/v2",
+        "version": "v2.25.0"
+      },
+      {
+        "path": "github.com/hashicorp/logutils",
+        "version": "v1.0.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-exec",
+        "version": "v0.25.3"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-json",
+        "version": "v0.28.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-framework",
+        "version": "v1.19.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-framework-validators",
+        "version": "v0.19.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-go",
+        "version": "v0.31.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-log",
+        "version": "v0.11.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-sdk/v2",
+        "version": "v2.40.1"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-testing",
+        "version": "v1.16.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-registry-address",
+        "version": "v0.5.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-svchost",
+        "version": "v0.2.1"
+      },
+      {
+        "path": "github.com/hashicorp/yamux",
+        "version": "v0.1.2"
+      },
+      {
+        "path": "github.com/mattn/go-colorable",
+        "version": "v0.1.15"
+      },
+      {
+        "path": "github.com/mattn/go-isatty",
+        "version": "v0.0.24"
+      },
+      {
+        "path": "github.com/mitchellh/copystructure",
+        "version": "v1.2.0"
+      },
+      {
+        "path": "github.com/mitchellh/go-testing-interface",
+        "version": "v1.14.1"
+      },
+      {
+        "path": "github.com/mitchellh/go-wordwrap",
+        "version": "v1.0.1"
+      },
+      {
+        "path": "github.com/mitchellh/mapstructure",
+        "version": "v1.5.0"
+      },
+      {
+        "path": "github.com/mitchellh/reflectwalk",
+        "version": "v1.0.2"
+      },
+      {
+        "path": "github.com/oklog/run",
+        "version": "v1.2.0"
+      },
+      {
+        "path": "github.com/permitio/permit-golang",
+        "version": "v1.2.8"
+      },
+      {
+        "path": "github.com/samber/lo",
+        "version": "v1.53.0"
+      },
+      {
+        "path": "github.com/vmihailenco/msgpack",
+        "version": "v4.0.4+incompatible"
+      },
+      {
+        "path": "github.com/vmihailenco/msgpack/v5",
+        "version": "v5.4.1"
+      },
+      {
+        "path": "github.com/vmihailenco/tagparser/v2",
+        "version": "v2.0.0"
+      },
+      {
+        "path": "github.com/zclconf/go-cty",
+        "version": "v1.19.0"
+      },
+      {
+        "path": "go.uber.org/multierr",
+        "version": "v1.11.0"
+      },
+      {
+        "path": "go.uber.org/zap",
+        "version": "v1.28.0"
+      },
+      {
+        "path": "golang.org/x/crypto",
+        "version": "v0.57.0"
+      },
+      {
+        "path": "golang.org/x/mod",
+        "version": "v0.41.0"
+      },
+      {
+        "path": "golang.org/x/net",
+        "version": "v0.59.0"
+      },
+      {
+        "path": "golang.org/x/oauth2",
+        "version": "v0.37.0"
+      },
+      {
+        "path": "golang.org/x/sys",
+        "version": "v0.48.0"
+      },
+      {
+        "path": "golang.org/x/text",
+        "version": "v0.42.0"
+      },
+      {
+        "path": "google.golang.org/genproto/googleapis/rpc",
+        "version": "v0.0.0-20260928230214-8a89bd6388cc"
+      },
+      {
+        "path": "google.golang.org/grpc",
+        "version": "v1.83.2"
+      },
+      {
+        "path": "google.golang.org/protobuf",
+        "version": "v1.36.12"
+      },
+      {
+        "path": "stdlib",
+        "version": "v1.26.8"
+      }
+    ],
+    "roots": [
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/common",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/conditionset_rules",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/conditionsets",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/config",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/group_resource_instance_role_assignments",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/proxy_configs",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/relations",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instance_role_assignments",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/resource_instances",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/resources",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/role_assignments",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/role_derivations",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/roles",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/tenants",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/user_attributes",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider/users",
+      "github.com/permitio/terraform-provider-permit-io/internal/provider",
+      "github.com/permitio/terraform-provider-permit-io",
+      "github.com/permitio/terraform-provider-permit-io/internal/acctest/checkgotest",
+      "github.com/permitio/terraform-provider-permit-io/internal/acctest/mockpermit",
+      "github.com/permitio/terraform-provider-permit-io/internal/acctest/providerschema",
+      "github.com/permitio/terraform-provider-permit-io/internal/acctest/schemadiff"
+    ]
+  }
+}
+{
+  "osv": {
+    "id": "GO-2022-0493",
+    "summary": "Incorrect privilege reporting in syscall and golang.org/x/sys/unix"
+  }
+}
+{
+  "osv": {
+    "id": "GO-2022-0493",
+    "summary": "Incorrect privilege reporting in syscall and golang.org/x/sys/unix"
+  }
+}
+{
+  "osv": {
+    "id": "GO-2026-5932",
+    "summary": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues"
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2026-5932",
+    "trace": [
+      {
+        "module": "golang.org/x/crypto",
+        "version": "v0.57.0"
+      }
+    ]
+  }
+}

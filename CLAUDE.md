@@ -9,11 +9,12 @@ GOTOOLCHAIN=auto go build ./...                    # Build
 GOTOOLCHAIN=auto go test -count=1 -skip '^TestAcc' ./...  # Unit and offline tests (mock Permit API, no key needed)
 PERMITIO_API_KEY=<key> GOTOOLCHAIN=auto TF_ACC=1 go test ./internal/provider/ -run <TestName> -v -timeout 300s  # Acceptance tests
 prek install && prek run --all-files               # Hooks, as the CI prek job runs them (prek >= 0.5.3)
-GOTOOLCHAIN=auto go tool govulncheck ./...         # Vulnerability scan
+GOTOOLCHAIN=auto go build -o /tmp/vulnscan ./internal/acctest/vulnscan && GOTOOLCHAIN=auto /tmp/vulnscan -mode source -accept .github/vulnscan-accept.txt ./...  # Vulnerability scan, as CI runs it
 GOTOOLCHAIN=auto go generate ./...                 # Docs and example formatting (needs terraform on PATH); CI fails on any change
 ```
-- Tool versions: golangci-lint, actionlint, zizmor and shellcheck in `.pre-commit-config.yaml` (Dependabot updates the SHAs and `# frozen:` tags), tfplugindocs and govulncheck in go.mod's `tool` directive. release.yml still pins its own govulncheck until the release workflow moves to `go tool govulncheck`.
-- The zizmor findings release.yml already had are ignored one by one by line entries in `.github/zizmor.yml`. Remove an ignore when its fix lands.
+- Tool versions: golangci-lint, actionlint, zizmor and shellcheck in `.pre-commit-config.yaml` (Dependabot updates the SHAs and `# frozen:` tags), tfplugindocs and govulncheck in go.mod's `tool` directive (vulnscan runs it as `go tool govulncheck`, so go.mod is its only pin), GoReleaser in `.tool-versions`.
+- `vulnscan` fails on every vulnerability govulncheck reports, called or not, unless `.github/vulnscan-accept.txt` lists it: one line with its ID, the scan mode (source or binary) and the reason. Accepted ones are still printed, called code cannot be accepted, and an entry that a complete scan no longer reports fails. Exit codes: 0 pass, 1 findings, 2 the scan did not complete.
+- The only zizmor ignore in `.github/zizmor.yml` is the self-repository rule for release.yml: it calls test.yml as `./.github/workflows/test.yml` because actionlint rejects the `$/` syntax zizmor asks for.
 - CI in test.yml is the aggregate check: it fails unless every job in its `needs` succeeded. Add a new job to `needs` (the prek job fails when one is missing) and change `EXPECTED_JOBS`; add or remove a resource or data source and change the generate job's `MIN_DOCS`.
 
 ## Offline tests

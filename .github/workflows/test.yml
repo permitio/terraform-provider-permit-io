@@ -2,12 +2,26 @@
 name: Tests
 
 # Pull requests into any branch, pushes to main and manual runs. There is no path
-# filter: a required check that never starts blocks the pull request.
+# filter: a required check that never starts blocks the pull request. The release
+# workflow calls this one and publishes only when CI passes; a called run has the
+# release's push event, so acceptance runs with the keys the release passes.
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    secrets:
+      PERMITIO_API_KEY_1_0:
+        required: true
+      PERMITIO_API_KEY_1_1:
+        required: true
+      PERMITIO_API_KEY_1_2:
+        required: true
+      PERMITIO_API_KEY_1_3:
+        required: true
+      PERMITIO_API_KEY_1_4:
+        required: true
 
 permissions: {}
 
@@ -101,8 +115,14 @@ jobs:
             1) echo "::warning title=Breaking schema changes::See the job summary." ;;
             *) exit "$status" ;;
           esac
-      # golangci-lint runs in the prek job; govulncheck's version comes from go.mod.
-      - run: go tool govulncheck ./...
+      # golangci-lint runs in the prek job. vulnscan runs govulncheck, whose version
+      # comes from go.mod, and exits 1 on a vulnerability that is not accepted in
+      # the accept file and 2 when the scan did not complete.
+      - name: Scan for vulnerabilities
+        shell: bash
+        run: |
+          go build -o "$RUNNER_TEMP/vulnscan" ./internal/acctest/vulnscan
+          "$RUNNER_TEMP/vulnscan" -mode source -accept .github/vulnscan-accept.txt ./...
 
   # Runs every hook in .pre-commit-config.yaml on every file. The golangci-lint
   # version is set only there. The checksum is the release's .sha256 asset for
@@ -243,6 +263,62 @@ jobs:
           fi
           echo "Generated files match the commit; ${#docs[@]} doc pages."
 
+  # On pull requests that change how a release is made (.goreleaser.yml, the
+  # release workflow or its files check) or what it compiles (go.mod, go.sum),
+  # checks .goreleaser.yml, builds a snapshot release for every platform, unsigned
+  # and unpublished, and checks its files as the release workflow does. Other runs
+  # skip the steps and pass, so CI can need this job.
+  goreleaser:
+    name: goreleaser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-goreleaser
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          # The pull request's merge commit and its first parent, the base branch.
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check whether the release or Go module files changed
+        id: changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD -- .goreleaser.yml .tool-versions \
+            .github/workflows/release.yml .github/scripts/check-release-artifacts.sh \
+            go.mod go.sum)
+          if [[ -n $changed ]]; then
+            echo "Release or Go module files changed: ${changed//$'\n'/, }"
+            echo "release=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "::notice title=goreleaser skipped::No release or Go module file changed."
+            echo "release=false" >>"$GITHUB_OUTPUT"
+          fi
+      # No module cache: the release workflow builds without one too.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        if: steps.changes.outputs.release == 'true'
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94  # v7.2.3
+        if: steps.changes.outputs.release == 'true'
+        with:
+          version-file: .tool-versions
+          install-only: true
+      # A snapshot is not signed, so the files check runs without -s and -t.
+      - name: Build and check a snapshot release
+        if: steps.changes.outputs.release == 'true'
+        shell: bash
+        run: |
+          goreleaser check
+          goreleaser release --snapshot --clean --skip=sign
+          .github/scripts/check-release-artifacts.sh dist
+
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Terraform Provider Acceptance Tests
@@ -356,7 +432,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [build, generate, prek, test]
+    needs: [build, generate, goreleaser, prek, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -364,7 +440,7 @@ jobs:
         shell: bash
         env:
           NEEDS: ${{ toJSON(needs) }}
-          EXPECTED_JOBS: 4
+          EXPECTED_JOBS: 5
         run: |
           if ! results=$(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"$NEEDS"); then
             echo "::error title=CI::Could not read the job results."

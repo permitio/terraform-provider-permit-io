@@ -1,0 +1,301 @@
+{
+  "config": {
+    "protocol_version": "v1.0.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.8.0",
+    "db": "https://vuln.go.dev",
+    "db_last_modified": "2026-09-28T16:43:40Z",
+    "scan_level": "symbol",
+    "scan_mode": "binary"
+  }
+}
+{
+  "SBOM": {
+    "go_version": "go1.24.13",
+    "modules": [
+      {
+        "path": "github.com/permitio/terraform-provider-permit-io",
+        "version": "v0.0.25+dirty"
+      },
+      {
+        "path": "github.com/fatih/color",
+        "version": "v1.15.0"
+      },
+      {
+        "path": "github.com/golang/protobuf",
+        "version": "v1.5.3"
+      },
+      {
+        "path": "github.com/google/uuid",
+        "version": "v1.4.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-hclog",
+        "version": "v1.5.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-plugin",
+        "version": "v1.6.0"
+      },
+      {
+        "path": "github.com/hashicorp/go-uuid",
+        "version": "v1.0.3"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-framework",
+        "version": "v1.4.2"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-framework-validators",
+        "version": "v0.12.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-go",
+        "version": "v0.20.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-plugin-log",
+        "version": "v0.9.0"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-registry-address",
+        "version": "v0.2.3"
+      },
+      {
+        "path": "github.com/hashicorp/terraform-svchost",
+        "version": "v0.1.1"
+      },
+      {
+        "path": "github.com/hashicorp/yamux",
+        "version": "v0.1.1"
+      },
+      {
+        "path": "github.com/mattn/go-colorable",
+        "version": "v0.1.13"
+      },
+      {
+        "path": "github.com/mattn/go-isatty",
+        "version": "v0.0.18"
+      },
+      {
+        "path": "github.com/mitchellh/go-testing-interface",
+        "version": "v1.14.1"
+      },
+      {
+        "path": "github.com/oklog/run",
+        "version": "v1.0.0"
+      },
+      {
+        "path": "github.com/permitio/permit-golang",
+        "version": "v1.2.8"
+      },
+      {
+        "path": "github.com/samber/lo",
+        "version": "v1.38.1"
+      },
+      {
+        "path": "github.com/vmihailenco/msgpack/v5",
+        "version": "v5.4.1"
+      },
+      {
+        "path": "github.com/vmihailenco/tagparser/v2",
+        "version": "v2.0.0"
+      },
+      {
+        "path": "go.uber.org/multierr",
+        "version": "v1.11.0"
+      },
+      {
+        "path": "go.uber.org/zap",
+        "version": "v1.26.0"
+      },
+      {
+        "path": "golang.org/x/exp",
+        "version": "v0.0.0-20230809150735-7b3493d9a819"
+      },
+      {
+        "path": "golang.org/x/net",
+        "version": "v0.23.0"
+      },
+      {
+        "path": "golang.org/x/oauth2",
+        "version": "v0.14.0"
+      },
+      {
+        "path": "golang.org/x/sys",
+        "version": "v0.18.0"
+      },
+      {
+        "path": "golang.org/x/text",
+        "version": "v0.14.0"
+      },
+      {
+        "path": "google.golang.org/genproto/googleapis/rpc",
+        "version": "v0.0.0-20231002182017-d307bd883b97"
+      },
+      {
+        "path": "google.golang.org/grpc",
+        "version": "v1.60.0"
+      },
+      {
+        "path": "google.golang.org/protobuf",
+        "version": "v1.31.0"
+      },
+      {
+        "path": "stdlib",
+        "version": "go1.24.13"
+      }
+    ],
+    "roots": [
+      "github.com/permitio/terraform-provider-permit-io"
+    ]
+  }
+}
+{
+  "osv": {
+    "id": "GO-2025-3488",
+    "summary": "Unexpected memory consumption during token parsing in golang.org/x/oauth2"
+  }
+}
+{
+  "osv": {
+    "id": "GO-2024-2611",
+    "summary": "Infinite loop in JSON unmarshaling in google.golang.org/protobuf"
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2025-3488",
+    "fixed_version": "v0.27.0",
+    "trace": [
+      {
+        "module": "golang.org/x/oauth2",
+        "version": "v0.14.0"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-2611",
+    "fixed_version": "v1.33.0",
+    "trace": [
+      {
+        "module": "google.golang.org/protobuf",
+        "version": "v1.31.0"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-2611",
+    "fixed_version": "v1.33.0",
+    "trace": [
+      {
+        "module": "google.golang.org/protobuf",
+        "version": "v1.31.0",
+        "package": "google.golang.org/protobuf/encoding/protojson"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-2611",
+    "fixed_version": "v1.33.0",
+    "trace": [
+      {
+        "module": "google.golang.org/protobuf",
+        "version": "v1.31.0",
+        "package": "google.golang.org/protobuf/internal/encoding/json"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2025-3488",
+    "fixed_version": "v0.27.0",
+    "trace": [
+      {
+        "module": "golang.org/x/oauth2",
+        "version": "v0.14.0",
+        "package": "golang.org/x/oauth2/jws"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-2611",
+    "fixed_version": "v1.33.0",
+    "trace": [
+      {
+        "module": "google.golang.org/protobuf",
+        "version": "v1.31.0",
+        "package": "google.golang.org/protobuf/encoding/protojson",
+        "function": "Unmarshal",
+        "receiver": "UnmarshalOptions"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-2611",
+    "fixed_version": "v1.33.0",
+    "trace": [
+      {
+        "module": "google.golang.org/protobuf",
+        "version": "v1.31.0",
+        "package": "google.golang.org/protobuf/internal/encoding/json",
+        "function": "Read",
+        "receiver": "Decoder"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-2611",
+    "fixed_version": "v1.33.0",
+    "trace": [
+      {
+        "module": "google.golang.org/protobuf",
+        "version": "v1.31.0",
+        "package": "google.golang.org/protobuf/encoding/protojson",
+        "function": "Unmarshal"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2025-3488",
+    "fixed_version": "v0.27.0",
+    "trace": [
+      {
+        "module": "golang.org/x/oauth2",
+        "version": "v0.14.0",
+        "package": "golang.org/x/oauth2/jws",
+        "function": "Verify"
+      }
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-2611",
+    "fixed_version": "v1.33.0",
+    "trace": [
+      {
+        "module": "google.golang.org/protobuf",
+        "version": "v1.31.0",
+        "package": "google.golang.org/protobuf/internal/encoding/json",
+        "function": "Peek",
+        "receiver": "Decoder"
+      }
+    ]
+  }
+}

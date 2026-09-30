@@ -1,0 +1,3 @@
+# The GoReleaser that the release workflow and the test workflow's goreleaser job
+# install (goreleaser-action reads it through version-file).
+goreleaser 2.18.2
