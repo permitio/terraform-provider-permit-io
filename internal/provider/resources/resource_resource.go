@@ -171,7 +171,7 @@ func (r *ResourceResource) Create(ctx context.Context, req resource.CreateReques
 	if err := r.ResourceCreate(ctx, &resourcePlan); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create resource",
-			fmt.Sprintf("Unable to create resource: %s", err),
+			common.APIErrorDetail("create", "resource", resourcePlan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -201,7 +201,7 @@ func (r *ResourceResource) Read(ctx context.Context, request resource.ReadReques
 		}
 		response.Diagnostics.AddError(
 			"Unable to Read Resource",
-			fmt.Sprintf("Unable to read resource: %s, Error: %s", data.Id.String(), err.Error()),
+			common.APIErrorDetail("read", "resource", data.Key.ValueString(), err),
 		)
 		return
 	}
@@ -229,7 +229,7 @@ func (r *ResourceResource) Update(ctx context.Context, req resource.UpdateReques
 	if err := r.ResourceUpdate(ctx, &resourcePlan); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update resource",
-			fmt.Sprintf("Unable to update resource: %s", err),
+			common.APIErrorDetail("update", "resource", resourcePlan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -254,7 +254,7 @@ func (r *ResourceResource) Delete(ctx context.Context, req resource.DeleteReques
 	if err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error Deleting Resource",
-			"Could not delete resource, unexpected error: "+err.Error(),
+			common.APIErrorDetail("delete", "resource", state.Key.ValueString(), err),
 		)
 		return
 	}

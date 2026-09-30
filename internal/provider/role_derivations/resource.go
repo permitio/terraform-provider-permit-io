@@ -98,7 +98,7 @@ func (r *RoleDerivationResource) Create(ctx context.Context, request resource.Cr
 	roleRead, err := r.client.Create(ctx, plan)
 
 	if err != nil {
-		detail := fmt.Errorf("unable to create role derivation: %w", err).Error()
+		detail := common.APIErrorDetail("create", "role derivation", derivationID(plan), err)
 		if common.IsNotFoundErr(err) {
 			detail += fmt.Sprintf(
 				"\n\nCheck that to_role %q is a role on resource %q, role %q is a role on "+
@@ -133,7 +133,7 @@ func (r *RoleDerivationResource) Read(ctx context.Context, request resource.Read
 		}
 		response.Diagnostics.AddError(
 			"Unable to read role derivation",
-			fmt.Errorf("unable to read role derivation: %w", err).Error(),
+			common.APIErrorDetail("read", "role derivation", derivationID(model), err),
 		)
 		return
 	}
@@ -141,8 +141,10 @@ func (r *RoleDerivationResource) Read(ctx context.Context, request resource.Read
 	response.Diagnostics.Append(response.State.Set(ctx, &reality)...)
 }
 
-func (r *RoleDerivationResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	panic("")
+func (r *RoleDerivationResource) Update(
+	_ context.Context, _ resource.UpdateRequest, response *resource.UpdateResponse,
+) {
+	common.AddReplaceOnlyUpdateError(&response.Diagnostics, "role derivation")
 }
 
 func (r *RoleDerivationResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
@@ -158,7 +160,15 @@ func (r *RoleDerivationResource) Delete(ctx context.Context, request resource.De
 	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting role derivation",
-			fmt.Errorf("unable to delete role derivation: %w", err).Error(),
+			common.APIErrorDetail("delete", "role derivation", derivationID(model), err),
 		)
 	}
+}
+
+// derivationID names a role derivation in error messages by the role it derives
+// from and the role it grants, each as resource:role.
+func derivationID(model roleDerivationModel) string {
+	return fmt.Sprintf("%s:%s to %s:%s",
+		model.OnResource.ValueString(), model.Role.ValueString(),
+		model.Resource.ValueString(), model.ToRole.ValueString())
 }

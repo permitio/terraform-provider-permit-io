@@ -44,7 +44,7 @@ func (c *resourceInstanceClient) Create(ctx context.Context, plan resourceInstan
 		return resourceInstanceModel{}, fmt.Errorf("create returned nil response")
 	}
 
-	return tfModelFromResourceInstanceRead(*created), nil
+	return tfModelFromResourceInstanceRead(*created)
 }
 
 func (c *resourceInstanceClient) Read(ctx context.Context, key string, resource string) (resourceInstanceModel, error) {
@@ -57,7 +57,7 @@ func (c *resourceInstanceClient) Read(ctx context.Context, key string, resource 
 		return resourceInstanceModel{}, fmt.Errorf("instance %s %w", instanceId, common.ErrNotFound)
 	}
 
-	return tfModelFromResourceInstanceRead(*instance), nil
+	return tfModelFromResourceInstanceRead(*instance)
 }
 
 func (c *resourceInstanceClient) Update(ctx context.Context, plan resourceInstanceModel) (resourceInstanceModel, error) {
@@ -84,7 +84,7 @@ func (c *resourceInstanceClient) Update(ctx context.Context, plan resourceInstan
 		return resourceInstanceModel{}, fmt.Errorf("update returned nil response for %s", instanceId)
 	}
 
-	return tfModelFromResourceInstanceRead(*updated), nil
+	return tfModelFromResourceInstanceRead(*updated)
 }
 
 func (c *resourceInstanceClient) Delete(ctx context.Context, key string, resource string) error {

@@ -119,8 +119,8 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Create(ctx context.Context
 	if err := r.client.Create(ctx, &plan); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create group resource instance role assignment",
-			fmt.Sprintf("Unable to assign role %s to group %s on resource %s instance %s in tenant %s: %s",
-				plan.Role.ValueString(), plan.Group.ValueString(), plan.Resource.ValueString(), plan.ResourceInstance.ValueString(), plan.Tenant.ValueString(), err),
+			common.APIErrorDetail("create", "group resource instance role assignment",
+				assignmentID(plan), err),
 		)
 		return
 	}
@@ -143,7 +143,8 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Read(ctx context.Context, 
 		}
 		resp.Diagnostics.AddError(
 			"Unable to read group resource instance role assignment",
-			fmt.Sprintf("Unable to read group resource instance role assignment: %s", err.Error()),
+			common.APIErrorDetail("read", "group resource instance role assignment",
+				assignmentID(data), err),
 		)
 		return
 	}
@@ -151,8 +152,10 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Read(ctx context.Context, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *GroupResourceInstanceRoleAssignmentResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	panic("updating GroupResourceInstanceRoleAssignments is not implemented")
+func (r *GroupResourceInstanceRoleAssignmentResource) Update(
+	_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse,
+) {
+	common.AddReplaceOnlyUpdateError(&resp.Diagnostics, "group resource instance role assignment")
 }
 
 func (r *GroupResourceInstanceRoleAssignmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -165,10 +168,19 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Delete(ctx context.Context
 	if err := r.client.Delete(ctx, &state); err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error deleting group resource instance role assignment",
-			fmt.Sprintf("Could not unassign role %s from group %s on resource %s instance %s in tenant %s: %s",
-				state.Role.ValueString(), state.Group.ValueString(), state.Resource.ValueString(), state.ResourceInstance.ValueString(), state.Tenant.ValueString(), err.Error()),
+			common.APIErrorDetail("delete", "group resource instance role assignment",
+				assignmentID(state), err),
 		)
 	}
+}
+
+// assignmentID names an assignment in error messages the way its import ID does,
+// as group:role:resource:resource_instance:tenant.
+func assignmentID(model GroupResourceInstanceRoleAssignmentModel) string {
+	return strings.Join([]string{
+		model.Group.ValueString(), model.Role.ValueString(), model.Resource.ValueString(),
+		model.ResourceInstance.ValueString(), model.Tenant.ValueString(),
+	}, ":")
 }
 
 func (r *GroupResourceInstanceRoleAssignmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

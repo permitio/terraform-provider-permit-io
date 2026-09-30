@@ -2,6 +2,7 @@ package resource_instances
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 )
@@ -20,7 +21,7 @@ type resourceInstanceModel struct {
 	Attributes     types.String `tfsdk:"attributes"`
 }
 
-func tfModelFromResourceInstanceRead(m models.ResourceInstanceRead) resourceInstanceModel {
+func tfModelFromResourceInstanceRead(m models.ResourceInstanceRead) (resourceInstanceModel, error) {
 	r := resourceInstanceModel{}
 	r.Id = types.StringValue(m.Id)
 	r.Key = types.StringValue(m.Key)
@@ -36,14 +37,13 @@ func tfModelFromResourceInstanceRead(m models.ResourceInstanceRead) resourceInst
 	// Convert attributes map to JSON string
 	if len(m.Attributes) > 0 {
 		attributesJSON, err := json.Marshal(m.Attributes)
-		if err == nil {
-			r.Attributes = types.StringValue(string(attributesJSON))
-		} else {
-			r.Attributes = types.StringValue("{}")
+		if err != nil {
+			return resourceInstanceModel{}, fmt.Errorf("encoding the attributes: %w", err)
 		}
+		r.Attributes = types.StringValue(string(attributesJSON))
 	} else {
 		r.Attributes = types.StringNull()
 	}
 
-	return r
+	return r, nil
 }

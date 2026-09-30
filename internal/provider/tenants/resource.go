@@ -2,7 +2,6 @@ package tenants
 
 import (
 	"context"
-	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
@@ -65,7 +64,7 @@ func (r *TenantResource) Create(ctx context.Context, request resource.CreateRequ
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to create tenant",
-			fmt.Errorf("unable to create tenant: %w", err).Error(),
+			common.APIErrorDetail("create", "tenant", plan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -91,7 +90,7 @@ func (r *TenantResource) Read(ctx context.Context, request resource.ReadRequest,
 		}
 		response.Diagnostics.AddError(
 			"Unable to read tenant",
-			fmt.Errorf("unable to read tenant: %w", err).Error(),
+			common.APIErrorDetail("read", "tenant", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -113,7 +112,7 @@ func (r *TenantResource) Update(ctx context.Context, request resource.UpdateRequ
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to update tenant",
-			fmt.Errorf("unable to update tenant: %w", err).Error(),
+			common.APIErrorDetail("update", "tenant", plan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -134,7 +133,7 @@ func (r *TenantResource) Delete(ctx context.Context, request resource.DeleteRequ
 	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Unable to delete tenant",
-			fmt.Errorf("unable to delete tenant: %w", err).Error(),
+			common.APIErrorDetail("delete", "tenant", model.Key.ValueString(), err),
 		)
 	}
 }

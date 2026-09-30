@@ -204,9 +204,13 @@ func (d *ResourceDataSource) Read(ctx context.Context, request datasource.ReadRe
 
 	state, err := d.ResourceRead(ctx, data)
 	if err != nil {
+		lookup := data.Key.ValueString()
+		if data.Key.IsNull() {
+			lookup = data.Id.ValueString()
+		}
 		response.Diagnostics.AddError(
 			"Unable to Read Resource",
-			fmt.Sprintf("Unable to read resource: %s, Error: %s", data.Id.String(), err.Error()),
+			common.APIErrorDetail("read", "resource", lookup, err),
 		)
 		return
 	}

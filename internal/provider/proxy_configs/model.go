@@ -115,9 +115,14 @@ func (model *proxyConfigModel) fromProxyConfigRead(sdkModel *models.ProxyConfigR
 	model.EnvironmentId = types.StringValue(sdkModel.EnvironmentId)
 	model.Key = types.StringValue(sdkModel.Key)
 	model.Name = types.StringValue(sdkModel.Name)
-	model.AuthMechanism = types.StringValue(string(*sdkModel.AuthMechanism))
+	// A response without auth_mechanism has the API's default, Bearer.
+	authMechanism := models.BEARER
+	if sdkModel.AuthMechanism != nil {
+		authMechanism = *sdkModel.AuthMechanism
+	}
+	model.AuthMechanism = types.StringValue(string(authMechanism))
 
-	switch *sdkModel.AuthMechanism {
+	switch authMechanism {
 	case models.BASIC:
 		model.AuthSecret.Basic = types.StringValue(sdkModel.Secret)
 	case models.BEARER:

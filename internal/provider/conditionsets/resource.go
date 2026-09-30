@@ -14,8 +14,10 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &conditionSetResource{}
-	_ resource.ResourceWithConfigure = &conditionSetResource{}
+	_ resource.Resource              = &UserSetResource{}
+	_ resource.ResourceWithConfigure = &UserSetResource{}
+	_ resource.Resource              = &ResourceSetResource{}
+	_ resource.ResourceWithConfigure = &ResourceSetResource{}
 )
 
 func NewResourceSetResource() resource.Resource {
@@ -65,11 +67,6 @@ func (c *conditionSetResource) Configure(_ context.Context, request resource.Con
 	c.client = ConditionSetClient{client: permitClient}
 }
 
-func (c *conditionSetResource) Metadata(_ context.Context, _ resource.MetadataRequest, _ *resource.MetadataResponse) {
-	// should be completely implemented in ResourceSet/UserSet
-	panic("not implemented")
-}
-
 func (c *ResourceSetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := c.baseAttributes()
 	attributes["resource"] = schema.StringAttribute{
@@ -89,10 +86,6 @@ func (c *UserSetResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 		MarkdownDescription: "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
 		Attributes:          attributes,
 	}
-}
-
-func (c *conditionSetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	panic("not implemented")
 }
 
 func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
@@ -174,8 +167,8 @@ func (c *conditionSetResource) Create(ctx context.Context, req resource.CreateRe
 
 	if err := c.client.Create(ctx, c.conditionSetType, &plan); err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to create resource",
-			fmt.Sprintf("Unable to create resource: %s", err),
+			"Unable to create condition set",
+			common.APIErrorDetail("create", "condition set", plan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -207,7 +200,7 @@ func (c *conditionSetResource) Read(ctx context.Context, request resource.ReadRe
 		}
 		response.Diagnostics.AddError(
 			"Unable to Read Condition Set",
-			fmt.Sprintf("Unable to read condition set: %s, Error: %s", data.Id.String(), err.Error()),
+			common.APIErrorDetail("read", "condition set", data.Key.ValueString(), err),
 		)
 		return
 	}
@@ -234,8 +227,8 @@ func (c *conditionSetResource) Update(ctx context.Context, req resource.UpdateRe
 
 	if err := c.client.Update(ctx, &plan); err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update resource",
-			fmt.Sprintf("Unable to update resource: %s", err),
+			"Unable to update condition set",
+			common.APIErrorDetail("update", "condition set", plan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -262,7 +255,7 @@ func (c *conditionSetResource) Delete(ctx context.Context, req resource.DeleteRe
 	if err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error Deleting Condition Set",
-			"Could not delete resource, unexpected error: "+err.Error(),
+			common.APIErrorDetail("delete", "condition set", state.Key.ValueString(), err),
 		)
 		return
 	}

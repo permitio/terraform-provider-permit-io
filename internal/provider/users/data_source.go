@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 var (
@@ -95,7 +96,7 @@ func (d *UserDataSource) Read(ctx context.Context, request datasource.ReadReques
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to Read User",
-			fmt.Sprintf("Unable to read user with key %s: %s", data.Key.ValueString(), err.Error()),
+			common.APIErrorDetail("read", "user", data.Key.ValueString(), err),
 		)
 		return
 	}

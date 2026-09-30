@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 var (
@@ -126,7 +127,7 @@ func (d *ConditionSetDataSource) Read(ctx context.Context, request datasource.Re
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to read condition set",
-			fmt.Sprintf("Unable to read condition set with key %s: %s", key, err),
+			common.APIErrorDetail("read", "condition set", key, err),
 		)
 		return
 	}
@@ -135,7 +136,7 @@ func (d *ConditionSetDataSource) Read(ctx context.Context, request datasource.Re
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to read condition set",
-			fmt.Sprintf("Unable to read condition set with key %s: %s", key, err),
+			common.APIErrorDetail("read", "condition set", key, err),
 		)
 		return
 	}

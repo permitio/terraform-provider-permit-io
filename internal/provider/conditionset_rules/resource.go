@@ -123,7 +123,7 @@ func (c *ConditionSetRuleResource) Create(ctx context.Context, req resource.Crea
 	if err := c.client.Create(ctx, &plan); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create condition set rule",
-			fmt.Sprintf("Unable to create condition set rule: %s", err),
+			common.APIErrorDetail("create", "condition set rule", ruleID(plan), err),
 		)
 		return
 	}
@@ -155,7 +155,7 @@ func (c *ConditionSetRuleResource) Read(ctx context.Context, req resource.ReadRe
 		}
 		resp.Diagnostics.AddError(
 			"Unable to Read Condition Set Rule",
-			fmt.Sprintf("Unable to read condition set rule: %s, Error: %s", data.Id.String(), err.Error()),
+			common.APIErrorDetail("read", "condition set rule", ruleID(data), err),
 		)
 		return
 	}
@@ -168,10 +168,12 @@ func (c *ConditionSetRuleResource) Read(ctx context.Context, req resource.ReadRe
 	}
 }
 
-// Update updates the resource and sets the updated Terraform state on success.
-func (c *ConditionSetRuleResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	// rules cannot be updated, only replaced - this should never be called
-	panic("updating ConditionSetRules is not implemented")
+// Update reports an error: every attribute of a rule forces replacement, so
+// Terraform never calls it.
+func (c *ConditionSetRuleResource) Update(
+	_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse,
+) {
+	common.AddReplaceOnlyUpdateError(&resp.Diagnostics, "condition set rule")
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
@@ -190,10 +192,20 @@ func (c *ConditionSetRuleResource) Delete(ctx context.Context, req resource.Dele
 	if err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error Deleting Condition Set Rule",
-			"Could not delete condition set rule, unexpected error: "+err.Error(),
+			common.APIErrorDetail("delete", "condition set rule", ruleID(state), err),
 		)
 		return
 	}
+}
+
+// ruleID names a condition set rule in error messages the way its import ID does,
+// as user_set,permission,resource_set.
+func ruleID(model ConditionSetRuleModel) string {
+	return strings.Join([]string{
+		model.UserSet.ValueString(),
+		model.Permission.ValueString(),
+		model.ResourceSet.ValueString(),
+	}, ",")
 }
 
 // ImportState implements resource.ResourceWithImportState.

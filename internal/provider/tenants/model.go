@@ -2,6 +2,7 @@ package tenants
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 )
@@ -20,7 +21,7 @@ type tenantModel struct {
 	Attributes     types.String `tfsdk:"attributes"`
 }
 
-func tfModelFromTenantRead(m models.TenantRead) tenantModel {
+func tfModelFromTenantRead(m models.TenantRead) (tenantModel, error) {
 	r := tenantModel{}
 	r.Id = types.StringValue(m.Id)
 	r.Key = types.StringValue(m.Key)
@@ -36,14 +37,13 @@ func tfModelFromTenantRead(m models.TenantRead) tenantModel {
 	// Convert attributes map to JSON string
 	if len(m.Attributes) > 0 {
 		attributesJSON, err := json.Marshal(m.Attributes)
-		if err == nil {
-			r.Attributes = types.StringValue(string(attributesJSON))
-		} else {
-			r.Attributes = types.StringValue("{}")
+		if err != nil {
+			return tenantModel{}, fmt.Errorf("encoding the attributes: %w", err)
 		}
+		r.Attributes = types.StringValue(string(attributesJSON))
 	} else {
 		r.Attributes = types.StringNull()
 	}
 
-	return r
+	return r, nil
 }

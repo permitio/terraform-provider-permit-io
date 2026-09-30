@@ -2,7 +2,6 @@ package resource_instances
 
 import (
 	"context"
-	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -88,7 +87,7 @@ func (r *ResourceInstanceResource) Create(ctx context.Context, request resource.
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to create resource instance",
-			fmt.Errorf("unable to create resource instance: %w", err).Error(),
+			common.APIErrorDetail("create", "resource instance", instanceID(plan), err),
 		)
 		return
 	}
@@ -114,7 +113,7 @@ func (r *ResourceInstanceResource) Read(ctx context.Context, request resource.Re
 		}
 		response.Diagnostics.AddError(
 			"Unable to read resource instance",
-			fmt.Errorf("unable to read resource instance: %w", err).Error(),
+			common.APIErrorDetail("read", "resource instance", instanceID(model), err),
 		)
 		return
 	}
@@ -136,7 +135,7 @@ func (r *ResourceInstanceResource) Update(ctx context.Context, request resource.
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to update resource instance",
-			fmt.Errorf("unable to update resource instance: %w", err).Error(),
+			common.APIErrorDetail("update", "resource instance", instanceID(plan), err),
 		)
 		return
 	}
@@ -157,10 +156,16 @@ func (r *ResourceInstanceResource) Delete(ctx context.Context, request resource.
 	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Unable to delete resource instance",
-			fmt.Errorf("unable to delete resource instance %s:%s: %w", model.Resource.ValueString(), model.Key.ValueString(), err).Error(),
+			common.APIErrorDetail("delete", "resource instance", instanceID(model), err),
 		)
 		return
 	}
+}
+
+// instanceID names a resource instance in error messages the way its import ID
+// does, as resource:key.
+func instanceID(model resourceInstanceModel) string {
+	return model.Resource.ValueString() + ":" + model.Key.ValueString()
 }
 
 // ImportState implements resource.ResourceWithImportState.

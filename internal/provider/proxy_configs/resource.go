@@ -198,7 +198,7 @@ func (c *proxyConfigResource) Create(ctx context.Context, request resource.Creat
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to create proxy config",
-			fmt.Sprintf("Unable to create resource: %s", err),
+			common.APIErrorDetail("create", "proxy config", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -228,8 +228,8 @@ func (c *proxyConfigResource) Read(ctx context.Context, request resource.ReadReq
 			return
 		}
 		response.Diagnostics.AddError(
-			"Unable to Read Condition Set",
-			fmt.Sprintf("Unable to read condition set: %s, Error: %s", read.Id.String(), err.Error()),
+			"Unable to read proxy config",
+			common.APIErrorDetail("read", "proxy config", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -255,8 +255,8 @@ func (c *proxyConfigResource) Update(ctx context.Context, request resource.Updat
 
 	if err != nil {
 		response.Diagnostics.AddError(
-			"Unable to update resource",
-			fmt.Sprintf("Unable to update resource: %s", err),
+			"Unable to update proxy config",
+			common.APIErrorDetail("update", "proxy config", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -279,7 +279,7 @@ func (c *proxyConfigResource) Delete(ctx context.Context, request resource.Delet
 	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Error deleting Proxy Config",
-			fmt.Sprintf("Could not delete Proxy Config, unexpected error: %s", err.Error()),
+			common.APIErrorDetail("delete", "proxy config", model.Key.ValueString(), err),
 		)
 		return
 	}

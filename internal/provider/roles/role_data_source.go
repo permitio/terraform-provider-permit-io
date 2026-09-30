@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -111,8 +112,9 @@ func (d *RoleDataSource) Read(ctx context.Context, request datasource.ReadReques
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to read role",
-			fmt.Errorf("unable to read role %s: %w", roleRead, err).Error(),
+			common.APIErrorDetail("read", "role", roleID(data), err),
 		)
+		return
 	}
 
 	// Set state

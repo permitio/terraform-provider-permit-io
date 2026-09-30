@@ -134,17 +134,29 @@ func TestDeleteSucceedsWhenObjectIsAlreadyGone(t *testing.T) {
 	}
 }
 
-// serverErrorPattern matches the 500 that FailRequests answers with, as the SDK
-// and the provider's own HTTP client report it.
-var serverErrorPattern = regexp.MustCompile(`500\s+Internal\s+Server\s+Error|status\s+500`)
+// serverErrorPattern matches the diagnostic for the failed operation on object
+// when the API answers with the 500 that FailRequests answers with: its summary,
+// then a detail that names the operation on object and gives the status and
+// message of the API's answer, after any context the provider adds.
+func serverErrorPattern(operation, object string) *regexp.Regexp {
+	return regexp.MustCompile(summaryPattern(operation, object) + `(?s:.*?)` +
+		wordsPattern("Unable to "+operation+" "+object+":") + `(?s:.*?)` +
+		wordsPattern("500 Internal Server Error: object not found"))
+}
 
 // TestReadAndDeleteFailOnOtherErrors answers each resource type's read, then its
 // delete, with a 500 that carries the body of a 404, and checks that the provider
 // takes neither for an object deleted outside Terraform: the refresh and the
-// destroy fail, and the object stays in state, so the plans after them are empty.
+// destroy fail with an error that names the object, and the object stays in
+// state, so the plans after them are empty.
 func TestReadAndDeleteFailOnOtherErrors(t *testing.T) {
+	errCases := apiErrorCases()
 	for _, c := range deletedObjectCases() {
 		t.Run(c.name, func(t *testing.T) {
+			errCase, ok := errCases[c.name]
+			if !ok {
+				t.Fatalf("no API error case for %s", c.name)
+			}
 			m := mockpermit.New(t, c.routes...)
 			c.setup(m)
 			var readPath string
@@ -167,7 +179,7 @@ func TestReadAndDeleteFailOnOtherErrors(t *testing.T) {
 								http.StatusInternalServerError, c.readsBefore)
 						},
 						RefreshState: true,
-						ExpectError:  serverErrorPattern,
+						ExpectError:  serverErrorPattern("read", errCase.object),
 					},
 					{
 						PreConfig: func() { stop() },
@@ -181,7 +193,7 @@ func TestReadAndDeleteFailOnOtherErrors(t *testing.T) {
 						},
 						Config:      c.config,
 						Destroy:     true,
-						ExpectError: serverErrorPattern,
+						ExpectError: serverErrorPattern("delete", errCase.object),
 					},
 					{
 						PreConfig: func() { stop() },

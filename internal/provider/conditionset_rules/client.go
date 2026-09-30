@@ -2,6 +2,7 @@ package conditionsetrules
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -60,6 +61,9 @@ func (c *ConditionSetRuleClient) Create(ctx context.Context, rulePlan *Condition
 
 	if err != nil {
 		return err
+	}
+	if len(ruleRead) == 0 {
+		return errors.New("the API answered the create with no condition set rule")
 	}
 
 	rulePlan.Id = types.StringValue(ruleRead[0].Id)

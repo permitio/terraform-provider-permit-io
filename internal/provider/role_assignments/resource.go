@@ -116,8 +116,7 @@ func (r *RoleAssignmentResource) Create(ctx context.Context, req resource.Create
 	if err := r.client.Create(ctx, &plan); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create role assignment",
-			fmt.Sprintf("Unable to assign role %s to user %s in tenant %s: %s",
-				plan.Role.ValueString(), plan.User.ValueString(), plan.Tenant.ValueString(), err),
+			common.APIErrorDetail("create", "role assignment", assignmentID(plan), err),
 		)
 		return
 	}
@@ -140,7 +139,7 @@ func (r *RoleAssignmentResource) Read(ctx context.Context, req resource.ReadRequ
 		}
 		resp.Diagnostics.AddError(
 			"Unable to read role assignment",
-			fmt.Sprintf("Unable to read role assignment: %s", err.Error()),
+			common.APIErrorDetail("read", "role assignment", assignmentID(data), err),
 		)
 		return
 	}
@@ -148,8 +147,10 @@ func (r *RoleAssignmentResource) Read(ctx context.Context, req resource.ReadRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *RoleAssignmentResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	panic("updating RoleAssignments is not implemented")
+func (r *RoleAssignmentResource) Update(
+	_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse,
+) {
+	common.AddReplaceOnlyUpdateError(&resp.Diagnostics, "role assignment")
 }
 
 func (r *RoleAssignmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -162,10 +163,17 @@ func (r *RoleAssignmentResource) Delete(ctx context.Context, req resource.Delete
 	if err := r.client.Delete(ctx, &state); err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error deleting role assignment",
-			fmt.Sprintf("Could not unassign role %s from user %s in tenant %s: %s",
-				state.Role.ValueString(), state.User.ValueString(), state.Tenant.ValueString(), err.Error()),
+			common.APIErrorDetail("delete", "role assignment", assignmentID(state), err),
 		)
 	}
+}
+
+// assignmentID names a role assignment in error messages the way its import ID
+// does, as user:role:tenant.
+func assignmentID(model RoleAssignmentModel) string {
+	return strings.Join([]string{
+		model.User.ValueString(), model.Role.ValueString(), model.Tenant.ValueString(),
+	}, ":")
 }
 
 func (r *RoleAssignmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

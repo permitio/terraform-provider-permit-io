@@ -39,20 +39,7 @@ func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (
 	)
 
 	if resource.Actions != nil {
-		actions = make(map[string]actionsModel)
-		for key, action := range *resource.Actions {
-			actionName := *action.Name
-			actionNew := actionsModel{
-				Id:   types.StringValue(action.Id),
-				Name: types.StringValue(actionName),
-			}
-			if action.Description == nil {
-				actionNew.Description = types.StringNull()
-			} else {
-				actionNew.Description = types.StringValue(*action.Description)
-			}
-			actions[key] = actionNew
-		}
+		actions = actionsFromSDK(*resource.Actions)
 	}
 	attributes = newAttributesModelsFromSDKWithPlan(resource.Attributes, data.Attributes)
 
@@ -103,16 +90,12 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 	if err != nil {
 		return err
 	}
-	actionsRead := make(map[string]actionsModel)
-	for key, action := range *resourceRead.Actions {
-		actionsRead[key] = actionsModel{
-			Id:          types.StringValue(action.Id),
-			Name:        types.StringPointerValue(action.Name),
-			Description: types.StringPointerValue(action.Description),
-		}
+	if resourceRead.Actions == nil {
+		return fmt.Errorf("the API answered the create of resource %q with no actions",
+			resourcePlan.Key.ValueString())
 	}
+	resourcePlan.Actions = actionsFromSDK(*resourceRead.Actions)
 	resourcePlan.Attributes = newAttributesModelsFromSDKWithPlan(resourceRead.Attributes, resourcePlan.Attributes)
-	resourcePlan.Actions = actionsRead
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
 	resourcePlan.CreatedAt = types.StringValue(resourceRead.CreatedAt.String())
@@ -154,29 +137,7 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
 	if resourceRead.Actions != nil {
-		actions := make(map[string]actionsModel)
-		for actionKey, action := range *resourceRead.Actions {
-			var (
-				name        types.String
-				description types.String
-			)
-			if action.Name != nil {
-				name = types.StringValue(*action.Name)
-			} else {
-				name = types.StringValue(actionKey)
-			}
-			if action.Description != nil {
-				description = types.StringValue(*action.Description)
-			} else {
-				description = types.StringNull()
-			}
-			actions[actionKey] = actionsModel{
-				Id:          types.StringValue(action.Id),
-				Name:        name,
-				Description: description,
-			}
-		}
-		resourcePlan.Actions = actions
+		resourcePlan.Actions = actionsFromSDK(*resourceRead.Actions)
 	}
 	resourcePlan.UpdatedAt = types.StringValue(resourceRead.UpdatedAt.String())
 	resourcePlan.CreatedAt = types.StringValue(resourceRead.CreatedAt.String())
@@ -186,4 +147,22 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 	resourcePlan.OrganizationId = types.StringValue(resourceRead.OrganizationId)
 
 	return nil
+}
+
+// actionsFromSDK converts the actions the API returns for a resource. An action
+// that the API returns without a name gets its key as the name.
+func actionsFromSDK(read map[string]models.ActionBlockRead) map[string]actionsModel {
+	actions := make(map[string]actionsModel, len(read))
+	for actionKey, action := range read {
+		name := types.StringValue(actionKey)
+		if action.Name != nil {
+			name = types.StringValue(*action.Name)
+		}
+		actions[actionKey] = actionsModel{
+			Id:          types.StringValue(action.Id),
+			Name:        name,
+			Description: types.StringPointerValue(action.Description),
+		}
+	}
+	return actions
 }

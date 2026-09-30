@@ -34,7 +34,7 @@ func (c *tenantClient) Create(ctx context.Context, plan tenantModel) (tenantMode
 		return tenantModel{}, err
 	}
 
-	return tfModelFromTenantRead(*createdTenant), nil
+	return tfModelFromTenantRead(*createdTenant)
 }
 
 func (c *tenantClient) Read(ctx context.Context, key string) (tenantModel, error) {
@@ -44,7 +44,7 @@ func (c *tenantClient) Read(ctx context.Context, key string) (tenantModel, error
 		return tenantModel{}, err
 	}
 
-	return tfModelFromTenantRead(*tenantRead), nil
+	return tfModelFromTenantRead(*tenantRead)
 }
 
 func (c *tenantClient) Update(ctx context.Context, plan tenantModel) (tenantModel, error) {
@@ -69,7 +69,7 @@ func (c *tenantClient) Update(ctx context.Context, plan tenantModel) (tenantMode
 		return tenantModel{}, err
 	}
 
-	return tfModelFromTenantRead(*updatedTenant), nil
+	return tfModelFromTenantRead(*updatedTenant)
 }
 
 func (c *tenantClient) Delete(ctx context.Context, key string) error {

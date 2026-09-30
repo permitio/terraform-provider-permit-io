@@ -90,7 +90,7 @@ func (c *UserAttributeResource) Create(ctx context.Context, request resource.Cre
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Failed creating user attribute",
-			err.Error(),
+			common.APIErrorDetail("create", "user attribute", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -116,7 +116,7 @@ func (c *UserAttributeResource) Read(ctx context.Context, request resource.ReadR
 		}
 		response.Diagnostics.AddError(
 			"Failed reading user attribute",
-			err.Error(),
+			common.APIErrorDetail("read", "user attribute", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -137,7 +137,7 @@ func (c *UserAttributeResource) Update(ctx context.Context, request resource.Upd
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Failed updating user attribute",
-			err.Error(),
+			common.APIErrorDetail("update", "user attribute", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -159,7 +159,7 @@ func (c *UserAttributeResource) Delete(ctx context.Context, request resource.Del
 	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting user attribute",
-			err.Error(),
+			common.APIErrorDetail("delete", "user attribute", model.Key.ValueString(), err),
 		)
 		return
 	}

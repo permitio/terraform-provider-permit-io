@@ -90,7 +90,7 @@ func (r *RoleResource) Create(ctx context.Context, request resource.CreateReques
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to create role",
-			fmt.Errorf("unable to create role: %w", err).Error(),
+			common.APIErrorDetail("create", "role", roleID(plan), err),
 		)
 		return
 	}
@@ -119,7 +119,7 @@ func (r *RoleResource) Read(ctx context.Context, request resource.ReadRequest, r
 		}
 		response.Diagnostics.AddError(
 			"Unable to read role",
-			fmt.Errorf("unable to read role: %w", err).Error(),
+			common.APIErrorDetail("read", "role", roleID(model), err),
 		)
 		return
 	}
@@ -141,7 +141,7 @@ func (r *RoleResource) Update(ctx context.Context, request resource.UpdateReques
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to update role",
-			fmt.Errorf("unable to update role: %w", err).Error(),
+			common.APIErrorDetail("update", "role", roleID(plan), err),
 		)
 		return
 	}
@@ -161,11 +161,20 @@ func (r *RoleResource) Delete(ctx context.Context, request resource.DeleteReques
 
 	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
-			"Failed deleting relation",
-			fmt.Errorf("unable to delete role %s: %w", model.Key.ValueString(), err).Error(),
+			"Unable to delete role",
+			common.APIErrorDetail("delete", "role", roleID(model), err),
 		)
 		return
 	}
+}
+
+// roleID names a role the way its import ID does: "resource_key:role_key" for a
+// role of a resource and "role_key" for a top-level role.
+func roleID(model roleModel) string {
+	if model.Resource.ValueString() == "" {
+		return model.Key.ValueString()
+	}
+	return model.Resource.ValueString() + ":" + model.Key.ValueString()
 }
 
 // ImportState implements resource.ResourceWithImportState.

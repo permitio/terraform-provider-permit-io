@@ -2,7 +2,6 @@ package relations
 
 import (
 	"context"
-	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -80,7 +79,7 @@ func (c *RelationResource) Create(ctx context.Context, request resource.CreateRe
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Failed creating relation",
-			fmt.Errorf("unable to create relation: %w", err).Error(),
+			common.APIErrorDetail("create", "relation", relationID(plan), err),
 		)
 		return
 	}
@@ -106,7 +105,7 @@ func (c *RelationResource) Read(ctx context.Context, request resource.ReadReques
 		}
 		response.Diagnostics.AddError(
 			"Failed reading relation",
-			fmt.Errorf("unable to read relation %s/%s: %w", model.ObjectResourceId, model.Key, err).Error(),
+			common.APIErrorDetail("read", "relation", relationID(model), err),
 		)
 		return
 	}
@@ -134,8 +133,13 @@ func (c *RelationResource) Delete(ctx context.Context, request resource.DeleteRe
 	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting relation",
-			fmt.Errorf("unable to delete relation %s/%s: %w", model.ObjectResource.ValueString(), model.Key.ValueString(), err).Error(),
+			common.APIErrorDetail("delete", "relation", relationID(model), err),
 		)
 		return
 	}
+}
+
+// relationID names a relation in error messages by its object resource and key.
+func relationID(model relationModel) string {
+	return model.ObjectResource.ValueString() + "/" + model.Key.ValueString()
 }
