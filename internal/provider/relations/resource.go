@@ -2,6 +2,7 @@ package relations
 
 import (
 	"context"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -34,6 +35,22 @@ func (c *RelationResource) Configure(ctx context.Context, request resource.Confi
 
 func (c *RelationResource) Schema(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
 	attributes := common.CreateBaseResourceSchema()
+
+	// The Permit API has no operation that updates a relation, so a new name or
+	// description replaces it.
+	for _, name := range []string{"name", "description"} {
+		attribute, ok := attributes[name].(schema.StringAttribute)
+		if !ok {
+			response.Diagnostics.AddError("Invalid relation schema",
+				fmt.Sprintf("The base schema's %s is a %T, not a string attribute. "+
+					"Please report this issue to the provider developers.",
+					name, attributes[name]))
+			return
+		}
+		attribute.PlanModifiers = append(attribute.PlanModifiers,
+			stringplanmodifier.RequiresReplace())
+		attributes[name] = attribute
+	}
 
 	attributes["subject_resource"] = schema.StringAttribute{
 		Required:            true,

@@ -9,7 +9,8 @@ import (
 	"github.com/permitio/permit-golang/pkg/permit"
 )
 
-type ConditionSetModel struct {
+// userSetModel holds the attributes of a user set, which a resource set has too.
+type userSetModel struct {
 	Id             types.String `tfsdk:"id"`
 	OrganizationId types.String `tfsdk:"organization_id"`
 	ProjectId      types.String `tfsdk:"project_id"`
@@ -18,8 +19,14 @@ type ConditionSetModel struct {
 	Name           types.String `tfsdk:"name"`
 	Description    types.String `tfsdk:"description"`
 	Conditions     types.String `tfsdk:"conditions"`
-	Resource       types.String `tfsdk:"resource"`
 	ParentId       types.String `tfsdk:"parent_id"`
+}
+
+// ConditionSetModel holds a user set or a resource set. A user set has no
+// resource attribute, so its Resource stays null.
+type ConditionSetModel struct {
+	userSetModel
+	Resource types.String `tfsdk:"resource"`
 }
 
 type ConditionSetClient struct {
@@ -47,12 +54,17 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 		return ConditionSetModel{}, err
 	}
 
-	// Handle resource: if API returns null, keep it null to maintain consistency
+	// Handle resource: if API returns null, keep it null to maintain consistency.
+	// The API returns the resource's key; keep its ID where the state has that,
+	// so that naming the resource by ID does not plan an update on every plan.
 	var resource types.String
-	if conditionSet.Resource != nil {
-		resource = types.StringValue(conditionSet.Resource.Key)
-	} else {
+	switch {
+	case conditionSet.Resource == nil:
 		resource = types.StringPointerValue(nil)
+	case data.Resource.ValueString() == conditionSet.Resource.Id:
+		resource = data.Resource
+	default:
+		resource = types.StringValue(conditionSet.Resource.Key)
 	}
 
 	// Handle description: if API returns null and state is null, keep it null
@@ -83,19 +95,33 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 	}
 
 	state := ConditionSetModel{
-		Id:             types.StringValue(conditionSet.Id),
-		OrganizationId: types.StringValue(conditionSet.OrganizationId),
-		ProjectId:      types.StringValue(conditionSet.ProjectId),
-		EnvironmentId:  types.StringValue(conditionSet.EnvironmentId),
-		Key:            types.StringValue(conditionSet.Key),
-		Name:           types.StringValue(conditionSet.Name),
-		Description:    description,
-		Resource:       resource,
-		ParentId:       parentId,
-		Conditions:     types.StringValue(string(conditionsMarshalled)),
+		userSetModel: userSetModel{
+			Id:             types.StringValue(conditionSet.Id),
+			OrganizationId: types.StringValue(conditionSet.OrganizationId),
+			ProjectId:      types.StringValue(conditionSet.ProjectId),
+			EnvironmentId:  types.StringValue(conditionSet.EnvironmentId),
+			Key:            types.StringValue(conditionSet.Key),
+			Name:           types.StringValue(conditionSet.Name),
+			Description:    description,
+			ParentId:       parentId,
+			Conditions:     types.StringValue(string(conditionsMarshalled)),
+		},
+		Resource: resource,
 	}
 
 	return state, nil
+}
+
+// NamesSetResource reports whether resource, the ID or the key of a resource,
+// names the resource of the resource set with this key.
+func (c *ConditionSetClient) NamesSetResource(ctx context.Context, setKey, resource string,
+) (bool, error) {
+	conditionSet, err := c.client.Api.ConditionSets.Get(ctx, setKey)
+	if err != nil {
+		return false, err
+	}
+	current := conditionSet.Resource
+	return current != nil && (resource == current.Id || resource == current.Key), nil
 }
 
 func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models.ConditionSetType, conditionSetPlan *ConditionSetModel) error {

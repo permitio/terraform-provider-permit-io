@@ -28,8 +28,8 @@ const (
 
 // TestRelationCreateDestroy runs permitio_relation through Terraform against the
 // mock Permit API and checks the exact body the provider sends to create it.
-// Changing a relation's name or description fails today, so there is no update
-// step.
+// The API cannot update a relation, so there is no update step: changing its name
+// or description replaces it, as TestImmutableAttributesForceReplacement checks.
 func TestRelationCreateDestroy(t *testing.T) {
 	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ResourceRelations)
 	const address = "permitio_relation.parent"

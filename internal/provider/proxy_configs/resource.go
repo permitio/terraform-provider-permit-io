@@ -88,6 +88,9 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"key": schema.StringAttribute{
 				MarkdownDescription: "Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.\n\n",
 				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The name of the proxy config, for example: 'Stripe API",

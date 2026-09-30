@@ -25,7 +25,6 @@ See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/op
 
 - `description` (String) an optional longer description of the set
 - `parent_id` (String) The parent condition set id. Allows creating a nested condition set hierarchy.
-- `resource` (String) The resource id to which the condition set applies. This is only required for resource sets.
 
 ### Read-Only
 

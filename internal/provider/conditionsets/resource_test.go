@@ -1,13 +1,18 @@
 package conditionsets_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -330,5 +335,178 @@ func checkRequestsNamingParent(m *mockpermit.Server, method, path, parent string
 			bodies[i] = strings.ReplaceAll(body, parentIDToken, set.Primary.ID)
 		}
 		return m.CheckRequests(method, path, bodies...)(state)
+	}
+}
+
+// TestResourceSetNamingItsResourceByIDOrKey names a resource set's resource by
+// ID, then by key, then by ID again, and then names another resource. The API
+// returns the resource's key, so the set must keep an ID it was given, or the plan
+// after the apply is not empty. A change between the ID and the key of the set's
+// resource must update the set in place, as a replacement would delete the rules
+// on it, while naming another resource must replace the set, as the API cannot
+// move it.
+func TestResourceSetNamingItsResourceByIDOrKey(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ConditionSets)
+	const address = "permitio_resource_set.drafts"
+	step := func(resourceName, attribute string,
+		action plancheck.ResourceActionType,
+	) resource.TestStep {
+		return resource.TestStep{
+			Config: fmt.Sprintf(`
+resource "permitio_resource" "document" {
+  key  = "document"
+  name = "Document"
+  actions = {
+    read = { name = "Read" }
+  }
+}
+
+resource "permitio_resource" "folder" {
+  key  = "folder"
+  name = "Folder"
+  actions = {
+    list = { name = "List" }
+  }
+}
+
+resource "permitio_resource_set" "drafts" {
+  key      = "drafts"
+  name     = "Drafts"
+  resource = permitio_resource.%s.%s
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "resource.status" = { equals = "draft" } }] }]
+  })
+}
+`, resourceName, attribute),
+			ConfigPlanChecks: resource.ConfigPlanChecks{
+				PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(address, action),
+				},
+			},
+			Check: resource.TestCheckResourceAttrPair(address, "resource",
+				"permitio_resource."+resourceName, attribute),
+		}
+	}
+
+	// The plan reads the set once to refresh it and once more to compare its
+	// resource with the new one, which the fault fails.
+	var stopFault func()
+	readFails := step("document", "key", plancheck.ResourceActionDestroyBeforeCreate)
+	readFails.PreConfig = func() {
+		stopFault = m.FailRequests(http.MethodGet, conditionSetsPath+"/drafts",
+			http.StatusInternalServerError, 1)
+	}
+	readFails.ExpectError = regexp.MustCompile(`Unable to read resource set`)
+	unchanged := step("folder", "key", plancheck.ResourceActionNoop)
+	unchanged.PreConfig = func() { stopFault() }
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			step("document", "id", plancheck.ResourceActionCreate),
+			step("document", "key", plancheck.ResourceActionUpdate),
+			step("document", "id", plancheck.ResourceActionUpdate),
+			step("folder", "id", plancheck.ResourceActionDestroyBeforeCreate),
+			step("folder", "key", plancheck.ResourceActionUpdate),
+			readFails,
+			unchanged,
+		},
+	})
+}
+
+// TestUserSetRejectsResource checks that a user set takes no resource: the API
+// drops a user set's resource, so setting one never had an effect.
+func TestUserSetRejectsResource(t *testing.T) {
+	mockpermit.New(t, mockpermit.ConditionSets)
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "permitio_user_set" "reviewers" {
+  key      = "reviewers"
+  name     = "Reviewers"
+  resource = "document"
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "subject.team" = { equals = "review" } }] }]
+  })
+}
+`,
+				ExpectError: regexp.MustCompile(`An argument named "resource" is not expected here`),
+			},
+		},
+	})
+}
+
+// TestUserSetStateWithResourceUpgrades gives the provider the state of a user set
+// that an earlier release saved with a resource, as Terraform does before it uses
+// a saved state, and checks that the provider drops the resource and keeps every
+// other value. Every earlier release saved user sets at schema version 0.
+func TestUserSetStateWithResourceUpgrades(t *testing.T) {
+	server, err := providerFactories["permitio"]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemas, err := server.GetProviderSchema(t.Context(), &tfprotov6.GetProviderSchemaRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	userSet, ok := schemas.ResourceSchemas["permitio_user_set"]
+	if !ok {
+		t.Fatal("the provider has no permitio_user_set schema")
+	}
+	kept := map[string]string{
+		"id":              mockpermit.ObjectID(1),
+		"organization_id": mockpermit.OrganizationID,
+		"project_id":      mockpermit.ProjectID,
+		"environment_id":  mockpermit.EnvironmentID,
+		"key":             "reviewers",
+		"name":            "Reviewers",
+		"description":     "Users who review documents",
+		"conditions":      `{"allOf":[{"allOf":[{"subject.team":{"equals":"review"}}]}]}`,
+	}
+	saved := map[string]any{"resource": "document", "parent_id": nil}
+	want := map[string]tftypes.Value{"parent_id": tftypes.NewValue(tftypes.String, nil)}
+	for name, value := range kept {
+		saved[name] = value
+		want[name] = tftypes.NewValue(tftypes.String, value)
+	}
+	savedJSON, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := server.UpgradeResourceState(t.Context(), &tfprotov6.UpgradeResourceStateRequest{
+		TypeName: "permitio_user_set",
+		Version:  0,
+		RawState: &tfprotov6.RawState{JSON: savedJSON},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range resp.Diagnostics {
+		t.Errorf("upgrading the saved state: %s: %s", d.Summary, d.Detail)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	upgraded, err := resp.UpgradedState.Unmarshal(userSet.ValueType())
+	if err != nil {
+		t.Fatalf("decoding the upgraded state: %v", err)
+	}
+	var got map[string]tftypes.Value
+	if err := upgraded.As(&got); err != nil {
+		t.Fatalf("reading the upgraded state as an object: %v", err)
+	}
+	if len(got) != len(want) {
+		t.Errorf("the upgraded state has attributes %q, want %q",
+			slices.Sorted(maps.Keys(got)), slices.Sorted(maps.Keys(want)))
+	}
+	for name, value := range want {
+		if !got[name].Equal(value) {
+			t.Errorf("the upgraded state has %s = %s, want %s", name, got[name], value)
+		}
 	}
 }

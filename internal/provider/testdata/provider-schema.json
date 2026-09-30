@@ -191,7 +191,10 @@
         "key": {
           "type": "string",
           "required": true,
-          "description": "Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.\n\n"
+          "description": "Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.\n\n",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
         },
         "mapping_rules": {
           "type": "list_nested",
@@ -261,7 +264,10 @@
           "type": "string",
           "optional": true,
           "computed": true,
-          "description": "The description. This is a human-readable description for the object. "
+          "description": "The description. This is a human-readable description for the object. ",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
         },
         "environment_id": {
           "type": "string",
@@ -290,7 +296,10 @@
         "name": {
           "type": "string",
           "required": true,
-          "description": "The name. This is a human-readable name for the object. "
+          "description": "The name. This is a human-readable name for the object. ",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
         },
         "object_resource": {
           "type": "string",
@@ -415,7 +424,10 @@
         "key": {
           "type": "string",
           "required": true,
-          "description": "A URL-friendly name of the resource (i.e: slug). You will be able to query later using this key instead of the id (UUID) of the resource."
+          "description": "A URL-friendly name of the resource (i.e: slug). You will be able to query later using this key instead of the id (UUID) of the resource.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
         },
         "name": {
           "type": "string",
@@ -664,7 +676,10 @@
         "key": {
           "type": "string",
           "required": true,
-          "description": "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name."
+          "description": "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
         },
         "name": {
           "type": "string",
@@ -1038,7 +1053,10 @@
         "key": {
           "type": "string",
           "required": true,
-          "description": "The key of the attribute"
+          "description": "The key of the attribute",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
         },
         "organization_id": {
           "type": "string",
@@ -1119,7 +1137,10 @@
         "key": {
           "type": "string",
           "required": true,
-          "description": "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name."
+          "description": "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.",
+          "plan_modifiers": [
+            "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ]
         },
         "name": {
           "type": "string",
@@ -1150,11 +1171,6 @@
           "plan_modifiers": [
             "stringplanmodifier.useNonNullStateForUnknown: Once set to a non-null value, the value of this attribute in state will not change."
           ]
-        },
-        "resource": {
-          "type": "string",
-          "optional": true,
-          "description": "The resource id to which the condition set applies. This is only required for resource sets."
         }
       }
     }

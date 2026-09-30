@@ -98,6 +98,9 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"key": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "A URL-friendly name of the resource (i.e: slug). You will be able to query later using this key instead of the id (UUID) of the resource.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:            true,

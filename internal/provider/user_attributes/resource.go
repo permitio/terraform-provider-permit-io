@@ -52,6 +52,9 @@ func (c *UserAttributeResource) Schema(_ context.Context, _ resource.SchemaReque
 	attributes["key"] = schema.StringAttribute{
 		Required:            true,
 		MarkdownDescription: "The key of the attribute",
+		PlanModifiers: []planmodifier.String{
+			stringplanmodifier.RequiresReplace(),
+		},
 	}
 	attributes["type"] = schema.StringAttribute{
 		Required:            true,

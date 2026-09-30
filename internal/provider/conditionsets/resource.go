@@ -3,10 +3,14 @@ package conditionsets
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
@@ -14,10 +18,11 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &UserSetResource{}
-	_ resource.ResourceWithConfigure = &UserSetResource{}
-	_ resource.Resource              = &ResourceSetResource{}
-	_ resource.ResourceWithConfigure = &ResourceSetResource{}
+	_ resource.Resource               = &UserSetResource{}
+	_ resource.ResourceWithConfigure  = &UserSetResource{}
+	_ resource.Resource               = &ResourceSetResource{}
+	_ resource.ResourceWithConfigure  = &ResourceSetResource{}
+	_ resource.ResourceWithModifyPlan = &ResourceSetResource{}
 )
 
 func NewResourceSetResource() resource.Resource {
@@ -79,6 +84,40 @@ func (c *ResourceSetResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
+// ModifyPlan replaces a resource set when its resource changes, as the API cannot
+// move a set to another resource. The configuration may name the resource by ID
+// or by key, so a change between the ID and the key of the set's own resource
+// updates the set in place: a replacement would also delete the rules on the set.
+func (c *ResourceSetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest,
+	resp *resource.ModifyPlanResponse,
+) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var key, prior, planned types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("key"), &key)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("resource"), &prior)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("resource"), &planned)...)
+	if resp.Diagnostics.HasError() || planned.Equal(prior) {
+		return
+	}
+	if planned.IsUnknown() || c.client.client == nil {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("resource"))
+		return
+	}
+	same, err := c.client.NamesSetResource(ctx, key.ValueString(), planned.ValueString())
+	if err != nil && !common.IsNotFoundErr(err) {
+		resp.Diagnostics.AddError(
+			"Unable to read resource set",
+			common.APIErrorDetail("read", "resource set", key.ValueString(), err),
+		)
+		return
+	}
+	if !same {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("resource"))
+	}
+}
+
 func (c *UserSetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := c.baseAttributes()
 
@@ -121,6 +160,9 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 		"key": schema.StringAttribute{
 			MarkdownDescription: "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.",
 			Required:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplace(),
+			},
 		},
 		"name": schema.StringAttribute{
 			MarkdownDescription: "A descriptive name for the set, i.e: 'US based employees' or 'Users behind VPN'",
@@ -138,10 +180,6 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			MarkdownDescription: "a boolean expression that consists of multiple conditions, with and/or logic.",
 			Required:            true,
 		},
-		"resource": schema.StringAttribute{
-			MarkdownDescription: "The resource id to which the condition set applies. This is only required for resource sets.",
-			Optional:            true,
-		},
 		"parent_id": schema.StringAttribute{
 			MarkdownDescription: "The parent condition set id. Allows creating a nested condition set hierarchy.",
 			Optional:            true,
@@ -153,12 +191,38 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 	}
 }
 
+// modelSource is a plan or a state, which get reads a condition set from.
+type modelSource interface {
+	Get(ctx context.Context, target any) diag.Diagnostics
+}
+
+// get reads the attributes of this type of condition set from source into model.
+// A user set has no resource attribute, so it leaves model.Resource null.
+func (c *conditionSetResource) get(ctx context.Context, source modelSource,
+	model *ConditionSetModel,
+) diag.Diagnostics {
+	if c.conditionSetType == models.USERSET {
+		return source.Get(ctx, &model.userSetModel)
+	}
+	return source.Get(ctx, model)
+}
+
+// set writes the attributes of this type of condition set from model into state.
+func (c *conditionSetResource) set(ctx context.Context, state *tfsdk.State,
+	model ConditionSetModel,
+) diag.Diagnostics {
+	if c.conditionSetType == models.USERSET {
+		return state.Set(ctx, model.userSetModel)
+	}
+	return state.Set(ctx, model)
+}
+
 func (c *conditionSetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var (
 		plan ConditionSetModel
 	)
 
-	diags := req.Plan.Get(ctx, &plan)
+	diags := c.get(ctx, req.Plan, &plan)
 	resp.Diagnostics.Append(diags...)
 
 	if resp.Diagnostics.HasError() {
@@ -174,7 +238,7 @@ func (c *conditionSetResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	// Set state to fully populated data
-	diags = resp.State.Set(ctx, plan)
+	diags = c.set(ctx, &resp.State, plan)
 	resp.Diagnostics.Append(diags...)
 
 	if resp.Diagnostics.HasError() {
@@ -186,7 +250,7 @@ func (c *conditionSetResource) Create(ctx context.Context, req resource.CreateRe
 func (c *conditionSetResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var data ConditionSetModel
 
-	response.Diagnostics.Append(request.State.Get(ctx, &data)...)
+	response.Diagnostics.Append(c.get(ctx, request.State, &data)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -206,7 +270,7 @@ func (c *conditionSetResource) Read(ctx context.Context, request resource.ReadRe
 	}
 
 	// Set state
-	diags := response.State.Set(ctx, &state)
+	diags := c.set(ctx, &response.State, state)
 	response.Diagnostics.Append(diags...)
 	if response.Diagnostics.HasError() {
 		return
@@ -219,7 +283,7 @@ func (c *conditionSetResource) Update(ctx context.Context, req resource.UpdateRe
 		plan ConditionSetModel
 	)
 
-	diags := req.Plan.Get(ctx, &plan)
+	diags := c.get(ctx, req.Plan, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -232,7 +296,7 @@ func (c *conditionSetResource) Update(ctx context.Context, req resource.UpdateRe
 		)
 		return
 	}
-	diags = resp.State.Set(ctx, plan)
+	diags = c.set(ctx, &resp.State, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -243,7 +307,7 @@ func (c *conditionSetResource) Update(ctx context.Context, req resource.UpdateRe
 func (c *conditionSetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Retrieve values from state
 	var state ConditionSetModel
-	diags := req.State.Get(ctx, &state)
+	diags := c.get(ctx, req.State, &state)
 	resp.Diagnostics.Append(diags...)
 
 	if resp.Diagnostics.HasError() {
