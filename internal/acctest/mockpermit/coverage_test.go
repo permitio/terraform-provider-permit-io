@@ -22,8 +22,12 @@ import (
 // TestRouteSetsAreListed checks this list against the package source, so the
 // coverage tests below see every set.
 var routeSets = map[string]Routes{
+	"ConditionSetRules":  ConditionSetRules,
+	"ConditionSets":      ConditionSets,
 	"ImplicitGrants":     ImplicitGrants,
+	"ProxyConfigs":       ProxyConfigs,
 	"ResourceAttributes": ResourceAttributes,
+	"ResourceInstances":  ResourceInstances,
 	"ResourceRelations":  ResourceRelations,
 	"ResourceRoles":      ResourceRoles,
 	"Resources":          Resources,

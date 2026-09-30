@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/permitio/terraform-provider-permit-io/internal/acctest/mockpermit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider"
 )
@@ -21,25 +21,22 @@ const tenantsPath = "/v2/facts/" + mockpermit.ProjectID + "/" + mockpermit.Envir
 	"/tenants"
 
 // TestTenantCreateUpdateDestroy runs permitio_tenant through Terraform against the
-// mock Permit API and checks the exact bodies the provider sends.
+// mock Permit API and checks the exact bodies the provider sends. The update
+// changes every attribute the tenant updates in place: name, description and
+// attributes. The new attributes keep every key of the old ones, and jsonencode
+// writes them the way the provider reads them back.
 func TestTenantCreateUpdateDestroy(t *testing.T) {
 	m := mockpermit.New(t, mockpermit.Tenants)
 	const address = "permitio_tenant.test"
 
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: providerFactories,
-		CheckDestroy: func(*terraform.State) error {
-			if keys := m.StoredKeys(); len(keys) > 0 {
-				return fmt.Errorf("objects left in the mock after destroy: %q", keys)
-			}
-			return nil
-		},
+		CheckDestroy:             m.CheckEmpty,
 		Steps: []resource.TestStep{
 			{
-				Config: tenantConfig("Acme"),
+				Config: tenantConfig("Acme", "First tenant", `{ tier = "gold" }`),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(address, "id",
-						"00000000-0000-4000-8000-000000000001"),
+					resource.TestCheckResourceAttr(address, "id", mockpermit.ObjectID(1)),
 					resource.TestCheckResourceAttr(address, "key", "acme"),
 					resource.TestCheckResourceAttr(address, "name", "Acme"),
 					resource.TestCheckResourceAttr(address, "description", "First tenant"),
@@ -49,7 +46,11 @@ func TestTenantCreateUpdateDestroy(t *testing.T) {
 					resource.TestCheckResourceAttr(address, "project_id", mockpermit.ProjectID),
 					resource.TestCheckResourceAttr(address, "environment_id",
 						mockpermit.EnvironmentID),
-					checkOnlyRequest(m, http.MethodPost, tenantsPath, `{
+					resource.TestCheckResourceAttr(address, "created_at",
+						"2026-01-01 00:00:00 +0000 UTC"),
+					resource.TestCheckResourceAttr(address, "last_action_at",
+						"2026-01-01 00:00:00 +0000 UTC"),
+					m.CheckRequests(http.MethodPost, tenantsPath, `{
 						"key": "acme",
 						"name": "Acme",
 						"description": "First tenant",
@@ -58,13 +59,30 @@ func TestTenantCreateUpdateDestroy(t *testing.T) {
 				),
 			},
 			{
-				Config: tenantConfig("Acme Renamed"),
+				Config: tenantConfig("Acme Renamed", "The first tenant, renamed",
+					`{ seats = 25, tier = "platinum" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(address, plancheck.ResourceActionUpdate),
+					},
+				},
 				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(address, "id", mockpermit.ObjectID(1)),
 					resource.TestCheckResourceAttr(address, "name", "Acme Renamed"),
-					checkOnlyRequest(m, http.MethodPatch, tenantsPath+"/acme", `{
-						"name": "Acme Renamed",
+					resource.TestCheckResourceAttr(address, "description",
+						"The first tenant, renamed"),
+					resource.TestCheckResourceAttr(address, "attributes",
+						`{"seats":25,"tier":"platinum"}`),
+					m.CheckRequests(http.MethodPost, tenantsPath, `{
+						"key": "acme",
+						"name": "Acme",
 						"description": "First tenant",
 						"attributes": {"tier": "gold"}
+					}`),
+					m.CheckRequests(http.MethodPatch, tenantsPath+"/acme", `{
+						"name": "Acme Renamed",
+						"description": "The first tenant, renamed",
+						"attributes": {"seats": 25, "tier": "platinum"}
 					}`),
 				),
 			},
@@ -74,25 +92,13 @@ func TestTenantCreateUpdateDestroy(t *testing.T) {
 	m.AssertAllRoutesHit()
 }
 
-func tenantConfig(name string) string {
+func tenantConfig(name, description, attributes string) string {
 	return fmt.Sprintf(`
 resource "permitio_tenant" "test" {
   key         = "acme"
   name        = %q
-  description = "First tenant"
-  attributes  = jsonencode({ tier = "gold" })
+  description = %q
+  attributes  = jsonencode(%s)
 }
-`, name)
-}
-
-// checkOnlyRequest checks that the provider has sent exactly one request with this
-// method and path so far, and that its body is the JSON in want.
-func checkOnlyRequest(m *mockpermit.Server, method, path, want string) resource.TestCheckFunc {
-	return func(*terraform.State) error {
-		requests := m.Requests(method, path)
-		if len(requests) != 1 {
-			return fmt.Errorf("%s %s: got %d requests, want 1", method, path, len(requests))
-		}
-		return requests[0].CheckJSONBody(want)
-	}
+`, name, description, attributes)
 }

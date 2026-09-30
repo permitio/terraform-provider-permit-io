@@ -166,6 +166,43 @@ func (s *Server) AssertAllRoutesHit() {
 	}
 }
 
+// AssertRoutesHit fails the test for every route in sets that received no request.
+// A test that also serves the route sets of objects it only depends on, such as
+// the resource a resource set is on, names the sets it exercises here, so it does
+// not have to change the other objects just to call their routes. It fails the
+// test when sets has no routes or names a route the fake does not serve.
+func (s *Server) AssertRoutesHit(sets ...Routes) {
+	s.t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var unhit, unserved []string
+	checked := 0
+	for _, set := range sets {
+		for _, rt := range set {
+			checked++
+			hits, served := s.hits[rt.pattern]
+			switch {
+			case !served:
+				unserved = append(unserved, rt.pattern)
+			case hits == 0:
+				unhit = append(unhit, rt.pattern)
+			}
+		}
+	}
+	if checked == 0 {
+		s.t.Errorf("mockpermit: AssertRoutesHit was given no routes to check")
+	}
+	if len(unserved) > 0 {
+		slices.Sort(unserved)
+		s.t.Errorf("mockpermit: AssertRoutesHit names routes the mock does not serve: %q; "+
+			"pass their route sets to New", unserved)
+	}
+	if len(unhit) > 0 {
+		slices.Sort(unhit)
+		s.t.Errorf("mockpermit: routes never called: %q", unhit)
+	}
+}
+
 // StoredKeys returns "collection/key" for every object the fake holds, sorted. It
 // is empty after a destroy that removed everything the test created.
 func (s *Server) StoredKeys() []string {
@@ -286,6 +323,50 @@ func (s *Server) decodeObject(w http.ResponseWriter, r *http.Request) (map[strin
 		return nil, false
 	}
 	return object, true
+}
+
+// knownFieldsOnly answers 422 and returns false when the request body has a field
+// that is not in known. The API's request models allow no other fields, and it
+// rejects a body with one the same way.
+func (s *Server) knownFieldsOnly(w http.ResponseWriter, body map[string]any,
+	known ...string,
+) bool {
+	var unknown []string
+	for field := range body {
+		if !slices.Contains(known, field) {
+			unknown = append(unknown, field)
+		}
+	}
+	if len(unknown) == 0 {
+		return true
+	}
+	slices.Sort(unknown)
+	s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY",
+		fmt.Sprintf("unknown fields %q", unknown))
+	return false
+}
+
+// objectIfGiven answers 422 and returns false when the request body has the field
+// and it is not a JSON object.
+func (s *Server) objectIfGiven(w http.ResponseWriter, body map[string]any, field string) bool {
+	if _, given := body[field]; !given {
+		return true
+	}
+	if _, ok := body[field].(map[string]any); ok {
+		return true
+	}
+	s.writeError(w, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY",
+		field+" is not an object")
+	return false
+}
+
+// refuseUnconfirmed fails the test and answers 501 for a request whose effect on
+// the API is unconfirmed, so that the fake does not guess it. what says what the
+// request does.
+func (s *Server) refuseUnconfirmed(w http.ResponseWriter, r *http.Request, what string) {
+	s.t.Errorf("mockpermit: %s %s: %s, and what the API does then is unconfirmed, so the "+
+		"fake does not model it", r.Method, r.URL.Path, what)
+	s.writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not modelled in mockpermit")
 }
 
 // collection returns the objects stored under name by key, creating the collection

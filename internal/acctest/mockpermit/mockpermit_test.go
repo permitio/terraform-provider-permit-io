@@ -291,6 +291,98 @@ func TestAssertAllRoutesHit(t *testing.T) {
 	}
 }
 
+// TestAssertRoutesHit checks that AssertRoutesHit requires only the routes of the
+// sets it names, while AssertAllRoutesHit still requires every route served.
+func TestAssertRoutesHit(t *testing.T) {
+	rec := &errorRecorder{TB: t}
+	m := New(rec, Tenants, Resources)
+	call(t, m, http.MethodPost, tenantsPath, bearer, `{"key":"acme","name":"Acme"}`)
+	call(t, m, http.MethodGet, tenantsPath+"/acme", bearer, "")
+	call(t, m, http.MethodPatch, tenantsPath+"/acme", bearer, `{"name":"Acme 2"}`)
+
+	m.AssertRoutesHit(Tenants, Resources)
+
+	got := rec.take()
+	if len(got) != 1 || !strings.Contains(got[0], "routes never called") {
+		t.Fatalf("test errors = %q, want one listing the unhit routes", got)
+	}
+	for _, rt := range append(Routes{routeFor(t, Tenants, "Tenants.Delete")}, Resources...) {
+		if !strings.Contains(got[0], `"`+rt.pattern+`"`) {
+			t.Errorf("error %q does not name unhit route %q", got[0], rt.pattern)
+		}
+	}
+	for _, operation := range []string{"Tenants.Create", "Tenants.Get", "Tenants.Update"} {
+		if rt := routeFor(t, Tenants, operation); strings.Contains(got[0], `"`+rt.pattern+`"`) {
+			t.Errorf("error %q names route %q, which was hit", got[0], rt.pattern)
+		}
+	}
+
+	call(t, m, http.MethodDelete, tenantsPath+"/acme", bearer, "")
+	m.AssertRoutesHit(Tenants)
+
+	if got := rec.take(); len(got) != 0 {
+		t.Errorf("test errors = %q after every tenant route was hit, want none", got)
+	}
+
+	m.AssertAllRoutesHit()
+
+	if got := rec.take(); len(got) != 1 || !strings.Contains(got[0], Resources[0].pattern) {
+		t.Errorf("AssertAllRoutesHit test errors = %q, want one naming the resource routes", got)
+	}
+}
+
+// TestAssertRoutesHitRejectsBadArguments checks that AssertRoutesHit fails the
+// test when it has no routes to check, or names routes the mock does not serve,
+// even though every route the mock serves was hit.
+func TestAssertRoutesHitRejectsBadArguments(t *testing.T) {
+	tests := []struct {
+		name      string
+		sets      []Routes
+		wantError string
+	}{
+		{name: "no sets", wantError: "given no routes to check"},
+		{name: "an empty set", sets: []Routes{{}}, wantError: "given no routes to check"},
+		{
+			name: "a set the mock does not serve", sets: []Routes{Tenants, Roles},
+			wantError: "names routes the mock does not serve",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := &errorRecorder{TB: t}
+			m := New(rec, Tenants)
+			call(t, m, http.MethodGet, "/v2/api-key/scope", bearer, "")
+			call(t, m, http.MethodPost, tenantsPath, bearer, `{"key":"acme","name":"Acme"}`)
+			call(t, m, http.MethodGet, tenantsPath+"/acme", bearer, "")
+			call(t, m, http.MethodPatch, tenantsPath+"/acme", bearer, `{"name":"Acme 2"}`)
+			call(t, m, http.MethodDelete, tenantsPath+"/acme", bearer, "")
+			m.AssertAllRoutesHit()
+			if got := rec.take(); len(got) != 0 {
+				t.Fatalf("test errors = %q after every route was hit, want none", got)
+			}
+
+			m.AssertRoutesHit(tt.sets...)
+
+			got := rec.take()
+			if len(got) != 1 || !strings.Contains(got[0], tt.wantError) {
+				t.Errorf("test errors = %q, want one containing %q", got, tt.wantError)
+			}
+		})
+	}
+}
+
+// routeFor returns the route in set for an SDK operation, such as "Tenants.Get".
+func routeFor(t *testing.T, set Routes, operation string) route {
+	t.Helper()
+	for _, rt := range set {
+		if rt.operation == operation {
+			return rt
+		}
+	}
+	t.Fatalf("no route in the set for %s", operation)
+	return route{}
+}
+
 // TestCollectionsAreCreatedOnFirstUse checks that a route set can store objects in
 // a collection of its own without New knowing about it.
 func TestCollectionsAreCreatedOnFirstUse(t *testing.T) {

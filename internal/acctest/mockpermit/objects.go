@@ -1,6 +1,9 @@
 package mockpermit
 
-import "strings"
+import (
+	"net/http"
+	"strings"
+)
 
 // newObject returns the fields the API sets on an object it creates: a fresh ID,
 // the scope IDs and the timestamps. The caller holds s.mu.
@@ -27,6 +30,27 @@ func (s *Server) find(collection, keyOrID string) (map[string]any, bool) {
 			return object, true
 		}
 	}
+	return nil, false
+}
+
+// findKey returns the object in a collection whose key is key, for a field where
+// the API takes a key. When no object has that key but one has it as its ID, it
+// fails the test, since whether the API also takes an ID there is unconfirmed.
+// Otherwise it writes a 404 naming what. The caller holds s.mu.
+func (s *Server) findKey(w http.ResponseWriter, r *http.Request, collection, key, what string) (
+	map[string]any, bool,
+) {
+	objects := s.collection(collection)
+	if object, ok := objects[key]; ok {
+		return object, true
+	}
+	for _, object := range objects {
+		if object["id"] == key {
+			s.refuseUnconfirmed(w, r, "the body names the "+what+" "+key+" by ID")
+			return nil, false
+		}
+	}
+	s.writeError(w, http.StatusNotFound, "NOT_FOUND", what+" "+key+" not found")
 	return nil, false
 }
 

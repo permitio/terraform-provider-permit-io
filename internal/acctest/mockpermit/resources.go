@@ -125,10 +125,7 @@ func (s *Server) updateResource(w http.ResponseWriter, r *http.Request) {
 		unconfirmed = append(unconfirmed, leftOut("attributes", storedAttributes, attributes)...)
 	}
 	if len(unconfirmed) > 0 {
-		s.t.Errorf("mockpermit: %s %s: the body leaves out or nulls %q, and what the API "+
-			"does then is unconfirmed, so the fake does not model it",
-			r.Method, r.URL.Path, unconfirmed)
-		s.writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not modelled in mockpermit")
+		s.refuseUnconfirmed(w, r, fmt.Sprintf("the body leaves out or nulls %q", unconfirmed))
 		return
 	}
 	maps.Copy(resource, body)
@@ -146,7 +143,9 @@ func (s *Server) updateResource(w http.ResponseWriter, r *http.Request) {
 
 // deleteResource deletes a resource with its actions and attributes. The API also
 // deletes the roles, relations and derivations on it; the fake keeps them, so a
-// test that deletes a resource before them sees them in StoredKeys.
+// test that deletes a resource before them sees them in StoredKeys. It keeps the
+// resource sets and instances on it too, and fails the test on a request for one;
+// see ConditionSets and ResourceInstances.
 func (s *Server) deleteResource(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
