@@ -117,53 +117,73 @@ func (d *ResourceDataSource) Metadata(_ context.Context, req datasource.Metadata
 // Schema defines the schema for the data source.
 func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Reads a resource by its key, with its actions and attributes, " +
+			"such as one that Terraform does not manage. Only `key` selects the resource; " +
+			"every other attribute holds what Permit returns.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID Permit assigns to the resource.",
 			},
 			"organization_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the organization the resource belongs to.",
 			},
 			"project_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the project the resource belongs to.",
 			},
 			"environment_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the environment the resource belongs to.",
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "When the resource was created.",
 			},
 			"updated_at": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "When the resource was last updated.",
 			},
 			"key": schema.StringAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "The key of the resource to read.",
 			},
 			"name": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "The name of the resource. " + common.LookupOnlyInputNote,
 			},
 			"urn": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The URN of the resource, or null when it has none. " +
+					common.LookupOnlyInputNote,
 			},
 			"description": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The description of the resource, or null when it has " +
+					"none. " + common.LookupOnlyInputNote,
 			},
 			"actions": schema.MapNestedAttribute{
+				MarkdownDescription: "The actions of the resource, by action key. " +
+					common.LookupOnlyInputNote,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
-							Computed: true,
+							Computed:            true,
+							MarkdownDescription: "The ID Permit assigns to the action.",
 						},
 						"name": schema.StringAttribute{
-							Optional: true,
-							Computed: true,
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "The name of the action.",
 						},
 						"description": schema.StringAttribute{
-							Optional: true,
-							Computed: true,
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "The description of the action, or null.",
 						},
 					},
 				},
@@ -171,17 +191,22 @@ func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				Computed: true,
 			},
 			"attributes": schema.MapNestedAttribute{
+				MarkdownDescription: "The attributes of the resource, by attribute key. " +
+					common.LookupOnlyInputNote,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"type": schema.StringAttribute{
 							Required: true,
+							MarkdownDescription: "The type of the attribute: `bool`, " +
+								"`number`, `string`, `time`, `array` or `json`.",
 							Validators: []validator.String{
 								common.AttributeTypeValidator{},
 							},
 						},
 						"description": schema.StringAttribute{
-							Optional: true,
-							Computed: true,
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "The description of the attribute, or null.",
 						},
 					},
 				},

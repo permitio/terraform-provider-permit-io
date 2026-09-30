@@ -81,7 +81,8 @@ func (r *RoleDerivationResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"`on_resource` instance linked by the `linked_by` relation. For example, " +
 			"`role = \"manager\"`, `on_resource = \"folder\"`, `to_role = \"editor\"`, " +
 			"`resource = \"file\"` and `linked_by = \"parent\"` make folder managers editors of " +
-			"the files in their folders. See [the documentation](" +
+			"the files in their folders. Every argument forces replacement: changing one " +
+			"removes the derivation and creates a new one. See [the documentation](" +
 			"https://api.permit.io/v2/redoc#tag/Implicit-Grants/operation/create_implicit_grant) " +
 			"for more information on role derivations.",
 	}

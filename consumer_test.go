@@ -248,18 +248,24 @@ type validateOutput struct {
 // reportedErrors returns each error diagnostic as "file:line: summary: detail". The
 // warning that development overrides are in effect is not an error.
 func (o validateOutput) reportedErrors() []string {
-	var errs []string
+	return o.reported("error")
+}
+
+// reported returns each diagnostic of the severity ("error" or "warning") as
+// "file:line: summary: detail".
+func (o validateOutput) reported(severity string) []string {
+	var diags []string
 	for _, d := range o.Diagnostics {
-		if d.Severity != "error" {
+		if d.Severity != severity {
 			continue
 		}
 		location := "(no location)"
 		if d.Range != nil {
 			location = fmt.Sprintf("%s:%d", d.Range.Filename, d.Range.Start.Line)
 		}
-		errs = append(errs, fmt.Sprintf("%s: %s: %s", location, d.Summary, d.Detail))
+		diags = append(diags, fmt.Sprintf("%s: %s: %s", location, d.Summary, d.Detail))
 	}
-	return errs
+	return diags
 }
 
 // validate runs `validate -json` in dir with the CLI configuration and returns its

@@ -59,7 +59,10 @@ func (c *proxyConfigResource) Configure(_ context.Context, request resource.Conf
 
 func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config) for more information about proxy configs.",
+		MarkdownDescription: "Manages a proxy config: how the Permit Proxy authenticates to a " +
+			"backend service, and which requests to it map to which resource actions. See " +
+			"[the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/" +
+			"create_proxy_config) for more information about proxy configs.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -90,14 +93,15 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"key": schema.StringAttribute{
-				MarkdownDescription: "Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.\n\n",
-				Required:            true,
+				MarkdownDescription: "The key of the proxy config. Changing it replaces the " +
+					"proxy config.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "The name of the proxy config, for example: 'Stripe API",
+				MarkdownDescription: "The name of the proxy config, for example: 'Stripe API'",
 				Required:            true,
 			},
 			"auth_mechanism": schema.StringAttribute{
@@ -124,13 +128,23 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Attributes: map[string]schema.Attribute{
 					"bearer": schema.StringAttribute{
 						Optional: true,
+						MarkdownDescription: "The token the Permit Proxy sends in the " +
+							"Authorization header as a Bearer token. Required when " +
+							"`auth_mechanism` is `Bearer`.",
 					},
 					"basic": schema.StringAttribute{
 						Optional: true,
+						MarkdownDescription: "The `user:password` the Permit Proxy sends in " +
+							"the Authorization header as Basic credentials. Required when " +
+							"`auth_mechanism` is `Basic`.",
 					},
 					"headers": schema.MapAttribute{
 						Optional:    true,
 						ElementType: types.StringType,
+						MarkdownDescription: "The headers for Headers authentication, which is " +
+							"not supported yet. Only one of `bearer`, `basic` and `headers` may " +
+							"be set, and `auth_mechanism` needs the one it names, so a " +
+							"configuration cannot use `headers` yet.",
 					},
 				},
 			},
@@ -151,6 +165,14 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 					Attributes: map[string]schema.Attribute{
 						"url": schema.StringAttribute{
 							Required: true,
+							MarkdownDescription: "The URL that a request must match, such as " +
+								"`https://billing.example.com/v1/invoices`, or a regular " +
+								"expression when `url_type` is `regex`. A placeholder in the " +
+								"URL, such as `{invoice_id}` in `.../invoices/{invoice_id}`, " +
+								"makes the Permit API add an attribute of that name to " +
+								"`resource`, so a `permitio_resource` that manages that " +
+								"resource no longer matches Permit and its next plan shows the " +
+								"change.",
 						},
 						"url_type": schema.StringAttribute{
 							Optional: true,
@@ -165,19 +187,31 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 						},
 						"http_method": schema.StringAttribute{
 							Required: true,
+							MarkdownDescription: "The HTTP method that a request must use, " +
+								"in lower case: `get`, `post`, `put`, `patch`, `delete`, " +
+								"`head` or `options`.",
 						},
 						"resource": schema.StringAttribute{
 							Required: true,
+							MarkdownDescription: "The key of the resource that a matching " +
+								"request acts on.",
 						},
 						"action": schema.StringAttribute{
 							Optional: true,
+							MarkdownDescription: "The key of the action on `resource` that a " +
+								"matching request is checked for.",
 						},
 						"priority": schema.Int64Attribute{
 							Optional: true,
+							MarkdownDescription: "The priority of the rule when more than one " +
+								"rule matches a request: the higher the number, the higher " +
+								"the precedence.",
 						},
 						"headers": schema.MapAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
+							MarkdownDescription: "Header values that a request must have to " +
+								"match the rule.",
 						},
 					},
 				},

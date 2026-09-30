@@ -53,7 +53,11 @@ func (c *ConditionSetRuleResource) Metadata(_ context.Context, req resource.Meta
 
 func (c *ConditionSetRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "See [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Set-Rules) for more information on condition sets rules.",
+		MarkdownDescription: "Grants a permission to the users in a user set on the resources " +
+			"in a resource set. Every argument forces replacement: changing one removes the " +
+			"rule and creates a new one. See [our documentation]" +
+			"(https://api.permit.io/v2/redoc#tag/Condition-Set-Rules) for more information on " +
+			"condition set rules.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -84,8 +88,9 @@ func (c *ConditionSetRuleResource) Schema(_ context.Context, _ resource.SchemaRe
 				},
 			},
 			"user_set": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "The userset that will be given permission, i.e: all the users matching this rule will be given the specified permission",
+				Required: true,
+				MarkdownDescription: "The key of the user set that will be given permission, " +
+					"i.e: all the users matching this rule will be given the specified permission",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -98,8 +103,11 @@ func (c *ConditionSetRuleResource) Schema(_ context.Context, _ resource.SchemaRe
 				},
 			},
 			"resource_set": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "The resourceset that represents the resources that are granted for access, i.e: all the resources matching this rule can be accessed by the userset to perform the granted permission",
+				Required: true,
+				MarkdownDescription: "The key of the resource set that represents the " +
+					"resources that are granted for access, i.e: all the resources matching " +
+					"this rule can be accessed by the user set to perform the granted " +
+					"permission",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

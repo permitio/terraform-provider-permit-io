@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     permitio = {
-      source = "registry.terraform.io/permitio/permit-io"
+      source = "permitio/permit-io"
     }
   }
 }

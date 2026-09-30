@@ -70,42 +70,60 @@ func (d *ConditionSetDataSource) Metadata(_ context.Context, req datasource.Meta
 // keep working, and hold the values read from Permit.
 func (d *ConditionSetDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Reads a user set or a resource set by its key, such as one " +
+			"that Terraform does not manage, for use in a `permitio_condition_set_rule`. " +
+			"Only `key` selects the set; every other attribute holds what Permit returns.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID Permit assigns to the condition set.",
 			},
 			"organization_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the organization the condition set belongs to.",
 			},
 			"project_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the project the condition set belongs to.",
 			},
 			"environment_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the environment the condition set belongs to.",
 			},
 			"key": schema.StringAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "The key of the user set or resource set to read.",
 			},
 			"name": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The name of the condition set. " +
+					common.LookupOnlyInputNote,
 			},
 			"description": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The description of the condition set, or null when it " +
+					"has none. " + common.LookupOnlyInputNote,
 			},
 			"type": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "`userset` for a user set or `resourceset` for a resource " +
+					"set. " + common.LookupOnlyInputNote,
 			},
 			"resource": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The key of the resource a resource set selects " +
+					"instances of, or null for a user set. " + common.LookupOnlyInputNote,
 			},
 			"conditions": schema.StringAttribute{
 				Optional:   true,
 				Computed:   true,
 				CustomType: jsontypes.NormalizedType{},
+				MarkdownDescription: "The conditions of the set, as a JSON object; read them " +
+					"with `jsondecode`. " + common.LookupOnlyInputNote,
 			},
 			"parent_id": schema.StringAttribute{
 				Computed:            true,

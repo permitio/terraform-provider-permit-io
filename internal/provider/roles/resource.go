@@ -41,17 +41,22 @@ func (r *RoleResource) Metadata(_ context.Context, request resource.MetadataRequ
 func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := common.CreateBaseResourceSchema()
 	attributes["permissions"] = schema.SetAttribute{
-		ElementType:         types.StringType,
-		MarkdownDescription: "list of action keys that define what actions this resource role is permitted to do",
-		Computed:            true,
-		Optional:            true,
+		ElementType: types.StringType,
+		MarkdownDescription: "The permissions the role grants: `resource_key:action_key` " +
+			"pairs for a top-level role, such as `document:read`, and action keys of " +
+			"`resource` for a resource role, such as `read`. Leaving it out keeps the " +
+			"permissions the role has; set it to `[]` to remove them all.",
+		Computed: true,
+		Optional: true,
 		PlanModifiers: []planmodifier.Set{
 			setplanmodifier.UseNonNullStateForUnknown(),
 		},
 	}
 	attributes["extends"] = schema.SetAttribute{
-		MarkdownDescription: "list of role keys that define what roles this role extends. In other words: this role will automatically inherit all the permissions of the given roles in this list.",
-		ElementType:         types.StringType,
+		MarkdownDescription: "list of role keys that define what roles this role extends. " +
+			"In other words: this role will automatically inherit all the permissions of " +
+			"the given roles in this list. Leaving it out keeps the roles it extends.",
+		ElementType: types.StringType,
 		PlanModifiers: []planmodifier.Set{
 			setplanmodifier.UseNonNullStateForUnknown(),
 		},
@@ -59,20 +64,26 @@ func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		Optional: true,
 	}
 	attributes["resource"] = schema.StringAttribute{
-		MarkdownDescription: "The unique resource key that the role belongs to.",
-		Optional:            true,
+		MarkdownDescription: "The key of the resource the role belongs to, for a resource " +
+			"role. Leave it out for a top-level role. Changing it replaces the role.",
+		Optional: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["resource_id"] = schema.StringAttribute{
-		MarkdownDescription: "The unique resource ID that the role belongs to.",
-		Computed:            true,
+		MarkdownDescription: "The ID of the resource the role belongs to, or null for a " +
+			"top-level role.",
+		Computed: true,
 	}
 
 	resp.Schema = schema.Schema{
-		Attributes:          attributes,
-		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource) for more information about roles.\n You can also read about Resource Roles [here](https://api.permit.io/v2/redoc#tag/Resource-Roles/operation/create_resource_role).",
+		Attributes: attributes,
+		MarkdownDescription: "Manages a role: a top-level role, or with `resource` a role on " +
+			"that resource. See [the documentation](https://api.permit.io/v2/redoc#tag/" +
+			"Roles/operation/create_role) for more information about roles.\n You can also " +
+			"read about Resource Roles [here](https://api.permit.io/v2/redoc#tag/" +
+			"Resource-Roles/operation/create_resource_role).",
 	}
 }
 

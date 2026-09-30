@@ -6,18 +6,23 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 )
 
+// LookupOnlyInputNote ends the description of each data source attribute that a
+// configuration may set but that does not select what the data source reads. Such
+// attributes are accepted so that older configurations keep working.
+const LookupOnlyInputNote = "Setting it does not filter the lookup: Permit's value replaces it."
+
 func CreateBaseResourceSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"id": schema.StringAttribute{
 			Computed:            true,
-			MarkdownDescription: "The resource ID. This is a unique identifier for the resource. ",
+			MarkdownDescription: "The ID Permit assigns to the object.",
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
 		},
 		"key": schema.StringAttribute{
 			Required:            true,
-			MarkdownDescription: "The key. This is a unique identifier. ",
+			MarkdownDescription: "The key that identifies the object. Changing it replaces the object.",
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.RequiresReplace(),
 			},
@@ -27,7 +32,7 @@ func CreateBaseResourceSchema() map[string]schema.Attribute {
 			Required:            true,
 		},
 		"description": schema.StringAttribute{
-			MarkdownDescription: "The description. This is a human-readable description for the object. ",
+			MarkdownDescription: "A description of the object; leaving it out keeps the one in Permit.",
 			Optional:            true,
 			Computed:            true,
 		},

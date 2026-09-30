@@ -25,6 +25,8 @@ GOTOOLCHAIN=auto go build -o /tmp/mutationgate ./internal/acctest/mutationgate &
 - CI pipes `go test -json` into `internal/acctest/checkgotest`, which fails the run when a test skips or no test runs. An offline test must not call `t.Skip`.
 - Name every test that needs the real API `TestAcc*`: the Build job skips those by name and fails on any other test that skips, including a `resource.Test` without `TF_ACC`.
 - `TestConsumerFixtures` (`consumer_test.go`) runs `validate` with this build on `testdata/consumer/`: `valid/*.tf` must validate and declare every resource and data source, and each `invalid/<case>/` holds a `main.tf` that must fail and an `expect.txt` with text every error must contain. When a schema change adds a rule users can break, add a case and raise `minInvalidFixtures`. It runs the CLI in `TF_ACC_TERRAFORM_PATH` or `terraform` on `PATH` and fails when neither is set; it does not download one.
+- `TestExamples` (`examples_test.go`) runs `validate` the same way in every `examples/` directory with a `.tf` file, and fails when the provider, a resource or a data source has no `examples/provider/provider.tf`, `examples/resources/<name>/resource.tf` or `examples/data-sources/<name>/data-source.tf` declaring it, which its doc page embeds. Each example declares `required_providers`, so it validates on its own. When you add an example directory, raise `minExampleDirs`.
+- `TestSchemaDescriptions` fails when the provider, a resource, a data source or any attribute has no description; the docs show them.
 
 ## Testing with real API
 - Use `PERMITIO_API_KEY` env var (not `PERMIT_API_KEY`)

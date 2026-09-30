@@ -54,11 +54,13 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Schema(_ context.Context, 
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Assigns a role to a group on a specific resource instance within a tenant. " +
 			"This uses the Permit.io Groups API to manage group-level permissions on resource instances. " +
-			"For user-specific assignments, use `permitio_resource_instance_role_assignment` instead.",
+			"For user-specific assignments, use `permitio_resource_instance_role_assignment` " +
+			"instead. Every argument forces replacement: changing one removes the assignment and " +
+			"creates a new one.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Unique identifier of the role assignment",
+				MarkdownDescription: "The key of the group, the same as `group`.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},

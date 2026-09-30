@@ -50,36 +50,48 @@ func (c *RelationResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 		}
 		attribute.PlanModifiers = append(attribute.PlanModifiers,
 			stringplanmodifier.RequiresReplace())
+		attribute.MarkdownDescription += " Changing it replaces the relation."
 		attributes[name] = attribute
 	}
 
 	attributes["subject_resource"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "The subject resource ID or key",
+		Required: true,
+		MarkdownDescription: "The key of the subject resource: in \"folder is parent of " +
+			"file\", the folder resource. Use the key, not the ID: Permit returns the key, " +
+			"so an ID makes the apply fail with an inconsistent result. Changing it replaces " +
+			"the relation.",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["object_resource"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "The object resource ID or key",
+		Required: true,
+		MarkdownDescription: "The key of the object resource, which the relation is " +
+			"defined on: in \"folder is parent of file\", the file resource. Use the key, " +
+			"not the ID: Permit returns the key, so an ID makes the apply fail with an " +
+			"inconsistent result. Changing it replaces the relation.",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 
 	attributes["subject_resource_id"] = schema.StringAttribute{
-		MarkdownDescription: "The subject resource ID",
+		MarkdownDescription: "The ID of the subject resource.",
 		Computed:            true,
 	}
 	attributes["object_resource_id"] = schema.StringAttribute{
-		MarkdownDescription: "The object resource ID",
+		MarkdownDescription: "The ID of the object resource.",
 		Computed:            true,
 	}
 
 	response.Schema = schema.Schema{
-		Attributes:          attributes,
-		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Resource-Relations/operation/create_resource_relation) for more information about Relations",
+		Attributes: attributes,
+		MarkdownDescription: "Manages a relation between two resources, such as \"folder is " +
+			"parent of file\", for relationship-based access control with " +
+			"`permitio_role_derivation`. Permit cannot update a relation, so changing any " +
+			"argument replaces it. See [the documentation](https://api.permit.io/v2/redoc#" +
+			"tag/Resource-Relations/operation/create_resource_relation) for more information " +
+			"about Relations",
 	}
 }
 

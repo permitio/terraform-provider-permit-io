@@ -80,11 +80,19 @@ func (c *ResourceSetResource) Schema(_ context.Context, _ resource.SchemaRequest
 	attributes := c.baseAttributes()
 	attributes["resource"] = schema.StringAttribute{
 		Required: true,
+		MarkdownDescription: "The resource whose instances the set selects, by key, such as " +
+			"`document`. Changing it to another resource replaces the set, which also deletes " +
+			"the condition set rules on it. Changing it between the key and the ID of the same " +
+			"resource updates the set in place.",
 	}
 
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
-		Attributes:          attributes,
+		MarkdownDescription: "Manages a resource set: a condition set that selects the " +
+			"instances of a resource by their attributes, for use in a " +
+			"`permitio_condition_set_rule`. See [our documentation]" +
+			"(https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/" +
+			"create_condition_set) for more information on condition sets.",
+		Attributes: attributes,
 	}
 }
 
@@ -126,8 +134,11 @@ func (c *UserSetResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	attributes := c.baseAttributes()
 
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
-		Attributes:          attributes,
+		MarkdownDescription: "Manages a user set: a condition set that selects users by " +
+			"their attributes, for use in a `permitio_condition_set_rule`. See [our " +
+			"documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/" +
+			"create_condition_set) for more information on condition sets.",
+		Attributes: attributes,
 	}
 }
 
@@ -135,7 +146,7 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"id": schema.StringAttribute{
 			Computed:            true,
-			MarkdownDescription: "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.\n\n",
+			MarkdownDescription: "The ID Permit assigns to the condition set.",
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
@@ -162,8 +173,10 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			},
 		},
 		"key": schema.StringAttribute{
-			MarkdownDescription: "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.",
-			Required:            true,
+			MarkdownDescription: "A unique id by which Permit will identify the condition " +
+				"set. The key will be used as the generated rego rule name. Changing it " +
+				"replaces the set, which also deletes the condition set rules on it.",
+			Required: true,
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.RequiresReplace(),
 			},

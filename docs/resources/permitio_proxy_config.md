@@ -3,16 +3,24 @@
 page_title: "permitio_proxy_config Resource - terraform-provider-permit-io"
 subcategory: ""
 description: |-
-  See the documentation https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config for more information about proxy configs.
+  Manages a proxy config: how the Permit Proxy authenticates to a backend service, and which requests to it map to which resource actions. See the documentation https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config for more information about proxy configs.
 ---
 
 # permitio_proxy_config (Resource)
 
-See [the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config) for more information about proxy configs.
+Manages a proxy config: how the Permit Proxy authenticates to a backend service, and which requests to it map to which resource actions. See [the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config) for more information about proxy configs.
 
 ## Example Usage
 
 ```terraform
+terraform {
+  required_providers {
+    permitio = {
+      source = "permitio/permit-io"
+    }
+  }
+}
+
 variable "billing_api_token" {
   description = "The token the Permit Proxy sends to the billing API."
   type        = string
@@ -39,6 +47,8 @@ resource "permitio_proxy_config" "billing" {
       resource    = "invoice"
       action      = "create"
     },
+    # A regex matches every invoice. A placeholder such as {invoice_id} in a url
+    # would make Permit add an invoice_id attribute to the invoice resource.
     {
       url         = "^https://billing\\.example\\.com/v1/invoices/[0-9]+$"
       url_type    = "regex"
@@ -64,9 +74,9 @@ Basic injects `auth_secret.basic` into the Authorization header as a Basic user:
 
 Headers, which injects plain headers into the request, is not supported yet: the provider cannot send a Headers secret to the Permit API, so a plan that sets it fails.
 - `auth_secret` (Attributes, Sensitive) Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service. Set the attribute that `auth_mechanism` names: `bearer` or `basic`. `headers` is for Headers authentication, which is not supported yet. Its values are sensitive: Terraform hides them in plan output, and an output that references one must be marked `sensitive = true`. Terraform still stores them in plain text in the state. Take them from a variable marked `sensitive = true` rather than writing them in the configuration. (see [below for nested schema](#nestedatt--auth_secret))
-- `key` (String) Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.
+- `key` (String) The key of the proxy config. Changing it replaces the proxy config.
 - `mapping_rules` (Attributes List) Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method. The Permit API identifies a rule by its `url` and `http_method`, so no two rules may have the same pair. When a rule leaves the list, or its `url` or `http_method` changes, the provider removes the old rule from Permit. Each create and update leaves Permit with the rules in the list's order. Terraform does not detect rules reordered outside Terraform: the state keeps the list's order, and the next update of the proxy config restores it in Permit. (see [below for nested schema](#nestedatt--mapping_rules))
-- `name` (String) The name of the proxy config, for example: 'Stripe API
+- `name` (String) The name of the proxy config, for example: 'Stripe API'
 
 ### Read-Only
 
@@ -80,9 +90,9 @@ Headers, which injects plain headers into the request, is not supported yet: the
 
 Optional:
 
-- `basic` (String)
-- `bearer` (String)
-- `headers` (Map of String)
+- `basic` (String) The `user:password` the Permit Proxy sends in the Authorization header as Basic credentials. Required when `auth_mechanism` is `Basic`.
+- `bearer` (String) The token the Permit Proxy sends in the Authorization header as a Bearer token. Required when `auth_mechanism` is `Bearer`.
+- `headers` (Map of String) The headers for Headers authentication, which is not supported yet. Only one of `bearer`, `basic` and `headers` may be set, and `auth_mechanism` needs the one it names, so a configuration cannot use `headers` yet.
 
 
 <a id="nestedatt--mapping_rules"></a>
@@ -90,15 +100,15 @@ Optional:
 
 Required:
 
-- `http_method` (String)
-- `resource` (String)
-- `url` (String)
+- `http_method` (String) The HTTP method that a request must use, in lower case: `get`, `post`, `put`, `patch`, `delete`, `head` or `options`.
+- `resource` (String) The key of the resource that a matching request acts on.
+- `url` (String) The URL that a request must match, such as `https://billing.example.com/v1/invoices`, or a regular expression when `url_type` is `regex`. A placeholder in the URL, such as `{invoice_id}` in `.../invoices/{invoice_id}`, makes the Permit API add an attribute of that name to `resource`, so a `permitio_resource` that manages that resource no longer matches Permit and its next plan shows the change.
 
 Optional:
 
-- `action` (String)
-- `headers` (Map of String)
-- `priority` (Number)
+- `action` (String) The key of the action on `resource` that a matching request is checked for.
+- `headers` (Map of String) Header values that a request must have to match the rule.
+- `priority` (Number) The priority of the rule when more than one rule matches a request: the higher the number, the higher the precedence.
 - `url_type` (String) How `url` matches the request URL. Set to `regex` to match it as a regular expression; omit it to match `url` as a URL. The API checks that `url` is a valid URL, or a valid regular expression, only when it creates the proxy config: an update stores `url` without checking it.
 
 ## Import

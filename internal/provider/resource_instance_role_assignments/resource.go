@@ -49,7 +49,9 @@ func (r *ResourceInstanceRoleAssignmentResource) Schema(_ context.Context, _ res
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Assigns a role to a user on a specific resource instance within a tenant. " +
 			"This is for instance-level permissions (e.g., giving a user editor access to a specific document). " +
-			"For tenant-level role assignments, use `permitio_role_assignment` instead.",
+			"For tenant-level role assignments, use `permitio_role_assignment` instead. " +
+			"Every argument forces replacement: changing one removes the assignment and " +
+			"creates a new one.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -59,19 +61,22 @@ func (r *ResourceInstanceRoleAssignmentResource) Schema(_ context.Context, _ res
 				},
 			},
 			"organization_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the organization the role assignment belongs to.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"project_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the project the role assignment belongs to.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"environment_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the environment the role assignment belongs to.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
@@ -112,7 +117,8 @@ func (r *ResourceInstanceRoleAssignmentResource) Schema(_ context.Context, _ res
 				},
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "When the role assignment was created.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},

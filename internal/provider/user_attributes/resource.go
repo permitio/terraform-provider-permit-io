@@ -52,14 +52,15 @@ func (c *UserAttributeResource) Schema(_ context.Context, _ resource.SchemaReque
 	}
 	attributes["key"] = schema.StringAttribute{
 		Required:            true,
-		MarkdownDescription: "The key of the attribute",
+		MarkdownDescription: "The key of the attribute. Changing it replaces the attribute.",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["type"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "The type of the attribute",
+		Required: true,
+		MarkdownDescription: "The type of the attribute: `bool`, `number`, `string`, " +
+			"`time`, `array` or `json`.",
 		Validators: []validator.String{
 			common.AttributeTypeValidator{},
 		},

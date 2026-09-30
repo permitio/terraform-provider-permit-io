@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     permitio = {
-      source = "registry.terraform.io/permitio/permit-io"
+      source = "permitio/permit-io"
     }
   }
 }
@@ -37,10 +37,10 @@ resource "permitio_resource" "document" {
 resource "permitio_role" "writer" {
   key         = "writer"
   name        = "writer"
-  description = "a new admin"
+  description = "a writer"
   permissions = ["document:read", "document:write", "document:delete"]
   depends_on = [
-    "permitio_resource.document"
+    permitio_resource.document
   ]
 }
 resource "permitio_role" "admin" {
@@ -50,8 +50,8 @@ resource "permitio_role" "admin" {
   permissions = ["document:read", "document:write"]
   extends     = []
   depends_on = [
-    "permitio_resource.document",
-    "permitio_role.writer"
+    permitio_resource.document,
+    permitio_role.writer
   ]
 }
 
@@ -122,9 +122,12 @@ variable "documents_api_credentials" {
   sensitive   = true
 }
 
-resource "permitio_proxy_config" "foaz" {
-  key            = "foaz"
-  name           = "Boaz"
+# The mapping rules use static URLs: a placeholder such as {document_id} in a url
+# would make Permit add a document_id attribute to the document resource, which
+# this configuration manages.
+resource "permitio_proxy_config" "documents_api" {
+  key            = "documents_api"
+  name           = "Documents API"
   auth_mechanism = "Basic"
   auth_secret = {
     basic = var.documents_api_credentials
@@ -132,29 +135,29 @@ resource "permitio_proxy_config" "foaz" {
   mapping_rules = [
     {
       url         = "https://example.com/documents"
-      http_method = "post"
-      resource    = "document"
-      action      = "read"
-    },
-    {
-      url         = "https://example.com/documents/{project_id}"
       http_method = "get"
-      resource    = "document"
+      resource    = permitio_resource.document.key
       action      = "read"
     },
     {
-      url         = "https://example.com/documents/{project_id}"
+      url         = "https://example.com/documents"
+      http_method = "post"
+      resource    = permitio_resource.document.key
+      action      = "write"
+    },
+    {
+      url         = "https://example.com/documents/archive"
       http_method = "put"
-      resource    = "document"
-      action      = "update"
+      resource    = permitio_resource.document.key
+      action      = "write"
       headers = {
-        "x-update-id" : "foaz"
+        "x-archive" : "true"
       }
     },
     {
-      url         = "https://example.com/documents/{project_id}"
+      url         = "https://example.com/documents/archive"
       http_method = "delete"
-      resource    = "document"
+      resource    = permitio_resource.document.key
       action      = "delete"
     }
   ]

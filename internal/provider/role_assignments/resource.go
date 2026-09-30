@@ -47,7 +47,9 @@ func (r *RoleAssignmentResource) Metadata(_ context.Context, req resource.Metada
 
 func (r *RoleAssignmentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Assigns a role to a user within a specific tenant.",
+		MarkdownDescription: "Assigns a top-level role to a user within a specific tenant. " +
+			"Every argument forces replacement: changing one removes the assignment and " +
+			"creates a new one.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -57,19 +59,22 @@ func (r *RoleAssignmentResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 			},
 			"organization_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the organization the role assignment belongs to.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"project_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the project the role assignment belongs to.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"environment_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the environment the role assignment belongs to.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
@@ -96,7 +101,8 @@ func (r *RoleAssignmentResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "When the role assignment was created.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},

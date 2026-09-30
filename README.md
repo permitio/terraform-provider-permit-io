@@ -5,8 +5,6 @@
 Permit.io is a cloud-based authorization service that allows you to define and manage permissions for your application.
 In order to make it easier and safer to manage your objects and policies in Permit.io, we have created a Terraform provider.
 
-_This provider repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
-
 ## Documentation
 
 - Use our public docs site for more info - https://docs.permit.io
@@ -16,6 +14,10 @@ _This provider repository is built on the [Terraform Plugin Framework](https://g
 ## Usage
 
 The [examples directory](./examples) contains a number of examples of how to use the provider.
+Each resource and data source has an example under `examples/resources/` or
+`examples/data-sources/`, which its page in `docs/` shows. The tests validate every example
+under `examples/` with the provider built from this repository; the snippets below are not
+validated, so the examples are the reference.
 
 ### Provider Definition
 
@@ -23,8 +25,8 @@ The [examples directory](./examples) contains a number of examples of how to use
 terraform {
   required_providers {
     permitio = {
-      source  = "registry.terraform.io/permitio/permit-io"
-      version = "~> 0.0.1"
+      source  = "permitio/permit-io"
+      version = "~> 1.0"
     }
   }
 }
@@ -71,13 +73,12 @@ resource "permitio_role" "reader" {
   key         = "reader"
   name        = "Reader"
   description = "A role that allows reading documents"
+  # Building the permission from the resource's key makes Terraform create the
+  # resource before the role.
   permissions = [
-    "document:read"
+    "${permitio_resource.document.key}:read"
   ]
   extends     = []
-  depends_on  = [
-    permitio_resource.document # This is required to ensure that the resource is created before the role (for the permissions assignment)
-  ]
 }
 ```
 
@@ -147,10 +148,6 @@ go mod tidy
 ```
 
 Then commit the changes to `go.mod` and `go.sum`.
-
-## Using the provider
-
-Fill this in for each provider
 
 ## Developing the Provider
 

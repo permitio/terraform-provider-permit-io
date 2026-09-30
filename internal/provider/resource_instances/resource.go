@@ -42,8 +42,9 @@ func (r *ResourceInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 	delete(attributes, "description")
 
 	attributes["resource"] = schema.StringAttribute{
-		MarkdownDescription: "The resource type key that this instance belongs to.",
-		Required:            true,
+		MarkdownDescription: "The resource type key that this instance belongs to. " +
+			"Changing it replaces the instance.",
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
@@ -56,8 +57,9 @@ func (r *ResourceInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 		},
 	}
 	attributes["tenant"] = schema.StringAttribute{
-		MarkdownDescription: "The tenant key for multi-tenant enforcement.",
-		Optional:            true,
+		MarkdownDescription: "The tenant key for multi-tenant enforcement. Changing it " +
+			"replaces the instance.",
+		Optional: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},

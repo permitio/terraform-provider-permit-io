@@ -1,5 +1,8 @@
 # Code of Conduct
 
-HashiCorp Community Guidelines apply to you when interacting with the community here on GitHub and contributing code.
+Everyone who takes part in this project, in issues, pull requests, discussions and
+reviews, is expected to follow the
+[Contributor Covenant, version 3.0](https://www.contributor-covenant.org/version/3/0/code_of_conduct/).
 
-Please read the full text at https://www.hashicorp.com/community-guidelines
+Report behavior that breaks it to the maintainers of this repository, or with
+GitHub's "Report content" option on the comment, issue or pull request.
