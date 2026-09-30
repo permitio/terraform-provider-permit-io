@@ -27,7 +27,8 @@ permissions: {}
 
 # Concurrency is set per job, not for the whole run: cancelling a run would also
 # cancel an acceptance leg that is already running against its Permit environment.
-# Build, each offline leg, prek, generate and goreleaser run once per ref at a time.
+# Build, each offline leg, prek, coverage, generate and goreleaser run once per ref
+# at a time.
 # A new push to a pull request cancels the older run of these jobs; on main, and
 # for manual runs, the new one waits for it instead.
 
@@ -339,6 +340,37 @@ jobs:
             exit 2
           fi
 
+  # Maps the provider's calls to the operations of the vendored Permit API spec,
+  # coverage/openapi.json, checks the triage in coverage/operations.yaml and decodes
+  # fixtures of every response the provider reads with the SDK's models, offline.
+  # apicoverage exits 1 on a finding and 2 when it did not run, such as on a spec
+  # that is not the one coverage/spec.lock.json pins. Its report goes to the job
+  # summary. The weekly coverage workflow runs it against the live spec.
+  coverage:
+    name: API coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-coverage
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+      - name: Check the API coverage
+        shell: bash
+        run: |
+          go build -o "$RUNNER_TEMP/apicoverage" ./internal/acctest/apicoverage
+          status=0
+          "$RUNNER_TEMP/apicoverage" >"$RUNNER_TEMP/coverage.md" || status=$?
+          tee -a "$GITHUB_STEP_SUMMARY" <"$RUNNER_TEMP/coverage.md"
+          exit "$status"
+
   # Regenerates the docs and formats the examples in a checkout directory that is
   # not named after the repository, so the output cannot depend on that name.
   generate:
@@ -598,7 +630,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [build, generate, goreleaser, offline, prek, test]
+    needs: [build, coverage, generate, goreleaser, offline, prek, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -606,7 +638,7 @@ jobs:
         shell: bash
         env:
           NEEDS: ${{ toJSON(needs) }}
-          EXPECTED_JOBS: 6
+          EXPECTED_JOBS: 7
         run: |
           if ! results=$(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"$NEEDS"); then
             echo "::error title=CI::Could not read the job results."

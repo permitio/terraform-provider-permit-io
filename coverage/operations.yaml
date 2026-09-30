@@ -1,0 +1,374 @@
+# The triage of every operation in coverage/openapi.json, by operation ID, grouped
+# by the operation's first tag in spec order. internal/acctest/apicoverage checks
+# it against the spec and the provider's call sites; see its doc comment.
+#
+# status:
+#   covered     a call site of the provider sends the operation; calls lists the
+#               calls that do, named as in the apicoverage report
+#   equivalent  not sent, but a covered operation does the same for the surface
+#   inline      managed as an attribute of another resource, through that
+#               resource's own operations
+#   planned     a ticket plans a Terraform surface for it
+#   excluded    the provider does not manage it
+# surface: the Terraform surface: permitio_x for a resource, data.permitio_x for a
+#   data source, either followed by .attribute for one attribute, and provider for
+#   the provider block. Needed for covered, equivalent and inline.
+# reason: needed for equivalent, planned and excluded, from this vocabulary:
+#   list-variant    (equivalent) lists what the surface reads one at a time
+#   bulk-variant    (equivalent) does in bulk what the surface does one at a time
+#   alternate-form  (equivalent) another route to what the surface does
+#   new-resource    (planned) a new resource
+#   not-ga          (excluded) an early-access (EAP) operation; required for one
+#                   the spec does not deprecate
+#   deprecated      (excluded) deprecated in the spec; required for one it does
+#   account-admin   (excluded) administers the Permit account: organizations,
+#                   members, invites and API keys
+#   runtime-data    (excluded) data the application manages at runtime, such as
+#                   users and their tenants
+#   read-only       (excluded) logs, history, statistics or derived data
+#   imperative      (excluded) a one-off action, not a declared object
+#   pdp-runtime     (excluded) configuration the PDPs read at runtime
+#   not-planned     (excluded) no ticket plans a Terraform surface for it yet
+# ticket: a ticket ID, such as PER-123, not a URL. Needed for planned, and for a
+#   covered operation the spec deprecates or marks EAP: the ticket that moves the
+#   provider off it.
+operations:
+  # Members
+  get_authenticated_member: {status: excluded, reason: account-admin}
+  list_organization_members: {status: excluded, reason: account-admin}
+  create_organization_members: {status: excluded, reason: account-admin}
+  delete_organization_permissions: {status: excluded, reason: account-admin}
+  get_organization_member: {status: excluded, reason: account-admin}
+  delete_organization_member: {status: excluded, reason: account-admin}
+  update_organization_member: {status: excluded, reason: account-admin}
+  # API Keys
+  get_environment_api_key: {status: excluded, reason: account-admin}
+  get_api_key_scope: {status: covered, surface: [provider], calls: [APIKeysApiService.GetApiKeyScope]}
+  list_api_keys: {status: excluded, reason: account-admin}
+  create_api_key: {status: excluded, reason: account-admin}
+  get_api_key: {status: excluded, reason: account-admin}
+  delete_api_key: {status: excluded, reason: account-admin}
+  rotate_api_key: {status: excluded, reason: account-admin}
+  # Organizations
+  list_organizations: {status: excluded, reason: account-admin}
+  create_organization: {status: excluded, reason: account-admin}
+  get_organization: {status: excluded, reason: account-admin}
+  delete_organization: {status: excluded, reason: account-admin}
+  update_organization: {status: excluded, reason: account-admin}
+  get_active_organization: {status: excluded, reason: account-admin}
+  restore_organization: {status: excluded, reason: account-admin}
+  stats_organization: {status: excluded, reason: read-only}
+  # Data Export
+  start_organization_export: {status: excluded, reason: imperative}
+  get_organization_export: {status: excluded, reason: imperative}
+  # Invites
+  list_organization_invites: {status: excluded, reason: account-admin}
+  invite_members_to_organization: {status: excluded, reason: account-admin}
+  cancel_invite: {status: excluded, reason: account-admin}
+  # Projects
+  list_projects: {status: excluded, reason: not-planned}
+  create_project: {status: excluded, reason: not-planned}
+  get_project: {status: excluded, reason: not-planned}
+  delete_project: {status: excluded, reason: not-planned}
+  update_project: {status: excluded, reason: not-planned}
+  # Environments
+  stats_environments: {status: excluded, reason: read-only}
+  list_environments: {status: excluded, reason: not-planned}
+  create_environment: {status: excluded, reason: not-planned}
+  get_environment: {status: excluded, reason: not-planned}
+  delete_environment: {status: excluded, reason: not-planned}
+  update_environment: {status: excluded, reason: not-planned}
+  copy_environment: {status: excluded, reason: imperative}
+  copy_environment_async: {status: excluded, reason: imperative}
+  get_copy_environment_async_result: {status: excluded, reason: imperative}
+  test_jwks_by_url: {status: excluded, reason: imperative}
+  # Bulk Operations
+  bulk_create_or_replace_roles: {status: equivalent, surface: [permitio_role], reason: bulk-variant}
+  # Condition Sets
+  list_condition_sets: {status: equivalent, surface: [permitio_user_set, permitio_resource_set, data.permitio_condition_set], reason: list-variant}
+  create_condition_set: {status: covered, surface: [permitio_user_set, permitio_resource_set], calls: [ConditionSets.Create]}
+  get_condition_set: {status: covered, surface: [permitio_user_set, permitio_resource_set, data.permitio_condition_set], calls: [ConditionSets.Get]}
+  delete_condition_set: {status: covered, surface: [permitio_user_set, permitio_resource_set], calls: [ConditionSets.Delete]}
+  update_condition_set: {status: covered, surface: [permitio_user_set, permitio_resource_set], calls: [ConditionSets.Update]}
+  get_condition_set_ancestors: {status: excluded, reason: read-only}
+  get_condition_set_descendants: {status: excluded, reason: read-only}
+  # Implicit Grants
+  create_implicit_grant: {status: covered, surface: [permitio_role_derivation], calls: [ImplicitGrants.Create]}
+  delete_implicit_grant: {status: covered, surface: [permitio_role_derivation], calls: [ImplicitGrants.Delete]}
+  update_implicit_grants_conditions: {status: excluded, reason: not-planned}
+  # Resource Action Groups
+  list_resource_action_groups: {status: excluded, reason: not-planned}
+  create_resource_action_group: {status: excluded, reason: not-planned}
+  get_resource_action_group: {status: excluded, reason: not-planned}
+  delete_resource_action_group: {status: excluded, reason: not-planned}
+  update_resource_action_group: {status: excluded, reason: not-planned}
+  # Resource Actions
+  list_resource_actions: {status: inline, surface: [permitio_resource.actions]}
+  create_resource_action: {status: inline, surface: [permitio_resource.actions]}
+  get_resource_action: {status: inline, surface: [permitio_resource.actions]}
+  delete_resource_action: {status: inline, surface: [permitio_resource.actions]}
+  update_resource_action: {status: inline, surface: [permitio_resource.actions]}
+  # Resource Attributes
+  list_resource_attributes: {status: equivalent, surface: [permitio_user_attribute, data.permitio_user_attribute], reason: list-variant}
+  create_resource_attribute: {status: covered, surface: [permitio_user_attribute], calls: [ResourceAttributes.Create]}
+  get_resource_attribute: {status: covered, surface: [permitio_user_attribute, data.permitio_user_attribute], calls: [ResourceAttributes.Get]}
+  delete_resource_attribute: {status: covered, surface: [permitio_user_attribute], calls: [ResourceAttributes.Delete]}
+  update_resource_attribute: {status: covered, surface: [permitio_user_attribute], calls: [ResourceAttributes.Update]}
+  # Resource Relations
+  list_resource_relations: {status: equivalent, surface: [permitio_relation], reason: list-variant}
+  create_resource_relation: {status: covered, surface: [permitio_relation], calls: [ResourceRelations.Create]}
+  get_resource_relation: {status: covered, surface: [permitio_relation], calls: [ResourceRelations.Get]}
+  delete_resource_relation: {status: covered, surface: [permitio_relation], calls: [ResourceRelations.Delete]}
+  # Resource Roles
+  list_resource_roles: {status: equivalent, surface: [permitio_role, data.permitio_role], reason: list-variant}
+  create_resource_role: {status: covered, surface: [permitio_role], calls: [ResourceRoles.Create]}
+  get_resource_role: {status: covered, surface: [permitio_role, data.permitio_role, permitio_role_derivation], calls: [ResourceRoles.Get]}
+  delete_resource_role: {status: covered, surface: [permitio_role], calls: [ResourceRoles.Delete]}
+  update_resource_role: {status: covered, surface: [permitio_role], calls: [ResourceRoles.Update]}
+  assign_permissions_to_resource_role: {status: covered, surface: [permitio_role], calls: [ResourceRoles.AssignPermissions]}
+  remove_permissions_from_resource_role: {status: covered, surface: [permitio_role], calls: [ResourceRoles.RemovePermissions]}
+  get_resource_role_ancestors: {status: excluded, reason: read-only}
+  get_resource_role_descendants: {status: excluded, reason: read-only}
+  # Resources
+  list_resources: {status: equivalent, surface: [permitio_resource, data.permitio_resource], reason: list-variant}
+  create_resource: {status: covered, surface: [permitio_resource], calls: [Resources.Create]}
+  get_resource: {status: covered, surface: [permitio_resource, data.permitio_resource], calls: [Resources.Get]}
+  replace_resource: {status: equivalent, surface: [permitio_resource], reason: alternate-form}
+  delete_resource: {status: covered, surface: [permitio_resource], calls: [Resources.Delete]}
+  update_resource: {status: covered, surface: [permitio_resource], calls: [Resources.Update]}
+  # Roles
+  list_roles: {status: equivalent, surface: [permitio_role, data.permitio_role], reason: list-variant}
+  create_role: {status: covered, surface: [permitio_role], calls: [Roles.Create]}
+  get_role: {status: covered, surface: [permitio_role, data.permitio_role], calls: [Roles.Get]}
+  delete_role: {status: covered, surface: [permitio_role], calls: [Roles.Delete]}
+  update_role: {status: covered, surface: [permitio_role], calls: [Roles.Update]}
+  assign_permissions_to_role: {status: covered, surface: [permitio_role], calls: [Roles.AssignPermissions]}
+  remove_permissions_from_role: {status: covered, surface: [permitio_role], calls: [Roles.RemovePermissions]}
+  get_role_ancestors: {status: excluded, reason: read-only}
+  get_role_descendants: {status: excluded, reason: read-only}
+  # User Attributes
+  list_user_attributes: {status: equivalent, surface: [permitio_user_attribute, data.permitio_user_attribute], reason: list-variant}
+  create_user_attribute: {status: equivalent, surface: [permitio_user_attribute], reason: alternate-form}
+  get_user_attribute: {status: equivalent, surface: [permitio_user_attribute], reason: alternate-form}
+  delete_user_attribute: {status: equivalent, surface: [permitio_user_attribute], reason: alternate-form}
+  update_user_attribute: {status: equivalent, surface: [permitio_user_attribute], reason: alternate-form}
+  # Groups
+  list_direct_group: {status: excluded, reason: not-planned}
+  get_direct_group: {status: excluded, reason: not-planned}
+  list_group_children: {status: excluded, reason: not-planned}
+  list_group_parents: {status: excluded, reason: not-planned}
+  list_group_users: {status: excluded, reason: not-planned}
+  list_group_roles: {status: covered, surface: [permitio_group_resource_instance_role_assignment], calls: ["group_resource_instance_role_assignments.listRolesPage (HTTP)"]}
+  assign_role_to_group: {status: covered, surface: [permitio_group_resource_instance_role_assignment], calls: ["group_resource_instance_role_assignments.Create (HTTP)"]}
+  remove_role_from_group: {status: covered, surface: [permitio_group_resource_instance_role_assignment], calls: ["group_resource_instance_role_assignments.Delete (HTTP)"]}
+  get_group: {status: excluded, reason: deprecated}
+  delete_group: {status: excluded, reason: not-planned}
+  list_group: {status: excluded, reason: deprecated}
+  create_group: {status: excluded, reason: not-planned}
+  assign_user_to_group: {status: excluded, reason: not-planned}
+  remove_user_from_group: {status: excluded, reason: not-planned}
+  assign_group_to_group: {status: excluded, reason: not-planned}
+  remove_group_from_group: {status: excluded, reason: not-planned}
+  # Users
+  list_users: {status: equivalent, surface: [data.permitio_user], reason: list-variant}
+  create_user: {status: excluded, reason: runtime-data}
+  get_user: {status: covered, surface: [data.permitio_user], calls: [Users.Get]}
+  replace_user: {status: excluded, reason: runtime-data}
+  delete_user: {status: excluded, reason: runtime-data}
+  update_user: {status: excluded, reason: runtime-data}
+  assign_role_to_user: {status: covered, surface: [permitio_role_assignment, permitio_resource_instance_role_assignment], calls: [Users.AssignResourceRole, Users.AssignRole]}
+  unassign_role_from_user: {status: covered, surface: [permitio_role_assignment, permitio_resource_instance_role_assignment], calls: [Users.UnassignResourceRole, Users.UnassignRole]}
+  # Tenants
+  list_tenant_users: {status: excluded, reason: runtime-data}
+  add_user_to_tenant: {status: excluded, reason: runtime-data}
+  list_tenants: {status: equivalent, surface: [permitio_tenant], reason: list-variant}
+  create_tenant: {status: covered, surface: [permitio_tenant], calls: [Tenants.Create]}
+  get_tenant: {status: covered, surface: [permitio_tenant], calls: [Tenants.Get]}
+  delete_tenant: {status: covered, surface: [permitio_tenant], calls: [Tenants.Delete]}
+  update_tenant: {status: covered, surface: [permitio_tenant], calls: [Tenants.Update]}
+  delete_tenant_user: {status: excluded, reason: runtime-data}
+  # Role Assignments
+  list_role_assignments_detailed: {status: equivalent, surface: [permitio_role_assignment, permitio_resource_instance_role_assignment], reason: list-variant}
+  list_role_assignments: {status: covered, surface: [permitio_role_assignment, permitio_resource_instance_role_assignment], calls: [RoleAssignments.List]}
+  assign_role: {status: equivalent, surface: [permitio_role_assignment, permitio_resource_instance_role_assignment], reason: alternate-form}
+  unassign_role: {status: equivalent, surface: [permitio_role_assignment, permitio_resource_instance_role_assignment], reason: alternate-form}
+  bulk_assign_role: {status: equivalent, surface: [permitio_role_assignment, permitio_resource_instance_role_assignment], reason: bulk-variant}
+  bulk_unassign_role: {status: equivalent, surface: [permitio_role_assignment, permitio_resource_instance_role_assignment], reason: bulk-variant}
+  # Condition Set Rules
+  list_set_permissions: {status: covered, surface: [permitio_condition_set_rule], calls: [ConditionSets.ListSetPermissions]}
+  assign_set_permissions: {status: covered, surface: [permitio_condition_set_rule], calls: [ConditionSets.AssignSetPermissions]}
+  unassign_set_permissions: {status: covered, surface: [permitio_condition_set_rule], calls: [ConditionSets.UnassignSetPermissions]}
+  # Resource Instances
+  list_resource_instances_detailed: {status: equivalent, surface: [permitio_resource_instance], reason: list-variant}
+  list_resource_instances: {status: equivalent, surface: [permitio_resource_instance], reason: list-variant}
+  create_resource_instance: {status: covered, surface: [permitio_resource_instance], calls: [ResourceInstances.Create]}
+  get_resource_instance: {status: covered, surface: [permitio_resource_instance], calls: [ResourceInstances.Get]}
+  delete_resource_instance: {status: covered, surface: [permitio_resource_instance], calls: [ResourceInstances.Delete]}
+  update_resource_instance: {status: covered, surface: [permitio_resource_instance], calls: [ResourceInstances.Update]}
+  # Proxy Config
+  list_proxy_configs: {status: equivalent, surface: [permitio_proxy_config], reason: list-variant}
+  create_proxy_config: {status: covered, surface: [permitio_proxy_config], calls: [ProxyConfigs.Create]}
+  get_proxy_config: {status: covered, surface: [permitio_proxy_config], calls: [ProxyConfigs.Get]}
+  delete_proxy_config: {status: covered, surface: [permitio_proxy_config], calls: [ProxyConfigs.Delete]}
+  update_proxy_config: {status: covered, surface: [permitio_proxy_config], calls: ["proxy_configs.update (HTTP)"]}
+  # Bulk Operations
+  bulk_replace_users: {status: excluded, reason: runtime-data}
+  bulk_create_users: {status: excluded, reason: runtime-data}
+  bulk_delete_users: {status: excluded, reason: runtime-data}
+  bulk_create_tenants: {status: equivalent, surface: [permitio_tenant], reason: bulk-variant}
+  bulk_delete_tenants: {status: equivalent, surface: [permitio_tenant], reason: bulk-variant}
+  bulk_replace_resource_instances: {status: equivalent, surface: [permitio_resource_instance], reason: bulk-variant}
+  bulk_delete_resource_instances: {status: equivalent, surface: [permitio_resource_instance], reason: bulk-variant}
+  # Email Configurations
+  get_email_configuration: {status: excluded, reason: not-planned}
+  create_or_update_email_configuration: {status: excluded, reason: not-planned}
+  send_test_email: {status: excluded, reason: imperative}
+  # Email Templates
+  list_templates: {status: excluded, reason: not-planned}
+  get_template_by_type: {status: excluded, reason: not-planned}
+  update_template_by_type: {status: excluded, reason: not-planned}
+  send_test_email_by_type: {status: excluded, reason: imperative}
+  # Relationship tuples
+  list_relationship_tuples_detailed: {status: excluded, reason: not-planned}
+  list_relationship_tuples: {status: excluded, reason: not-planned}
+  create_relationship_tuple: {status: excluded, reason: not-planned}
+  delete_relationship_tuple: {status: excluded, reason: not-planned}
+  bulk_create_relationship_tuples: {status: excluded, reason: not-planned}
+  bulk_delete_relationship_tuples: {status: excluded, reason: not-planned}
+  # User Invites
+  list_user_invites: {status: excluded, reason: runtime-data}
+  create_user_invite: {status: excluded, reason: runtime-data}
+  get_user_invite: {status: excluded, reason: runtime-data}
+  delete_user_invite: {status: excluded, reason: runtime-data}
+  update_user_invite: {status: excluded, reason: runtime-data}
+  approve_user_invite: {status: excluded, reason: imperative}
+  # Access Requests (EAP)
+  list_access_requests: {status: excluded, reason: not-ga}
+  create_access_request: {status: excluded, reason: not-ga}
+  get_access_request: {status: excluded, reason: not-ga}
+  update_access_request_reviewer: {status: excluded, reason: not-ga}
+  approve_access_request: {status: excluded, reason: not-ga}
+  deny_access_request: {status: excluded, reason: not-ga}
+  cancel_access_request: {status: excluded, reason: not-ga}
+  # Policy Decision Points
+  list_pdp_configs: {status: excluded, reason: pdp-runtime}
+  get_pdp_config_values: {status: excluded, reason: pdp-runtime}
+  enable_debug_audit_logs: {status: excluded, reason: imperative}
+  disable_debug_audit_logs: {status: excluded, reason: imperative}
+  rotate_pdp_api_key: {status: excluded, reason: imperative}
+  refresh_environment_pdp_data: {status: excluded, reason: imperative}
+  refresh_pdp_data: {status: excluded, reason: imperative}
+  migrate_shards: {status: excluded, reason: imperative}
+  # Audit Logs
+  list_audit_logs: {status: excluded, reason: read-only}
+  get_detailed_audit_log: {status: excluded, reason: read-only}
+  # Policy Git Repositories
+  list_policy_repos: {status: excluded, reason: not-planned}
+  create_policy_repo: {status: excluded, reason: not-planned}
+  get_active_policy_repo: {status: excluded, reason: not-planned}
+  disable_active_policy_repo: {status: excluded, reason: not-planned}
+  activate_policy_repo: {status: excluded, reason: not-planned}
+  get_policy_repo: {status: excluded, reason: not-planned}
+  delete_policy_repo: {status: excluded, reason: not-planned}
+  # Elements Configs (EAP)
+  list_elements_configs: {status: planned, reason: new-resource, ticket: PER-16623}
+  create_elements_config: {status: planned, reason: new-resource, ticket: PER-16623}
+  get_elements_config: {status: planned, reason: new-resource, ticket: PER-16623}
+  update_elements_config: {status: planned, reason: new-resource, ticket: PER-16623}
+  get_elements_config_runtime: {status: excluded, reason: not-ga}
+  delete_elements_config: {status: planned, reason: new-resource, ticket: PER-16623}
+  # Users Elements Data
+  elements_list_users: {status: excluded, reason: runtime-data}
+  elements_create_user: {status: excluded, reason: runtime-data}
+  elements_delete_user: {status: excluded, reason: runtime-data}
+  list_elements_user_invites: {status: excluded, reason: runtime-data}
+  elements_list_roles: {status: excluded, reason: runtime-data}
+  elements_assign_role_to_user: {status: excluded, reason: runtime-data}
+  elements_unassign_role_from_user: {status: excluded, reason: runtime-data}
+  set_config_active: {status: excluded, reason: runtime-data}
+  # Audit Elements Data
+  elements_list_audit_logs: {status: excluded, reason: read-only}
+  # Access Requests (EAP)
+  list_access_requests_v2_elements__proj_id___env_id__config__elements_config_id__access_requests_get: {status: excluded, reason: not-ga}
+  create_access_request_v2_elements__proj_id___env_id__config__elements_config_id__access_requests_post: {status: excluded, reason: not-ga}
+  get_access_request_v2_elements__proj_id___env_id__config__elements_config_id__access_requests__access_request_id__get: {status: excluded, reason: not-ga}
+  update_access_request_reviewer_v2_elements__proj_id___env_id__config__elements_config_id__access_requests__access_request_id__reviewer_patch: {status: excluded, reason: not-ga}
+  approve_access_request_v2_elements__proj_id___env_id__config__elements_config_id__access_requests__access_request_id__approve_put: {status: excluded, reason: not-ga}
+  deny_access_request_v2_elements__proj_id___env_id__config__elements_config_id__access_requests__access_request_id__deny_put: {status: excluded, reason: not-ga}
+  cancel_access_request_v2_elements__proj_id___env_id__config__elements_config_id__access_requests__access_request_id__cancel_put: {status: excluded, reason: not-ga}
+  # Operation Approval (EAP)
+  list_operation_approvals: {status: excluded, reason: not-ga}
+  create_operation_approval: {status: excluded, reason: not-ga}
+  get_operation_approval: {status: excluded, reason: not-ga}
+  update_operation_approval_reviewer: {status: excluded, reason: not-ga}
+  approve_operation_approval: {status: excluded, reason: not-ga}
+  deny_operation_approval: {status: excluded, reason: not-ga}
+  cancel_operation_approval: {status: excluded, reason: not-ga}
+  # (untagged)
+  list_api_events: {status: excluded, reason: deprecated}
+  get_api_event: {status: excluded, reason: deprecated}
+  get_request_body: {status: excluded, reason: deprecated}
+  get_response_body: {status: excluded, reason: deprecated}
+  # API History
+  list_api_events_v2_history_get: {status: excluded, reason: read-only}
+  get_api_event_v2_history__event_id__get: {status: excluded, reason: read-only}
+  get_request_body_v2_history__event_id__request_get: {status: excluded, reason: read-only}
+  get_response_body_v2_history__event_id__response_get: {status: excluded, reason: read-only}
+  # Activity Log
+  list_activity_events: {status: excluded, reason: read-only}
+  list_activity_types: {status: excluded, reason: read-only}
+  # (untagged)
+  list_activity_events_v2_deprecated_activity_get: {status: excluded, reason: deprecated}
+  list_activity_types_v2_deprecated_activity_types_get: {status: excluded, reason: deprecated}
+  # Policy Guards (EAP)
+  list_policy_guard_scopes: {status: excluded, reason: not-ga}
+  create_policy_guard_scope: {status: excluded, reason: not-ga}
+  get_policy_guard_scope: {status: excluded, reason: not-ga}
+  delete_policy_guard_scope: {status: excluded, reason: not-ga}
+  associate_policy_guard_scope: {status: excluded, reason: not-ga}
+  disassociate_policy_guard_scope: {status: excluded, reason: not-ga}
+  list_policy_guard_rules: {status: excluded, reason: not-ga}
+  create_policy_guard_rule: {status: excluded, reason: not-ga}
+  delete_policy_guard_rule: {status: excluded, reason: not-ga}
+  # Scope Configurations
+  get_scope_config: {status: excluded, reason: not-planned}
+  set_scope_config: {status: excluded, reason: not-planned}
+  reset_scope_config: {status: excluded, reason: not-planned}
+  # Audit Log Replay
+  run_audit_log_replay: {status: excluded, reason: imperative}
+  # OPAL Data ( EAP )
+  get_all_data_optimized: {status: excluded, reason: not-ga}
+  get_all_data: {status: excluded, reason: not-ga}
+  get_all_users_data: {status: excluded, reason: not-ga}
+  get_all_role_assignments_data: {status: excluded, reason: not-ga}
+  get_all_resource_instances_data: {status: excluded, reason: not-ga}
+  get_all_relationships_data: {status: excluded, reason: not-ga}
+
+# The decode failures the check allows, by the fixture label the report gives
+# them. A label that no longer fails is a finding, so fix the entry when the SDK
+# or the spec changes.
+known_decode_failures:
+  - variant: AttributeType=object
+    note: The SDK's AttributeType enum lacks object, so a resource with such an
+      attribute cannot be read (PER-16616).
+  - variant: AttributeType=object_array
+    note: The SDK's AttributeType enum lacks object_array, so a resource with such
+      an attribute cannot be read (PER-16616).
+  - variant: ProxyConfigRead.secret as HeadersAuth
+    note: No fixture can be built, since the spec types secret as HeadersAuth,
+      BasicAuth or BearerAuth, which are not JSON Schema types (PER-16342), so this
+      check never decodes a Headers secret. The SDK reads secret as a string and
+      cannot read a Headers secret, an object (PER-16617);
+      TestSDKCannotReadHeadersSecret checks that directly.
+  - variant: ProxyConfigRead.secret as BasicAuth
+    note: No fixture can be built, since BasicAuth is not a JSON Schema type
+      (PER-16342).
+  - variant: ProxyConfigRead.secret as BearerAuth
+    note: No fixture can be built, since BearerAuth is not a JSON Schema type
+      (PER-16342).
+  - variant: ResponseListRoleAssignmentsV2FactsProjIdEnvIdRoleAssignmentsGet as PaginatedResult_RoleAssignmentRead_
+    note: The SDK's model has no paginated form. The API sends it only when asked
+      with include_total_count, which the SDK cannot send.
+  - variant: ResponseListRoleAssignmentsV2FactsProjIdEnvIdRoleAssignmentsGet as PaginatedResult_RoleAssignmentDetailedRead_
+    note: The SDK's model has no paginated form. The API sends it only when asked
+      with include_total_count, which the SDK cannot send.
