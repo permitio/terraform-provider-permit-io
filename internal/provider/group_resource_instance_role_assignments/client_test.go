@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/terraform-provider-permit-io/internal/acctest/mockpermit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // TestHTTPRoutesMatchTheClient sends each request the client builds itself to a
@@ -331,9 +332,12 @@ func TestRead(t *testing.T) {
 			if tt.wantErr == "" && got != want {
 				t.Errorf("Read(%q) = %+v, want %+v", tt.role, got, want)
 			}
-			// resource.go removes the assignment from state on any "not found" error.
-			if tt.wantErr != "not found" && err != nil && strings.Contains(err.Error(), "not found") {
-				t.Errorf("Read(%q) error = %v, must not read as not-found", tt.role, err)
+			// resource.go removes the assignment from state when common.IsNotFoundErr
+			// reports the error as not found, and fails the read on any other error.
+			wantNotFound := tt.wantErr == "not found"
+			if err != nil && common.IsNotFoundErr(err) != wantNotFound {
+				t.Errorf("Read(%q) error = %v: IsNotFoundErr = %v, want %v",
+					tt.role, err, !wantNotFound, wantNotFound)
 			}
 			if !slices.Equal(pages, tt.wantPages) {
 				t.Errorf("Read(%q) requested pages %v, want %v", tt.role, pages, tt.wantPages)

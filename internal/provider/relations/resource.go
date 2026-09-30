@@ -100,6 +100,10 @@ func (c *RelationResource) Read(ctx context.Context, request resource.ReadReques
 	reality, err := c.client.Read(ctx, model.ObjectResourceId.ValueString(), model.Key.ValueString())
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Failed reading relation",
 			fmt.Errorf("unable to read relation %s/%s: %w", model.ObjectResourceId, model.Key, err).Error(),
@@ -127,7 +131,7 @@ func (c *RelationResource) Delete(ctx context.Context, request resource.DeleteRe
 
 	err := c.client.Delete(ctx, model.ObjectResource.ValueString(), model.Key.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting relation",
 			fmt.Errorf("unable to delete relation %s/%s: %w", model.ObjectResource.ValueString(), model.Key.ValueString(), err).Error(),

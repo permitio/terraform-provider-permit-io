@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type roleAssignmentClient struct {
@@ -36,7 +37,7 @@ func (c *roleAssignmentClient) Read(ctx context.Context, data RoleAssignmentMode
 		return RoleAssignmentModel{}, err
 	}
 	if assignments == nil || len(*assignments) == 0 {
-		return RoleAssignmentModel{}, fmt.Errorf("role assignment not found")
+		return RoleAssignmentModel{}, fmt.Errorf("role assignment %w", common.ErrNotFound)
 	}
 	return tfModelFromRoleAssignmentRead((*assignments)[0]), nil
 }

@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,9 +12,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	permitErrors "github.com/permitio/permit-golang/pkg/errors"
-	"github.com/permitio/permit-golang/pkg/openapi"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/user_attributes"
 )
 
@@ -98,22 +96,10 @@ func testAccExistsFromErr(err error) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-	if testAccIsNotFound(err) {
+	if common.IsNotFoundErr(err) {
 		return false, nil
 	}
 	return false, err
-}
-
-// testAccIsNotFound reports whether err is the API's 404 answer. Most SDK methods
-// wrap it in a PermitError; ResourceAttributes.Get returns the raw OpenAPI error,
-// whose message is the HTTP status line.
-func testAccIsNotFound(err error) bool {
-	var permitErr permitErrors.PermitError
-	if errors.As(err, &permitErr) {
-		return permitErr.StatusCode == http.StatusNotFound
-	}
-	var apiErr *openapi.GenericOpenAPIError
-	return errors.As(err, &apiErr) && strings.HasPrefix(apiErr.Error(), "404 ")
 }
 
 // fakeScopeJSON is the API key scope the offline fakes answer with, so SDK calls

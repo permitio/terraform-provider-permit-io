@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type resourceInstanceRoleAssignmentClient struct {
@@ -42,7 +43,8 @@ func (c *resourceInstanceRoleAssignmentClient) Read(ctx context.Context, data Re
 		return ResourceInstanceRoleAssignmentModel{}, err
 	}
 	if assignments == nil {
-		return ResourceInstanceRoleAssignmentModel{}, fmt.Errorf("resource instance role assignment not found")
+		return ResourceInstanceRoleAssignmentModel{},
+			fmt.Errorf("resource instance role assignment %w", common.ErrNotFound)
 	}
 
 	for _, a := range *assignments {
@@ -51,7 +53,8 @@ func (c *resourceInstanceRoleAssignmentClient) Read(ctx context.Context, data Re
 		}
 	}
 
-	return ResourceInstanceRoleAssignmentModel{}, fmt.Errorf("resource instance role assignment not found")
+	return ResourceInstanceRoleAssignmentModel{},
+		fmt.Errorf("resource instance role assignment %w", common.ErrNotFound)
 }
 
 func (c *resourceInstanceRoleAssignmentClient) Delete(ctx context.Context, plan *ResourceInstanceRoleAssignmentModel) error {

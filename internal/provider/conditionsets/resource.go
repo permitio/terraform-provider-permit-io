@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -200,6 +201,10 @@ func (c *conditionSetResource) Read(ctx context.Context, request resource.ReadRe
 	state, err := c.client.Read(ctx, data)
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to Read Condition Set",
 			fmt.Sprintf("Unable to read condition set: %s, Error: %s", data.Id.String(), err.Error()),
@@ -254,7 +259,7 @@ func (c *conditionSetResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	err := c.client.Delete(ctx, state.Key.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error Deleting Condition Set",
 			"Could not delete resource, unexpected error: "+err.Error(),

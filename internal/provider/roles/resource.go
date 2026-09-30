@@ -113,6 +113,10 @@ func (r *RoleResource) Read(ctx context.Context, request resource.ReadRequest, r
 		model.Resource.ValueStringPointer())
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to read role",
 			fmt.Errorf("unable to read role: %w", err).Error(),
@@ -155,7 +159,7 @@ func (r *RoleResource) Delete(ctx context.Context, request resource.DeleteReques
 
 	err := r.client.Delete(ctx, model.Key.ValueString(), model.Resource.ValueStringPointer())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting relation",
 			fmt.Errorf("unable to delete role %s: %w", model.Key.ValueString(), err).Error(),

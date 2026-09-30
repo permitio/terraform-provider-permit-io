@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type resourceInstanceClient struct {
@@ -53,7 +54,7 @@ func (c *resourceInstanceClient) Read(ctx context.Context, key string, resource 
 		return resourceInstanceModel{}, err
 	}
 	if instance == nil {
-		return resourceInstanceModel{}, fmt.Errorf("instance %s not found", instanceId)
+		return resourceInstanceModel{}, fmt.Errorf("instance %s %w", instanceId, common.ErrNotFound)
 	}
 
 	return tfModelFromResourceInstanceRead(*instance), nil

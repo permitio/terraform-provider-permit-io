@@ -195,6 +195,10 @@ func (r *ResourceResource) Read(ctx context.Context, request resource.ReadReques
 
 	state, err := r.ResourceRead(ctx, data)
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to Read Resource",
 			fmt.Sprintf("Unable to read resource: %s, Error: %s", data.Id.String(), err.Error()),
@@ -247,7 +251,7 @@ func (r *ResourceResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	err := r.client.Api.Resources.Delete(ctx, state.Key.ValueString())
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error Deleting Resource",
 			"Could not delete resource, unexpected error: "+err.Error(),

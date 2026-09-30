@@ -3,6 +3,7 @@ package role_derivations_test
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -85,6 +86,74 @@ func TestRoleDerivationCreateDestroy(t *testing.T) {
 
 	m.AssertRoutesHit(mockpermit.ImplicitGrants)
 }
+
+// TestRoleDerivationCreateNotFoundHint checks that when the API answers a
+// derivation's create with a 404, here because role is not a role on on_resource,
+// the error names the keys to check.
+func TestRoleDerivationCreateNotFoundHint(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ResourceRoles,
+		mockpermit.ResourceRelations, mockpermit.ImplicitGrants)
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{
+				Config: missingRoleConfig,
+				ExpectError: regexp.MustCompile(`Check\s+that\s+to_role\s+"editor"\s+is\s+a\s+` +
+					`role\s+on\s+resource\s+"file",\s+role\s+"manager"\s+is\s+a\s+role\s+on\s+` +
+					`on_resource\s+"folder"`),
+			},
+		},
+	})
+
+	if got := len(m.Requests(http.MethodPost, implicitGrantsPath)); got != 1 {
+		t.Errorf("POST %s: got %d requests, want 1", implicitGrantsPath, got)
+	}
+}
+
+// missingRoleConfig is a derivation from a manager role that the folder resource
+// does not have.
+const missingRoleConfig = `
+resource "permitio_resource" "folder" {
+  key     = "folder"
+  name    = "Folder"
+  actions = {
+    list = { name = "List" }
+  }
+}
+
+resource "permitio_resource" "file" {
+  key     = "file"
+  name    = "File"
+  actions = {
+    read = { name = "Read" }
+  }
+}
+
+resource "permitio_role" "editor" {
+  key         = "editor"
+  name        = "Editor"
+  resource    = permitio_resource.file.key
+  permissions = ["read"]
+  extends     = []
+}
+
+resource "permitio_relation" "parent" {
+  key              = "parent"
+  name             = "Parent folder"
+  subject_resource = permitio_resource.folder.key
+  object_resource  = permitio_resource.file.key
+}
+
+resource "permitio_role_derivation" "manager_edits_files" {
+  resource    = permitio_resource.file.key
+  to_role     = permitio_role.editor.key
+  on_resource = permitio_resource.folder.key
+  role        = "manager"
+  linked_by   = permitio_relation.parent.key
+}
+`
 
 // derivationConfig returns folders with their manager and owner roles, files in
 // folders with their editor role, and the two derivations that make a folder's

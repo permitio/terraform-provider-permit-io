@@ -85,6 +85,10 @@ func (r *TenantResource) Read(ctx context.Context, request resource.ReadRequest,
 	tenantRead, err := r.client.Read(ctx, model.Key.ValueString())
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to read tenant",
 			fmt.Errorf("unable to read tenant: %w", err).Error(),
@@ -127,7 +131,7 @@ func (r *TenantResource) Delete(ctx context.Context, request resource.DeleteRequ
 
 	err := r.client.Delete(ctx, model.Key.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Unable to delete tenant",
 			fmt.Errorf("unable to delete tenant: %w", err).Error(),

@@ -154,7 +154,7 @@ func (r *ResourceInstanceResource) Delete(ctx context.Context, request resource.
 
 	err := r.client.Delete(ctx, model.Key.ValueString(), model.Resource.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Unable to delete resource instance",
 			fmt.Errorf("unable to delete resource instance %s:%s: %w", model.Resource.ValueString(), model.Key.ValueString(), err).Error(),

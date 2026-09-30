@@ -108,6 +108,8 @@ type Server struct {
 	// objects maps a collection name to its objects by key.
 	objects map[string]map[string]map[string]any
 	lastID  int
+	// faults are the requests FailRequests answers with an error.
+	faults []*fault
 }
 
 // New starts a fake Permit API that serves the API key scope and the given route
@@ -223,6 +225,27 @@ func (s *Server) StoredKeys() []string {
 	return keys
 }
 
+// DeleteStored removes objects from the fake the way a change outside Terraform
+// would, each written "collection/key" as StoredKeys lists it. It fails the test
+// when it is given nothing or an object that is not stored, so a test cannot pass
+// by deleting nothing.
+func (s *Server) DeleteStored(stored ...string) {
+	s.t.Helper()
+	if len(stored) == 0 {
+		s.t.Errorf("mockpermit: DeleteStored was given nothing to delete")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, name := range stored {
+		collection, key, _ := strings.Cut(name, "/")
+		if _, ok := s.objects[collection][key]; !ok {
+			s.t.Errorf("mockpermit: DeleteStored: %s is not stored", name)
+			continue
+		}
+		delete(s.objects[collection], key)
+	}
+}
+
 func (s *Server) handle(mux *http.ServeMux, rt route) {
 	if _, served := s.hits[rt.pattern]; served {
 		return
@@ -270,6 +293,9 @@ func (s *Server) recordRequests(next http.Handler) http.Handler {
 			s.t.Errorf("mockpermit: %s %s: the path has an empty or dot segment, usually an "+
 				"empty key or ID in the path", r.Method, escaped)
 			s.writeError(w, http.StatusBadRequest, "BAD_REQUEST", "path is not canonical")
+			return
+		}
+		if s.failRequest(w, r) {
 			return
 		}
 		next.ServeHTTP(w, r)

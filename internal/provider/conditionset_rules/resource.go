@@ -187,7 +187,7 @@ func (c *ConditionSetRuleResource) Delete(ctx context.Context, req resource.Dele
 
 	err := c.client.Delete(ctx, &state)
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error Deleting Condition Set Rule",
 			"Could not delete condition set rule, unexpected error: "+err.Error(),

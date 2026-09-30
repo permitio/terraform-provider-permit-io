@@ -103,6 +103,10 @@ func (c *UserAttributeResource) Read(ctx context.Context, request resource.ReadR
 	reality, err := c.client.Read(ctx, model.Key.ValueString())
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Failed reading user attribute",
 			err.Error(),
@@ -145,7 +149,7 @@ func (c *UserAttributeResource) Delete(ctx context.Context, request resource.Del
 
 	err := c.client.Delete(ctx, model.Key.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting user attribute",
 			err.Error(),

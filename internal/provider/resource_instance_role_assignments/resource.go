@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"strings"
 )
 
@@ -149,8 +150,7 @@ func (r *ResourceInstanceRoleAssignmentResource) Read(ctx context.Context, req r
 
 	state, err := r.client.Read(ctx, data)
 	if err != nil {
-		// If the resource is not found, remove it from state (drift detection)
-		if strings.Contains(err.Error(), "not found") {
+		if common.IsNotFoundErr(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -175,7 +175,7 @@ func (r *ResourceInstanceRoleAssignmentResource) Delete(ctx context.Context, req
 		return
 	}
 
-	if err := r.client.Delete(ctx, &state); err != nil {
+	if err := r.client.Delete(ctx, &state); err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error deleting resource instance role assignment",
 			fmt.Sprintf("Could not unassign role %s from user %s on resource %s instance %s in tenant %s: %s",

@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type ConditionSetRuleModel struct {
@@ -38,7 +39,7 @@ func (c *ConditionSetRuleClient) Read(ctx context.Context, data ConditionSetRule
 	// The list is filtered server-side by user_set/permission/resource_set, so an
 	// empty result means the rule was removed outside of Terraform.
 	if len(rules) == 0 {
-		return ConditionSetRuleModel{}, fmt.Errorf("condition set rule not found")
+		return ConditionSetRuleModel{}, fmt.Errorf("condition set rule %w", common.ErrNotFound)
 	}
 
 	rule := rules[0]

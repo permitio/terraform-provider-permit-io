@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"strings"
 )
 
@@ -222,6 +223,10 @@ func (c *proxyConfigResource) Read(ctx context.Context, request resource.ReadReq
 	read, err := c.client.read(ctx, model)
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to Read Condition Set",
 			fmt.Sprintf("Unable to read condition set: %s, Error: %s", read.Id.String(), err.Error()),
@@ -271,7 +276,7 @@ func (c *proxyConfigResource) Delete(ctx context.Context, request resource.Delet
 
 	err := c.client.delete(ctx, model)
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Error deleting Proxy Config",
 			fmt.Sprintf("Could not delete Proxy Config, unexpected error: %s", err.Error()),

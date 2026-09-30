@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type groupResourceInstanceRoleAssignmentClient struct {
@@ -138,7 +139,7 @@ func (c *groupResourceInstanceRoleAssignmentClient) Create(ctx context.Context, 
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return &common.APIStatusError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 
 	// Generate ID for Terraform state
@@ -169,7 +170,7 @@ func (c *groupResourceInstanceRoleAssignmentClient) Read(ctx context.Context, da
 	}
 	if !found {
 		return GroupResourceInstanceRoleAssignmentModel{},
-			fmt.Errorf("group resource instance role assignment not found")
+			fmt.Errorf("group resource instance role assignment %w", common.ErrNotFound)
 	}
 
 	return data, nil
@@ -248,7 +249,7 @@ func listRolesPage(ctx context.Context, rolesURL, token string, page int) (group
 
 	if resp.StatusCode != http.StatusOK {
 		return groupRolesPage{},
-			fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+			&common.APIStatusError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 
 	var result groupRolesPage
@@ -312,7 +313,7 @@ func (c *groupResourceInstanceRoleAssignmentClient) Delete(ctx context.Context, 
 	}
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return &common.APIStatusError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 
 	return nil

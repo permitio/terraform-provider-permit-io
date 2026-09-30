@@ -155,7 +155,7 @@ func (r *RoleDerivationResource) Delete(ctx context.Context, request resource.De
 
 	err := r.client.Delete(ctx, model)
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting role derivation",
 			fmt.Errorf("unable to delete role derivation: %w", err).Error(),

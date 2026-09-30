@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/user_attributes"
 )
 
 // testAccUserAttributeKey returns a random user attribute key such as
@@ -62,8 +65,37 @@ func TestAccUserAttributes(t *testing.T) {
 				Config: config("number", ""),
 				Check:  resource.TestCheckResourceAttr(address, "description", ""),
 			},
+			{
+				// An attribute deleted outside Terraform is created again by the next
+				// apply instead of failing the plan.
+				PreConfig: func() { testAccDeleteUserAttribute(t, key) },
+				Config:    config("number", ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(address, plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(address, "key", key),
+					resource.TestCheckResourceAttr(address, "type", "number"),
+				),
+			},
 		},
 	})
+}
+
+// testAccDeleteUserAttribute deletes a user attribute through the SDK, the way a
+// change outside Terraform would.
+func testAccDeleteUserAttribute(t *testing.T, key string) {
+	t.Helper()
+	client, err := testAccPermitClient()
+	if err != nil {
+		t.Fatalf("building the client to delete user attribute %s: %v", key, err)
+	}
+	err = client.Api.ResourceAttributes.Delete(context.Background(), user_attributes.UserKey, key)
+	if err != nil {
+		t.Fatalf("deleting user attribute %s outside Terraform: %v", key, err)
+	}
 }
 
 func TestAccUserAttributeAllTypes(t *testing.T) {
