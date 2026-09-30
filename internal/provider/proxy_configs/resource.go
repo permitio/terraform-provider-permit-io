@@ -98,8 +98,11 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Required:            true,
 			},
 			"auth_mechanism": schema.StringAttribute{
-				MarkdownDescription: "Default: \"Bearer\"\nEnum: \"Bearer\" \"Basic\" \"Headers\"\nProxy config auth mechanism will define the authentication mechanism that will be used to authenticate the request.\n\nBearer injects the secret into the Authorization header as a Bearer token,\n\nBasic injects the secret into the Authorization header as a Basic user:password,\n\nHeaders injects plain headers into the request.",
-				Required:            true,
+				MarkdownDescription: "Enum: \"Bearer\" \"Basic\"\nProxy config auth mechanism will define the authentication mechanism that will be used to authenticate the request.\n\nBearer injects `auth_secret.bearer` into the Authorization header as a Bearer token,\n\nBasic injects `auth_secret.basic` into the Authorization header as a Basic user:password.\n\n" +
+					"Headers, which injects plain headers into the request, is not supported yet: " +
+					"the provider cannot send a Headers secret to the Permit API, so a plan that " +
+					"sets it fails.",
+				Required: true,
 				Validators: []validator.String{
 					authMechanismValidator{},
 				},
@@ -108,7 +111,9 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Required:  true,
 				Sensitive: true,
 				MarkdownDescription: "Proxy config secret is set to enable the Permit Proxy to make " +
-					"proxied requests to the backend service. Its values are sensitive: Terraform " +
+					"proxied requests to the backend service. Set the attribute that " +
+					"`auth_mechanism` names: `bearer` or `basic`. `headers` is for Headers " +
+					"authentication, which is not supported yet. Its values are sensitive: Terraform " +
 					"hides them in plan output, and an output that references one must be marked " +
 					"`sensitive = true`. Terraform still stores them in plain text in the state. " +
 					"Take them from a variable marked `sensitive = true` rather than writing them " +
@@ -194,11 +199,6 @@ func (c *proxyConfigResource) ValidateConfig(ctx context.Context, req resource.V
 
 	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.BEARER)) && data.AuthSecret.Bearer.IsNull() {
 		resp.Diagnostics.AddError("auth_mechanism was set to `bearer` but auth_secret.bearer is not set", "")
-		return
-	}
-
-	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.HEADERS)) && len(data.AuthSecret.Headers) == 0 {
-		resp.Diagnostics.AddError("auth_mechanism was set to `headers` but auth_secret.headers is not set", "")
 		return
 	}
 }

@@ -279,6 +279,45 @@ func TestProxyConfigRejectsURLType(t *testing.T) {
 	}
 }
 
+// TestProxyConfigRejectsHeadersAuth checks that a plan with Headers authentication
+// fails with a message that says so, before the provider sends anything: the
+// provider cannot send the object of header values the API takes as a Headers
+// secret, so such a proxy config could never be created.
+func TestProxyConfigRejectsHeadersAuth(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.ProxyConfigs)
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "permitio_proxy_config" "billing" {
+  key            = "billing"
+  name           = "Billing API"
+  auth_mechanism = "Headers"
+  auth_secret = {
+    headers = { "x-api-key" = "example-api-key" }
+  }
+  mapping_rules = [
+    {
+      url         = "https://billing.example.com/v1/invoices"
+      http_method = "get"
+      resource    = "invoice"
+    },
+  ]
+}
+`,
+				ExpectError: regexp.MustCompile(`Headers\s+authentication\s+is\s+not\s+supported\s+yet;` +
+					`\s+use\s+Bearer\s+or\s+Basic`),
+			},
+		},
+	})
+
+	if requests := m.Requests(http.MethodPost, proxyConfigsPath); len(requests) != 0 {
+		t.Errorf("the provider sent %d creates, want none", len(requests))
+	}
+}
+
 // proxyConfigWithRules returns the configuration of a Bearer proxy config with the
 // mapping rules in rules, written as the elements of an HCL list.
 func proxyConfigWithRules(rules string) string {

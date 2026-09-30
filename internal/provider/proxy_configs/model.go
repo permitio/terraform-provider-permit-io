@@ -93,7 +93,6 @@ func (model *proxyConfigModel) toProxyConfigCreate(ctx context.Context) (models.
 		proxyConfigCreate.Secret = model.AuthSecret.Basic.ValueString()
 	case models.BEARER:
 		proxyConfigCreate.Secret = model.AuthSecret.Bearer.ValueString()
-	case models.HEADERS:
 	}
 
 	return proxyConfigCreate, nil

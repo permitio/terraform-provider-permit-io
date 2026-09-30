@@ -55,16 +55,15 @@ resource "permitio_proxy_config" "billing" {
 
 ### Required
 
-- `auth_mechanism` (String) Default: "Bearer"
-Enum: "Bearer" "Basic" "Headers"
+- `auth_mechanism` (String) Enum: "Bearer" "Basic"
 Proxy config auth mechanism will define the authentication mechanism that will be used to authenticate the request.
 
-Bearer injects the secret into the Authorization header as a Bearer token,
+Bearer injects `auth_secret.bearer` into the Authorization header as a Bearer token,
 
-Basic injects the secret into the Authorization header as a Basic user:password,
+Basic injects `auth_secret.basic` into the Authorization header as a Basic user:password.
 
-Headers injects plain headers into the request.
-- `auth_secret` (Attributes, Sensitive) Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service. Its values are sensitive: Terraform hides them in plan output, and an output that references one must be marked `sensitive = true`. Terraform still stores them in plain text in the state. Take them from a variable marked `sensitive = true` rather than writing them in the configuration. (see [below for nested schema](#nestedatt--auth_secret))
+Headers, which injects plain headers into the request, is not supported yet: the provider cannot send a Headers secret to the Permit API, so a plan that sets it fails.
+- `auth_secret` (Attributes, Sensitive) Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service. Set the attribute that `auth_mechanism` names: `bearer` or `basic`. `headers` is for Headers authentication, which is not supported yet. Its values are sensitive: Terraform hides them in plan output, and an output that references one must be marked `sensitive = true`. Terraform still stores them in plain text in the state. Take them from a variable marked `sensitive = true` rather than writing them in the configuration. (see [below for nested schema](#nestedatt--auth_secret))
 - `key` (String) Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.
 - `mapping_rules` (Attributes List) Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method. (see [below for nested schema](#nestedatt--mapping_rules))
 - `name` (String) The name of the proxy config, for example: 'Stripe API
