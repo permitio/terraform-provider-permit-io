@@ -35,7 +35,38 @@ type ConditionSetClient struct {
 	client *permit.Client
 }
 
-func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (ConditionSetModel, error) {
+// conditionSetTypes gives the name of each type of condition set and the
+// resource type that manages it.
+var conditionSetTypes = map[models.ConditionSetType]struct{ name, resourceType string }{
+	models.USERSET:     {name: "user set", resourceType: "permitio_user_set"},
+	models.RESOURCESET: {name: "resource set", resourceType: "permitio_resource_set"},
+}
+
+// wrongTypeError is the error of a read that finds a condition set of another
+// type than the one the resource type manages, such as a resource set imported
+// as a user set.
+type wrongTypeError struct {
+	key       string
+	want, got models.ConditionSetType
+}
+
+func (e wrongTypeError) Error() string {
+	want, got := conditionSetTypes[e.want], conditionSetTypes[e.got]
+	if got.name == "" {
+		return fmt.Sprintf("The condition set %q has the type %q, so %s cannot manage it.",
+			e.key, e.got, want.resourceType)
+	}
+	return fmt.Sprintf("The condition set %q is a %s, not a %s, so %s cannot manage it. "+
+		"Import it as %s instead; if it is in the state already, remove it with "+
+		"terraform state rm first.", e.key, got.name, want.name, want.resourceType,
+		got.resourceType)
+}
+
+// Read reads the condition set with the key, or the ID when the key is null, of
+// data. It fails with a wrongTypeError when the set is not of conditionSetType.
+func (c *ConditionSetClient) Read(ctx context.Context, conditionSetType models.ConditionSetType,
+	data ConditionSetModel,
+) (ConditionSetModel, error) {
 	var keyOrId string
 
 	if data.Key.IsNull() {
@@ -48,6 +79,17 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 
 	if err != nil {
 		return ConditionSetModel{}, err
+	}
+
+	// The API leaves out the type of a user set, its default.
+	setType := models.USERSET
+	if conditionSet.Type != nil {
+		setType = *conditionSet.Type
+	}
+	if setType != conditionSetType {
+		return ConditionSetModel{}, wrongTypeError{
+			key: conditionSet.Key, want: conditionSetType, got: setType,
+		}
 	}
 
 	conditions, err := common.JSONObjectValue(conditionSet.Conditions, data.Conditions)

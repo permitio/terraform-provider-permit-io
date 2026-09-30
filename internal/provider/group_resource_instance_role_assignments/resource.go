@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -177,21 +176,10 @@ func assignmentID(model GroupResourceInstanceRoleAssignmentModel) string {
 	}, ":")
 }
 
-func (r *GroupResourceInstanceRoleAssignmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Format: group:role:resource:resource_instance:tenant
-	parts := strings.Split(req.ID, ":")
-	if len(parts) != 5 {
-		resp.Diagnostics.AddError(
-			"Invalid import ID format",
-			"Expected format: group:role:resource:resource_instance:tenant\n\n"+
-				"Example: terraform import permitio_group_resource_instance_role_assignment.example \"developers:read-write:workspace:ws-123:default\"",
-		)
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource"), parts[2])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_instance"), parts[3])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), parts[4])...)
+// ImportState imports an assignment by the keys of its group, role, resource,
+// resource instance and tenant.
+func (r *GroupResourceInstanceRoleAssignmentResource) ImportState(
+	ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "group:role:resource:resource_instance:tenant", req, resp)
 }

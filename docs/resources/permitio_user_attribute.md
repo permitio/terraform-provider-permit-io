@@ -34,3 +34,12 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/User-Attributes/opera
 - `resource_id` (String) The ID of the User resource
 - `resource_key` (String) The key of the User resource, will always be `__user`
 - `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a user attribute by its key.
+terraform import permitio_user_attribute.example department
+```

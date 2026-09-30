@@ -100,3 +100,15 @@ Optional:
 - `headers` (Map of String)
 - `priority` (Number)
 - `url_type` (String) How `url` matches the request URL. Set to `regex` to match it as a regular expression; omit it to match `url` as a URL. The API checks that `url` is a valid URL, or a valid regular expression, only when it creates the proxy config: an update stores `url` without checking it.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a proxy config by its key. The import reads the secret back from the
+# Permit API, and the mapping rules in the order Permit holds them. If the
+# configuration lists them in another order, the next apply sends them in the
+# configuration's order.
+terraform import permitio_proxy_config.example billing
+```

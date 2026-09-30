@@ -10,8 +10,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &TenantResource{}
-	_ resource.ResourceWithConfigure = &TenantResource{}
+	_ resource.Resource                = &TenantResource{}
+	_ resource.ResourceWithConfigure   = &TenantResource{}
+	_ resource.ResourceWithImportState = &TenantResource{}
 )
 
 func NewTenantResource() resource.Resource {
@@ -137,4 +138,11 @@ func (r *TenantResource) Delete(ctx context.Context, request resource.DeleteRequ
 			common.APIErrorDetail("delete", "tenant", model.Key.ValueString(), err),
 		)
 	}
+}
+
+// ImportState imports a tenant by its key.
+func (r *TenantResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

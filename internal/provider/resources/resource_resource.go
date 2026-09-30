@@ -16,8 +16,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &ResourceResource{}
-	_ resource.ResourceWithConfigure = &ResourceResource{}
+	_ resource.Resource                = &ResourceResource{}
+	_ resource.ResourceWithConfigure   = &ResourceResource{}
+	_ resource.ResourceWithImportState = &ResourceResource{}
 )
 
 // NewResourceResource is a helper function to simplify the provider implementation.
@@ -258,4 +259,11 @@ func (r *ResourceResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
+}
+
+// ImportState imports a resource by its key.
+func (r *ResourceResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

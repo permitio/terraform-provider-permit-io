@@ -70,6 +70,12 @@ func TestAccUserSetWithContains(t *testing.T) {
 					resource.TestCheckResourceAttrSet(address, "conditions"),
 				),
 			},
+			{
+				ResourceName:      address,
+				ImportState:       true,
+				ImportStateId:     key,
+				ImportStateVerify: true,
+			},
 			// Update testing
 			{
 				Config: providerConfig + fmt.Sprintf(`
@@ -225,6 +231,12 @@ func TestAccResourceSetWithContains(t *testing.T) {
 					resource.TestCheckResourceAttr(address, "name", setName),
 					resource.TestCheckResourceAttrSet(address, "conditions"),
 				),
+			},
+			{
+				ResourceName:      address,
+				ImportState:       true,
+				ImportStateId:     setKey,
+				ImportStateVerify: true,
 			},
 		},
 	})

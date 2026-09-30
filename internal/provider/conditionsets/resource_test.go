@@ -673,6 +673,187 @@ resource "permitio_resource_set" "drafts" {
 	})
 }
 
+// TestImportedResourceSetNamedByResourceID imports a resource set created outside
+// Terraform whose configuration names its resource by ID. Import can only give
+// the resource's key, which the API returns, so the plan after the import must
+// change the resource to the ID in place: a replacement would delete the rules on
+// the set.
+func TestImportedResourceSetNamedByResourceID(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ConditionSets)
+	const address = "permitio_resource_set.drafts"
+	const documentConfig = `
+resource "permitio_resource" "document" {
+  key  = "document"
+  name = "Document"
+  actions = {
+    read = { name = "Read" }
+  }
+}
+`
+	config := documentConfig + `
+resource "permitio_resource_set" "drafts" {
+  key      = "drafts"
+  name     = "Drafts"
+  resource = permitio_resource.document.id
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "resource.status" = { equals = "draft" } }] }]
+  })
+}
+`
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{
+				Config: documentConfig,
+				Check: func(*terraform.State) error {
+					return createOutsideTerraform(m, conditionSetsPath, `{
+						"key": "drafts", "name": "Drafts", "type": "resourceset",
+						"resource_id": "document",
+						"conditions": {"allOf": [{"allOf": [
+							{"resource.status": {"equals": "draft"}}]}]}
+					}`)
+				},
+			},
+			{
+				Config:             config,
+				ResourceName:       address,
+				ImportState:        true,
+				ImportStateId:      "drafts",
+				ImportStatePersist: true,
+				// The state also holds the resource, which the first step created.
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					for _, state := range states {
+						if state.Attributes["key"] != "drafts" {
+							continue
+						}
+						if got := state.Attributes["resource"]; got != "document" {
+							return fmt.Errorf("the imported resource set names resource %q, "+
+								"want its key, document", got)
+						}
+						return nil
+					}
+					return fmt.Errorf("the import left no resource set drafts in %v", states)
+				},
+			},
+			{
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(address, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.TestCheckResourceAttrPair(address, "resource",
+					"permitio_resource.document", "id"),
+			},
+		},
+	})
+}
+
+// createOutsideTerraform sends body to the mock the way a change outside Terraform
+// would, as a POST to path, and fails unless the mock answers 200.
+func createOutsideTerraform(m *mockpermit.Server, path, body string) error {
+	request, err := http.NewRequest(http.MethodPost, m.URL+path, strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer "+mockpermit.APIKey)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("POST %s: status %s, want 200 OK", path, response.Status)
+	}
+	return nil
+}
+
+// TestImportRejectsConditionSetOfOtherType imports a resource set's key as a user
+// set and a user set's key as a resource set, and checks that each import fails
+// with an error that names the resource type to import it as: adopting a set of
+// the other type would let the next apply change or delete it.
+func TestImportRejectsConditionSetOfOtherType(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ConditionSets)
+	const config = `
+resource "permitio_resource" "document" {
+  key  = "document"
+  name = "Document"
+  actions = {
+    read = { name = "Read" }
+  }
+}
+
+resource "permitio_resource_set" "drafts" {
+  key      = "drafts"
+  name     = "Drafts"
+  resource = permitio_resource.document.key
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "resource.status" = { equals = "draft" } }] }]
+  })
+}
+
+resource "permitio_user_set" "reviewers" {
+  key  = "reviewers"
+  name = "Reviewers"
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "subject.role" = { equals = "reviewer" } }] }]
+  })
+}
+`
+	const wrongConfig = config + `
+resource "permitio_user_set" "wrong" {
+  key  = "drafts"
+  name = "Drafts"
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "resource.status" = { equals = "draft" } }] }]
+  })
+}
+
+resource "permitio_resource_set" "wrong" {
+  key      = "reviewers"
+  name     = "Reviewers"
+  resource = permitio_resource.document.key
+  conditions = jsonencode({
+    allOf = [{ allOf = [{ "subject.role" = { equals = "reviewer" } }] }]
+  })
+}
+`
+
+	// Terraform wraps the error's lines, so any run of spaces may be a line break.
+	wrapped := func(text string) *regexp.Regexp {
+		return regexp.MustCompile(strings.Join(strings.Fields(regexp.QuoteMeta(text)), `\s+`))
+	}
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{Config: config},
+			{
+				Config:        wrongConfig,
+				ResourceName:  "permitio_user_set.wrong",
+				ImportState:   true,
+				ImportStateId: "drafts",
+				ExpectError: wrapped(`The condition set "drafts" is a resource set, not a ` +
+					`user set, so permitio_user_set cannot manage it. Import it as ` +
+					`permitio_resource_set instead`),
+			},
+			{
+				Config:        wrongConfig,
+				ResourceName:  "permitio_resource_set.wrong",
+				ImportState:   true,
+				ImportStateId: "reviewers",
+				ExpectError: wrapped(`The condition set "reviewers" is a user set, not a ` +
+					`resource set, so permitio_resource_set cannot manage it. Import it as ` +
+					`permitio_user_set instead`),
+			},
+		},
+	})
+}
+
 // TestUserSetRejectsResource checks that a user set takes no resource: the API
 // drops a user set's resource, so setting one never had an effect.
 func TestUserSetRejectsResource(t *testing.T) {

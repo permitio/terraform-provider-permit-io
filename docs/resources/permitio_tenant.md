@@ -34,3 +34,15 @@ Manages a Permit.io tenant. Tenants represent isolated groups or organizations w
 - `organization_id` (String) The organization ID. This is a unique identifier for the organization.
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a tenant by its key.
+# An imported tenant with no attributes has none in the state, so if the
+# configuration sets attributes = jsonencode({}), the first plan after the import
+# adds it in place. Applying that plan changes nothing in Permit.
+terraform import permitio_tenant.example acme
+```

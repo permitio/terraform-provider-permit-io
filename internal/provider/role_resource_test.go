@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -402,6 +403,34 @@ func TestAccRoleDerivation(t *testing.T) {
 			{
 				Config: config,
 				Check:  checks,
+			},
+			{
+				ResourceName: address,
+				ImportState:  true,
+				ImportStateId: strings.Join([]string{
+					fileKey, fileAdminKey, folderKey, folderAdminKey, parentKey,
+				}, ":"),
+				ImportStateVerify: true,
+				// A role derivation has no id attribute.
+				ImportStateVerifyIdentifierAttribute: "to_role",
+			},
+			{
+				ResourceName:      "permitio_relation.parent",
+				ImportState:       true,
+				ImportStateId:     fileKey + ":" + parentKey,
+				ImportStateVerify: true,
+			},
+			{
+				ResourceName:      "permitio_resource.file",
+				ImportState:       true,
+				ImportStateId:     fileKey,
+				ImportStateVerify: true,
+			},
+			{
+				ResourceName:      "permitio_role.fileAdmin",
+				ImportState:       true,
+				ImportStateId:     fileKey + ":" + fileAdminKey,
+				ImportStateVerify: true,
 			},
 			{
 				PreConfig: func() {

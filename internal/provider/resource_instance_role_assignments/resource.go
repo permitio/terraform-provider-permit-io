@@ -3,7 +3,6 @@ package resource_instance_role_assignments
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -196,21 +195,10 @@ func assignmentID(model ResourceInstanceRoleAssignmentModel) string {
 	}, ":")
 }
 
-func (r *ResourceInstanceRoleAssignmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Format: user:role:resource:resource_instance:tenant
-	parts := strings.Split(req.ID, ":")
-	if len(parts) != 5 {
-		resp.Diagnostics.AddError(
-			"Invalid import ID format",
-			"Expected format: user:role:resource:resource_instance:tenant\n\n"+
-				"Example: terraform import permitio_resource_instance_role_assignment.example \"user@example.com:editor:document:doc-123:default\"",
-		)
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource"), parts[2])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_instance"), parts[3])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), parts[4])...)
+// ImportState imports an assignment by the keys of its user, role, resource,
+// resource instance and tenant.
+func (r *ResourceInstanceRoleAssignmentResource) ImportState(
+	ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "user:role:resource:resource_instance:tenant", req, resp)
 }

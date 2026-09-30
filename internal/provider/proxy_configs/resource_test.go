@@ -184,6 +184,15 @@ resource "permitio_proxy_config" "billing" {
 					}`),
 				),
 			},
+			{
+				// The import reads the secret and the three rules back from the API, in
+				// the order the API holds them, which the update left in the planned
+				// order.
+				ResourceName:      address,
+				ImportState:       true,
+				ImportStateId:     "billing",
+				ImportStateVerify: true,
+			},
 		},
 	})
 

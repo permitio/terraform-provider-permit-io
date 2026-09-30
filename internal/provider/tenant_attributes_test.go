@@ -40,6 +40,12 @@ func TestAccTenantAttributesRemoved(t *testing.T) {
 				),
 			},
 			{
+				ResourceName:      address,
+				ImportState:       true,
+				ImportStateId:     key,
+				ImportStateVerify: true,
+			},
+			{
 				Config: config(""),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckNoResourceAttr(address, "attributes"),

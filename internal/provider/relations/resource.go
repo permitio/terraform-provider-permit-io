@@ -12,8 +12,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &RelationResource{}
-	_ resource.ResourceWithConfigure = &RelationResource{}
+	_ resource.Resource                = &RelationResource{}
+	_ resource.ResourceWithConfigure   = &RelationResource{}
+	_ resource.ResourceWithImportState = &RelationResource{}
 )
 
 func NewRelationResource() resource.Resource {
@@ -113,7 +114,12 @@ func (c *RelationResource) Read(ctx context.Context, request resource.ReadReques
 		return
 	}
 
-	reality, err := c.client.Read(ctx, model.ObjectResourceId.ValueString(), model.Key.ValueString())
+	// An imported relation has only the key of its object resource.
+	objectResource := model.ObjectResourceId
+	if objectResource.IsNull() {
+		objectResource = model.ObjectResource
+	}
+	reality, err := c.client.Read(ctx, objectResource.ValueString(), model.Key.ValueString())
 
 	if err != nil {
 		if common.IsNotFoundErr(err) {
@@ -159,4 +165,12 @@ func (c *RelationResource) Delete(ctx context.Context, request resource.DeleteRe
 // relationID names a relation in error messages by its object resource and key.
 func relationID(model relationModel) string {
 	return model.ObjectResource.ValueString() + "/" + model.Key.ValueString()
+}
+
+// ImportState imports a relation by the key of its object resource and its own
+// key, the two that name it in the API.
+func (c *RelationResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "object_resource:key", request, response)
 }

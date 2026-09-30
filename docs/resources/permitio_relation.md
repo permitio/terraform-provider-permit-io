@@ -36,3 +36,14 @@ See [the documentation](https://api.permit.io/v2/redoc#tag/Resource-Relations/op
 - `project_id` (String) The project ID. This is a unique identifier for the project.
 - `subject_resource_id` (String) The subject resource ID
 - `updated_at` (String) The update timestamp. This is a timestamp for when the object was last updated.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a relation using the format: object_resource:key
+# object_resource is the key, not the ID, of the resource the relation is on. A key
+# that contains ":" cannot be imported.
+terraform import permitio_relation.example file:parent
+```

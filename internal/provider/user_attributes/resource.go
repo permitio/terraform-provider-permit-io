@@ -13,8 +13,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &UserAttributeResource{}
-	_ resource.ResourceWithConfigure = &UserAttributeResource{}
+	_ resource.Resource                = &UserAttributeResource{}
+	_ resource.ResourceWithConfigure   = &UserAttributeResource{}
+	_ resource.ResourceWithImportState = &UserAttributeResource{}
 )
 
 func NewUserAttributeResource() resource.Resource {
@@ -166,4 +167,11 @@ func (c *UserAttributeResource) Delete(ctx context.Context, request resource.Del
 		)
 		return
 	}
+}
+
+// ImportState imports a user attribute by its key.
+func (c *UserAttributeResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

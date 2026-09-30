@@ -2,6 +2,7 @@ package conditionsets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -19,11 +20,13 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource               = &UserSetResource{}
-	_ resource.ResourceWithConfigure  = &UserSetResource{}
-	_ resource.Resource               = &ResourceSetResource{}
-	_ resource.ResourceWithConfigure  = &ResourceSetResource{}
-	_ resource.ResourceWithModifyPlan = &ResourceSetResource{}
+	_ resource.Resource                = &UserSetResource{}
+	_ resource.ResourceWithConfigure   = &UserSetResource{}
+	_ resource.Resource                = &ResourceSetResource{}
+	_ resource.ResourceWithConfigure   = &ResourceSetResource{}
+	_ resource.ResourceWithModifyPlan  = &ResourceSetResource{}
+	_ resource.ResourceWithImportState = &UserSetResource{}
+	_ resource.ResourceWithImportState = &ResourceSetResource{}
 )
 
 func NewResourceSetResource() resource.Resource {
@@ -284,11 +287,16 @@ func (c *conditionSetResource) Read(ctx context.Context, request resource.ReadRe
 		return
 	}
 
-	state, err := c.client.Read(ctx, data)
+	state, err := c.client.Read(ctx, c.conditionSetType, data)
 
 	if err != nil {
 		if common.IsNotFoundErr(err) {
 			response.State.RemoveResource(ctx)
+			return
+		}
+		var wrongType wrongTypeError
+		if errors.As(err, &wrongType) {
+			response.Diagnostics.AddError("Condition set of another type", wrongType.Error())
 			return
 		}
 		response.Diagnostics.AddError(
@@ -352,4 +360,13 @@ func (c *conditionSetResource) Delete(ctx context.Context, req resource.DeleteRe
 		)
 		return
 	}
+}
+
+// ImportState imports a user set or a resource set by its key. An imported resource
+// set names its resource by key. Read fails on a set of the other type, so a
+// resource set cannot be imported as a user set, or the reverse.
+func (c *conditionSetResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

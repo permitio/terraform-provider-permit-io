@@ -52,6 +52,12 @@ func TestAccUserAttributes(t *testing.T) {
 				),
 			},
 			{
+				ResourceName:      address,
+				ImportState:       true,
+				ImportStateId:     key,
+				ImportStateVerify: true,
+			},
+			{
 				Config: config("number", "an updated test"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(address, "key", key),

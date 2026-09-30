@@ -20,8 +20,9 @@ import (
 )
 
 var (
-	_ resource.Resource              = &proxyConfigResource{}
-	_ resource.ResourceWithConfigure = &proxyConfigResource{}
+	_ resource.Resource                = &proxyConfigResource{}
+	_ resource.ResourceWithConfigure   = &proxyConfigResource{}
+	_ resource.ResourceWithImportState = &proxyConfigResource{}
 )
 
 func NewProxyConfigResource() resource.Resource {
@@ -245,9 +246,14 @@ func (c *proxyConfigResource) Create(ctx context.Context, request resource.Creat
 }
 
 func (c *proxyConfigResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+	// Read takes only what it looks the proxy config up by and the order of the
+	// mapping rules: the state of an imported proxy config has no auth_secret yet.
 	var model proxyConfigModel
 
-	response.Diagnostics.Append(request.State.Get(ctx, &model)...)
+	response.Diagnostics.Append(request.State.GetAttribute(ctx, path.Root("id"), &model.Id)...)
+	response.Diagnostics.Append(request.State.GetAttribute(ctx, path.Root("key"), &model.Key)...)
+	response.Diagnostics.Append(request.State.GetAttribute(ctx, path.Root("mapping_rules"),
+		&model.MappingRules)...)
 
 	if response.Diagnostics.HasError() {
 		return
@@ -317,4 +323,12 @@ func (c *proxyConfigResource) Delete(ctx context.Context, request resource.Delet
 		)
 		return
 	}
+}
+
+// ImportState imports a proxy config by its key. Read fills in the secret, which
+// the API returns, and the mapping rules in the order the API holds them.
+func (c *proxyConfigResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

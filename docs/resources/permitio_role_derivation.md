@@ -22,3 +22,20 @@ Grants `to_role` on `resource` to every user who has `role` on an `on_resource` 
 - `resource` (String) The key or ID of the resource that `to_role` belongs to. Users get `to_role` on instances of this resource.
 - `role` (String) The key of a role on `on_resource`. Users who have this role on an `on_resource` instance get `to_role` on the linked `resource` instances.
 - `to_role` (String) The key of the role on `resource` that users get through this derivation.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a role derivation using the format:
+# resource:to_role:on_resource:role:linked_by
+# For example, file:editor:folder:manager:parent is the derivation that makes
+# managers of a folder editors of the files linked to it by the parent relation.
+# The import keeps the resource part as given, so write it the way the
+# configuration names the resource: its ID if the configuration uses the ID,
+# such as permitio_resource.file.id, and its key otherwise. If they differ, the
+# next plan replaces the derivation. The other parts are keys. A key that
+# contains ":" cannot be imported.
+terraform import permitio_role_derivation.example file:editor:folder:manager:parent
+```

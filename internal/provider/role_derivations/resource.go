@@ -12,8 +12,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &RoleDerivationResource{}
-	_ resource.ResourceWithConfigure = &RoleDerivationResource{}
+	_ resource.Resource                = &RoleDerivationResource{}
+	_ resource.ResourceWithConfigure   = &RoleDerivationResource{}
+	_ resource.ResourceWithImportState = &RoleDerivationResource{}
 )
 
 func NewRoleDerivationResource() resource.Resource {
@@ -171,4 +172,15 @@ func derivationID(model roleDerivationModel) string {
 	return fmt.Sprintf("%s:%s to %s:%s",
 		model.OnResource.ValueString(), model.Role.ValueString(),
 		model.Resource.ValueString(), model.ToRole.ValueString())
+}
+
+// ImportState imports a role derivation by all five attributes, which Read needs
+// to find it: the API path names the role it grants, to_role on resource, and the
+// derivation is the grant of that role that matches on_resource, role and
+// linked_by. Read keeps resource as the import ID gives it, key or ID, so it must
+// match the configuration, or the next plan replaces the derivation.
+func (r *RoleDerivationResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "resource:to_role:on_resource:role:linked_by", request, response)
 }

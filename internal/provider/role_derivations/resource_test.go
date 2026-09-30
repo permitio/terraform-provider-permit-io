@@ -1,15 +1,18 @@
 package role_derivations_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/permitio/terraform-provider-permit-io/internal/acctest/mockpermit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider"
 )
@@ -235,3 +238,125 @@ resource "permitio_role_derivation" "owner_edits_files" {
 }
 `, editorDescription, editorPermissions)
 }
+
+// TestImportedRoleDerivationNamedByResourceID imports a role derivation created
+// outside Terraform, whose configuration names its resource by ID, with the ID as
+// the resource part of the import ID, and checks that the next plan leaves it
+// alone. Read keeps the resource the import ID gives, and a change of resource
+// replaces the derivation, which drops the permissions it grants until the
+// create.
+func TestImportedRoleDerivationNamedByResourceID(t *testing.T) {
+	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ResourceRoles,
+		mockpermit.ResourceRelations, mockpermit.ImplicitGrants)
+	const address = "permitio_role_derivation.manager_edits_files"
+	const config = folderManagerFileEditorConfig + `
+resource "permitio_role_derivation" "manager_edits_files" {
+  resource    = permitio_resource.file.id
+  to_role     = permitio_role.editor.key
+  on_resource = permitio_resource.folder.key
+  role        = permitio_role.manager.key
+  linked_by   = permitio_relation.parent.key
+}
+`
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy:             m.CheckEmpty,
+		Steps: []resource.TestStep{
+			{
+				Config: folderManagerFileEditorConfig,
+				Check: func(*terraform.State) error {
+					return grantOutsideTerraform(m, managerBody)
+				},
+			},
+			{
+				Config:             config,
+				ResourceName:       address,
+				ImportState:        true,
+				ImportStatePersist: true,
+				ImportStateIdFunc: func(state *terraform.State) (string, error) {
+					file, ok := state.RootModule().Resources["permitio_resource.file"]
+					if !ok {
+						return "", errors.New("the state has no permitio_resource.file")
+					}
+					return file.Primary.Attributes["id"] + ":editor:folder:manager:parent", nil
+				},
+			},
+			{
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(address, plancheck.ResourceActionNoop),
+					},
+				},
+				Check: resource.TestCheckResourceAttrPair(address, "resource",
+					"permitio_resource.file", "id"),
+			},
+		},
+	})
+}
+
+// grantOutsideTerraform creates the implicit grant of the file editor role in
+// body the way a change outside Terraform would, and fails unless the mock
+// answers 200.
+func grantOutsideTerraform(m *mockpermit.Server, body string) error {
+	request, err := http.NewRequest(http.MethodPost, m.URL+implicitGrantsPath,
+		strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer "+mockpermit.APIKey)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("POST %s: status %s, want 200 OK", implicitGrantsPath, response.Status)
+	}
+	return nil
+}
+
+// folderManagerFileEditorConfig is folders with a manager role, files in folders
+// with an editor role, and no derivation.
+const folderManagerFileEditorConfig = `
+resource "permitio_resource" "folder" {
+  key  = "folder"
+  name = "Folder"
+  actions = {
+    list = { name = "List" }
+  }
+}
+
+resource "permitio_role" "manager" {
+  key         = "manager"
+  name        = "Manager"
+  resource    = permitio_resource.folder.key
+  permissions = ["list"]
+  extends     = []
+}
+
+resource "permitio_resource" "file" {
+  key  = "file"
+  name = "File"
+  actions = {
+    read = { name = "Read" }
+  }
+}
+
+resource "permitio_role" "editor" {
+  key         = "editor"
+  name        = "Editor"
+  resource    = permitio_resource.file.key
+  permissions = ["read"]
+  extends     = []
+}
+
+resource "permitio_relation" "parent" {
+  key              = "parent"
+  name             = "Parent folder"
+  subject_resource = permitio_resource.folder.key
+  object_resource  = permitio_resource.file.key
+}
+`

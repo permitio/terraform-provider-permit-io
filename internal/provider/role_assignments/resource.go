@@ -3,7 +3,6 @@ package role_assignments
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -176,18 +175,9 @@ func assignmentID(model RoleAssignmentModel) string {
 	}, ":")
 }
 
-func (r *RoleAssignmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Format: user:role:tenant
-	parts := strings.Split(req.ID, ":")
-	if len(parts) != 3 {
-		resp.Diagnostics.AddError(
-			"Invalid import ID format",
-			"Expected format: user:role:tenant",
-		)
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), parts[2])...)
+// ImportState imports a role assignment by the keys of its user, role and tenant.
+func (r *RoleAssignmentResource) ImportState(
+	ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "user:role:tenant", req, resp)
 }

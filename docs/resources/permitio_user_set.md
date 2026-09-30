@@ -32,3 +32,12 @@ See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/op
 - `id` (String) A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.
 - `organization_id` (String) The id of the organization to which the condition set belongs.
 - `project_id` (String) The id of the project to which the condition set belongs.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a user set by its key.
+terraform import permitio_user_set.example reviewers
+```

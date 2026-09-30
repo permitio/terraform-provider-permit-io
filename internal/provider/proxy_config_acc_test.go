@@ -95,6 +95,14 @@ func TestAccProxyConfigMappingRules(t *testing.T) {
 				Config: config(a, b, c),
 				Check:  testAccCheckProxyConfigRules(proxyKey, []testAccMappingRule{a, b, c}),
 			},
+			{
+				// The import reads the secret back from Permit, and the rules in the
+				// order Permit holds them, which the create left in the planned order.
+				ResourceName:      address,
+				ImportState:       true,
+				ImportStateId:     proxyKey,
+				ImportStateVerify: true,
+			},
 			updateStep(c, a, bPut),
 			updateStep(cWrite, d, bPut),
 			updateStep(d),
