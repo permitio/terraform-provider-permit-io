@@ -1,0 +1,1 @@
+Invalid resource attribute type: text

@@ -22,6 +22,7 @@ GOTOOLCHAIN=auto go generate ./...                 # Docs and example formatting
 - `mockpermit.New(t, mockpermit.Tenants)` serves only the listed route sets and points the provider at the fake through `PERMITIO_API_URL`/`PERMITIO_API_KEY` with `t.Setenv`, so these tests cannot use `t.Parallel`. A request to a route the fake does not serve fails the test; add the route to the mock's route table. So does a path with an empty or dot segment, which usually means an empty key or ID.
 - CI pipes `go test -json` into `internal/acctest/checkgotest`, which fails the run when a test skips or no test runs. An offline test must not call `t.Skip`.
 - Name every test that needs the real API `TestAcc*`: the Build job skips those by name and fails on any other test that skips, including a `resource.Test` without `TF_ACC`.
+- `TestConsumerFixtures` (`consumer_test.go`) runs `validate` with this build on `testdata/consumer/`: `valid/*.tf` must validate and declare every resource and data source, and each `invalid/<case>/` holds a `main.tf` that must fail and an `expect.txt` with text every error must contain. When a schema change adds a rule users can break, add a case and raise `minInvalidFixtures`. It runs the CLI in `TF_ACC_TERRAFORM_PATH` or `terraform` on `PATH` and fails when neither is set; it does not download one.
 
 ## Testing with real API
 - Use `PERMITIO_API_KEY` env var (not `PERMIT_API_KEY`)

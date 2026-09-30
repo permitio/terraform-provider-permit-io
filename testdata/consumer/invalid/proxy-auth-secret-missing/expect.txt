@@ -1,0 +1,1 @@
+auth_mechanism was set to `basic` but auth_secret.basic is not set
