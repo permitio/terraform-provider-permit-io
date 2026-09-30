@@ -10,6 +10,8 @@ description: |-
 
 [Permit.io](https://www.permit.io) is an authorization service. This provider manages the authorization policy of one Permit.io environment as Terraform configuration: resources with their actions and attributes, roles, relations and role derivations, condition sets and their rules, user attributes, tenants, resource instances, role assignments and proxy configs. Its data sources read existing resources, roles, condition sets, user attributes and users. The provider works on the environment its API key belongs to, so it needs an environment-level API key, set in `api_key` or in the `PERMITIO_API_KEY` environment variable.
 
+To upgrade from 0.0.x, follow the [version 1 upgrade guide](https://registry.terraform.io/providers/permitio/permit-io/latest/docs/guides/version-1-upgrade).
+
 ## Supported versions
 
 The provider needs one of:

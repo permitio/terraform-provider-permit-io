@@ -10,6 +10,12 @@ In order to make it easier and safer to manage your objects and policies in Perm
 - Use our public docs site for more info - https://docs.permit.io
 - This Terraform provider has an auto-generated documentation site - https://registry.terraform.io/providers/permitio/permit-io/latest/docs
 
+## Upgrading from 0.0.x to 1.0
+
+Read the [version 1 upgrade guide](docs/guides/version-1-upgrade.md), also on the
+[Terraform Registry](https://registry.terraform.io/providers/permitio/permit-io/latest/docs/guides/version-1-upgrade),
+before you change the version constraint to `~> 1.0`. Each change it lists says who is
+affected, what to do, and what the plan shows, including any replacement.
 
 ## Usage
 
