@@ -27,8 +27,8 @@ permissions: {}
 
 # Concurrency is set per job, not for the whole run: cancelling a run would also
 # cancel an acceptance leg that is already running against its Permit environment.
-# Build, each offline leg, prek, coverage, generate and goreleaser run once per ref
-# at a time.
+# Build, each offline leg, prek, coverage, generate, goreleaser and dependency review
+# run once per ref at a time.
 # A new push to a pull request cancels the older run of these jobs; on main, and
 # for manual runs, the new one waits for it instead.
 
@@ -277,6 +277,41 @@ jobs:
             exit 1
           fi
           echo "CI needs every other job: ${jobs//$'\n'/, }."
+      # release.yml calls this workflow from its tests job, and GitHub refuses the whole
+      # release run when a job here asks for a permission that job does not grant, even
+      # a job the release skips. Exits 1 when a grant is missing, and 2 when no
+      # permission or caller is read.
+      - name: Check that the release grants every job's permissions
+        shell: bash
+        env:
+          WORKFLOW: .github/workflows/test.yml
+          RELEASE: .github/workflows/release.yml
+        run: |
+          if ! asked=$(yq '(.permissions, .jobs[].permissions) | select(. != null) |
+            to_entries | .[] | .key + " " + .value' "$WORKFLOW" | sort -u) ||
+            [[ -z $asked ]]; then
+            echo "::error title=Release permissions::No permissions read from $WORKFLOW."
+            exit 2
+          fi
+          if [[ $(yq '.jobs.tests.uses' "$RELEASE") != "./$WORKFLOW" ]]; then
+            echo "::error title=Release permissions::The tests job in $RELEASE does not" \
+              "call $WORKFLOW."
+            exit 2
+          fi
+          missing=""
+          while read -r scope level; do
+            granted=$(yq ".jobs.tests.permissions[\"$scope\"]" "$RELEASE")
+            case $level:$granted in
+              none:* | read:read | read:write | write:write) ;;
+              *) missing+="$scope: $level, " ;;
+            esac
+          done <<<"$asked"
+          if [[ -n $missing ]]; then
+            echo "::error title=Release permissions::The tests job in $RELEASE must grant" \
+              "${missing%, }."
+            exit 1
+          fi
+          echo "The release grants every permission test.yml asks for: ${asked//$'\n'/, }."
       # The offline job's Terraform legs run two versions: the floor, which is the
       # lower, and TERRAFORM_VERSION, whose linux_amd64 leg has TERRAFORM_SHA256.
       # Exits 1 when they do not, and 2 when no Terraform leg is read.
@@ -518,6 +553,31 @@ jobs:
           goreleaser release --snapshot --clean --skip=sign
           .github/scripts/check-release-artifacts.sh dist
 
+  # Fails a pull request that brings in a dependency version (a Go module or an
+  # action) with a known vulnerability of high or critical severity. It compares the
+  # pull request's dependency graph with its base branch's, so it runs on pull
+  # requests only; on other events the job is skipped, not passed with its steps
+  # skipped, so that CI can tell whether the review ran.
+  dependency-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write  # posts the review's summary on the pull request when it fails
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-dependency-review
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
   # Runs the acceptance tests against the Permit API on Terraform 1.0 to 1.4, below
   # the supported floor (1.5.7): extra coverage, not a support claim. Each version
   # has its own Permit environment and API key, and the check names stay as they
@@ -628,13 +688,15 @@ jobs:
   # The one check to require. It runs whatever happened to the jobs it needs, since
   # a skipped required check counts as passing, and fails unless each of them
   # succeeded: a failed, cancelled or skipped job fails it. Acceptance runs without
-  # the API key succeed with their steps skipped. Exits 1 when a job did not
-  # succeed, and 2 when the results of fewer or more than EXPECTED_JOBS jobs arrive.
-  # Change EXPECTED_JOBS when you change needs.
+  # the API key succeed with their steps skipped. The one exception is dependency
+  # review, which runs on pull requests only: on a push or a manual run, a release's
+  # call included, its job is skipped and that passes; on any other event it must
+  # succeed. Exits 1 when a job did not succeed, and 2 when the results of fewer or
+  # more than EXPECTED_JOBS jobs arrive. Change EXPECTED_JOBS when you change needs.
   ci:
     name: CI
     if: always()
-    needs: [build, coverage, generate, goreleaser, offline, prek, test]
+    needs: [build, coverage, dependency-review, generate, goreleaser, offline, prek, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -642,7 +704,8 @@ jobs:
         shell: bash
         env:
           NEEDS: ${{ toJSON(needs) }}
-          EXPECTED_JOBS: 7
+          EVENT: ${{ github.event_name }}
+          EXPECTED_JOBS: 8
         run: |
           if ! results=$(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"$NEEDS"); then
             echo "::error title=CI::Could not read the job results."
@@ -655,6 +718,9 @@ jobs:
             exit 2
           fi
           failed=$(grep -v ' success$' <<<"$results" || true)
+          if [[ $EVENT == push || $EVENT == workflow_dispatch ]]; then
+            failed=$(grep -vx 'dependency-review skipped' <<<"$failed" || true)
+          fi
           if [[ -n $failed ]]; then
             echo "::error title=CI::Jobs that did not succeed: ${failed//$'\n'/, }"
             exit 1

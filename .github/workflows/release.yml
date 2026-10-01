@@ -1,8 +1,9 @@
 # Publishes a provider release when a version tag is pushed. Each job needs the one
 # before it: the tag is checked, the tests run, the release is built without being
 # published, its binaries are scanned for vulnerabilities, its files are checked,
-# and only then is it built again, signed and published from the release
-# environment. The second build must match the checked one file for file.
+# and only then, once a reviewer approves the release environment's deployment, is
+# it built again, signed and published. The second build must match the checked
+# one file for file.
 name: Release
 
 on:
@@ -38,11 +39,15 @@ jobs:
           fi
           echo "Releasing $TAG."
 
+  # A called workflow's jobs get at most what this job grants, and GitHub refuses
+  # the whole run when one asks for more, even a job that will be skipped. So this
+  # job grants every permission a test.yml job asks for; the prek job checks it.
   tests:
     name: Tests
     needs: tag
     permissions:
       contents: read
+      pull-requests: write  # for test.yml's dependency review, which a release run skips
     uses: ./.github/workflows/test.yml
     secrets:
       PERMITIO_API_KEY_1_0: ${{ secrets.PERMITIO_API_KEY_1_0 }}
@@ -158,7 +163,9 @@ jobs:
 
   # Builds the release again, signs it and uploads it as a draft. The draft is
   # published only when its files pass the same check, with the signature, and
-  # its checksums equal those of the build that was scanned and checked.
+  # its checksums equal those of the build that was scanned and checked. The
+  # release environment holds this job until a required reviewer approves it, and
+  # deploys only from v* tags. No other job reads the signing secrets.
   publish:
     name: Publish
     needs: artifacts
