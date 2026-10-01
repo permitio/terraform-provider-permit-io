@@ -23,8 +23,12 @@ resource "permitio_proxy_config" "reports" {
       resource    = permitio_resource.document.key
       action      = "read"
     },
+    # A regular expression rather than a {document_id} placeholder, which would make
+    # Permit add a document_id attribute that permitio_resource.document doesn't
+    # declare.
     {
-      url         = "https://reports.example.com/documents/{document_id}"
+      url         = "^https://reports\\.example\\.com/documents/[0-9]+$"
+      url_type    = "regex"
       http_method = "put"
       resource    = permitio_resource.document.key
       action      = "write"
