@@ -54,12 +54,12 @@ resource "permitio_resource_instance" "quarterly_report" {
 ### Required
 
 - `key` (String) The key that identifies the object. Changing it replaces the object.
-- `resource` (String) The resource type key that this instance belongs to. Changing it replaces the instance.
+- `resource` (String) The key of the resource that this instance belongs to, such as `document`. A value that has the form of an ID, a UUID, fails validation. Changing it replaces the instance.
+- `tenant` (String) The key of the tenant the instance belongs to; Permit needs one to create the instance. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run. Changing it replaces the instance.
 
 ### Optional
 
 - `attributes` (String) Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ pages = 12 })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the instance has no attributes, so removing it clears them in Permit.
-- `tenant` (String) The tenant key for multi-tenant enforcement. Changing it replaces the instance.
 
 ### Read-Only
 

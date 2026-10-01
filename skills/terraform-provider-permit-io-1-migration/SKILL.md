@@ -139,16 +139,24 @@ The usual recommendations:
   outside Terraform.
 - **S8** (duplicate mapping rules): the user chooses which rule of each pair stays.
 - **S11** (timeout or api_url): a positive timeout, an absolute https URL.
+- **S15** (an ID or UUID where 1.0 takes only the key of a resource, role or relation):
+  use the key. Changing a role derivation's `resource` or `to_role` from an ID replaces
+  the derivation; offer `terraform state rm` and an import by its keys instead. A group
+  resource instance role assignment whose `role` or `resource` was an ID isn't in the
+  state although Permit has it; offer an import by its keys instead of the create the
+  plan shows. An object whose own key is a UUID needs a new key, which replaces it: the
+  user decides.
+- **S16** (a resource instance without `tenant`): the user names the tenant key.
 - **B4** (`api_key` in the provider block): remove a placeholder; move a real key to a
   sensitive variable or `PERMITIO_API_KEY`, and tell the user it has been in the file.
 - **B14** (role derivations that look reversed): swapping `role` and `to_role` replaces the
   derivation and changes who gets which role. Confirm the intent for each one.
 - **K5** (a url placeholder): declare the attribute on the resource, or use
   `url_type = "regex"`.
-- **K6** (an object named by ID): use its key. The change plans a replacement where the
-  argument forces one: a relation's `subject_resource` and `object_resource`, a role's
-  `resource`, role derivations, a resource instance's `resource` and `tenant`, and every
-  kind of role assignment. A K6 INFO finding is a UUID the scanner can't tell from a key:
+- **K6** (an object named by ID where 1.0 doesn't check): use its key. The change plans a
+  replacement where the argument forces one: a role's `resource`, a resource instance's
+  `tenant`, and the user, group, instance and tenant of every kind of role assignment. A
+  K6 INFO finding is a UUID the scanner can't tell from a key:
   ask only if the plan shows a change for it.
 - **C1, C2** (Terraform or OpenTofu pins): raise them only when the user confirms the new
   version is available where the configuration runs.
@@ -168,7 +176,9 @@ terraform plan -input=false -no-color -detailed-exitcode -out=<scratch dir>/perm
    block or in `ignore_changes` (S4); `Invalid Configuration for Read-Only Attribute` (S5);
    `Unsupported auth_mechanism` (S7); `Duplicate mapping rule` (S8);
    `Invalid resource attribute type` (K1); `Invalid Attribute Value` on the provider's
-   `timeout` or `Invalid Permit.io API URL` (S11). Only `plan` reports
+   `timeout` or `Invalid Permit.io API URL` (S11); `Expected a key, got an ID` (S15), which
+   `apply` reports instead for an ID the plan doesn't know yet;
+   `The argument "tenant" is required` on a resource instance (S16). Only `plan` reports
    `Output refers to sensitive values` (S6), `Cannot remove the parent of a condition set`
    (S10), `Condition set of another type` (ST4),
    `Invalid PERMITIO_TIMEOUT environment variable` or
@@ -179,9 +189,9 @@ terraform plan -input=false -no-color -detailed-exitcode -out=<scratch dir>/perm
 
    | The plan shows | Documented by | What to do |
    |----------------|---------------|------------|
-   | `must be replaced` (`-/+`) | S1, S2, S3, B14, K6 | Stop. Name each replacement, the attribute with `# forces replacement` and what Permit deletes with it. Continue only with the user's approval of that replacement. |
+   | `must be replaced` (`-/+`) | S1, S2, S3, S15, B14, K6 | Stop. Name each replacement, the attribute with `# forces replacement` and what Permit deletes with it. Continue only with the user's approval of that replacement. |
    | `will be updated in-place` (`~`) | S3, S9, B9, B10, B12, B13, ST3, K6 | Show each change. Removed descriptions, attributes and mapping rules are deleted in Permit on apply. |
-   | `will be created` (`+`) | B1, B7 | Objects deleted outside Terraform. Ask whether each was deleted on purpose. |
+   | `will be created` (`+`) | B1, B7, S15 | B1, B7: objects deleted outside Terraform. Ask whether each was deleted on purpose. S15: a group resource instance role assignment whose `role` or `resource` was an ID still exists in Permit. Recommend importing it by its keys (ST1) instead of creating it, run only with the user's approval. |
    | `will be destroyed` (`-`) | none | Stop: no 1.0 change destroys an object. Something else changed. |
 
    A change that no entry explains is not part of the upgrade: stop and show it to the

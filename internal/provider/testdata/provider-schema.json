@@ -97,7 +97,7 @@
         "group": {
           "type": "string",
           "required": true,
-          "description": "Group key to assign the role to",
+          "description": "The key of the group to assign the role to. Use the key, not the ID.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -113,15 +113,18 @@
         "resource": {
           "type": "string",
           "required": true,
-          "description": "Resource type (e.g., 'workspace', 'document')",
+          "description": "The key of the resource the instance belongs to, such as `document`. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_resource, not its ID"
           ]
         },
         "resource_instance": {
           "type": "string",
           "required": true,
-          "description": "Resource instance key (e.g., 'ws-123', 'doc-456')",
+          "description": "The key of the resource instance, such as `handbook`. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -129,15 +132,18 @@
         "role": {
           "type": "string",
           "required": true,
-          "description": "Role key to assign",
+          "description": "The key of the role to assign, a role of `resource`. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_role, not its ID"
           ]
         },
         "tenant": {
           "type": "string",
           "required": true,
-          "description": "Tenant key for scoped assignment",
+          "description": "The key of the tenant the resource instance belongs to. Use the key, not the ID.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -326,9 +332,12 @@
         "object_resource": {
           "type": "string",
           "required": true,
-          "description": "The key of the object resource, which the relation is defined on: in \"folder is parent of file\", the file resource. Use the key, not the ID: Permit returns the key, so an ID makes the apply fail with an inconsistent result. Changing it replaces the relation.",
+          "description": "The key of the object resource, which the relation is defined on: in \"folder is parent of file\", the file resource. A value that has the form of an ID, a UUID, fails validation. Changing it replaces the relation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_resource, not its ID"
           ]
         },
         "object_resource_id": {
@@ -355,9 +364,12 @@
         "subject_resource": {
           "type": "string",
           "required": true,
-          "description": "The key of the subject resource: in \"folder is parent of file\", the folder resource. Use the key, not the ID: Permit returns the key, so an ID makes the apply fail with an inconsistent result. Changing it replaces the relation.",
+          "description": "The key of the subject resource: in \"folder is parent of file\", the folder resource. A value that has the form of an ID, a UUID, fails validation. Changing it replaces the relation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_resource, not its ID"
           ]
         },
         "subject_resource_id": {
@@ -552,9 +564,12 @@
         "resource": {
           "type": "string",
           "required": true,
-          "description": "The resource type key that this instance belongs to. Changing it replaces the instance.",
+          "description": "The key of the resource that this instance belongs to, such as `document`. A value that has the form of an ID, a UUID, fails validation. Changing it replaces the instance.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_resource, not its ID"
           ]
         },
         "resource_id": {
@@ -567,8 +582,8 @@
         },
         "tenant": {
           "type": "string",
-          "optional": true,
-          "description": "The tenant key for multi-tenant enforcement. Changing it replaces the instance.",
+          "required": true,
+          "description": "The key of the tenant the instance belongs to; Permit needs one to create the instance. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run. Changing it replaces the instance.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -627,15 +642,18 @@
         "resource": {
           "type": "string",
           "required": true,
-          "description": "Resource type (e.g., 'workspace', 'document')",
+          "description": "The key of the resource the instance belongs to, such as `document`. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_resource, not its ID"
           ]
         },
         "resource_instance": {
           "type": "string",
           "required": true,
-          "description": "Resource instance key (e.g., 'ws-123', 'doc-456')",
+          "description": "The key of the resource instance, such as `handbook`. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -643,15 +661,18 @@
         "role": {
           "type": "string",
           "required": true,
-          "description": "Role key to assign",
+          "description": "The key of the role to assign, a role of `resource`. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_role, not its ID"
           ]
         },
         "tenant": {
           "type": "string",
           "required": true,
-          "description": "Tenant key for scoped assignment",
+          "description": "The key of the tenant the resource instance belongs to. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -659,7 +680,7 @@
         "user": {
           "type": "string",
           "required": true,
-          "description": "User key to assign the role to",
+          "description": "The key of the user to assign the role to. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -888,15 +909,18 @@
         "role": {
           "type": "string",
           "required": true,
-          "description": "Role key to assign",
+          "description": "The key of the role to assign. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_role, not its ID"
           ]
         },
         "tenant": {
           "type": "string",
           "required": true,
-          "description": "Tenant key for scoped assignment",
+          "description": "The key of the tenant the role applies in. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -904,7 +928,7 @@
         "user": {
           "type": "string",
           "required": true,
-          "description": "User key to assign the role to",
+          "description": "The key of the user to assign the role to. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
           ]
@@ -918,41 +942,56 @@
         "linked_by": {
           "type": "string",
           "required": true,
-          "description": "The key of the relation that links `on_resource` instances to `resource` instances.",
+          "description": "The key of the relation that links `on_resource` instances to `resource` instances. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_relation, not its ID"
           ]
         },
         "on_resource": {
           "type": "string",
           "required": true,
-          "description": "The key of the related resource that `role` belongs to.",
+          "description": "The key of the related resource that `role` belongs to. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_resource, not its ID"
           ]
         },
         "resource": {
           "type": "string",
           "required": true,
-          "description": "The key or ID of the resource that `to_role` belongs to. Users get `to_role` on instances of this resource.",
+          "description": "The key of the resource that `to_role` belongs to. Users get `to_role` on instances of this resource. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_resource, not its ID"
           ]
         },
         "role": {
           "type": "string",
           "required": true,
-          "description": "The key of a role on `on_resource`. Users who have this role on an `on_resource` instance get `to_role` on the linked `resource` instances.",
+          "description": "The key of a role on `on_resource`. Users who have this role on an `on_resource` instance get `to_role` on the linked `resource` instances. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_role, not its ID"
           ]
         },
         "to_role": {
           "type": "string",
           "required": true,
-          "description": "The key of the role on `resource` that users get through this derivation.",
+          "description": "The key of the role on `resource` that users get through this derivation. A value that has the form of an ID, a UUID, fails validation.",
           "plan_modifiers": [
             "stringplanmodifier.requiresReplaceIfModifier: If the value of this attribute changes, Terraform will destroy and recreate the resource."
+          ],
+          "validators": [
+            "value must be the key of a permitio_role, not its ID"
           ]
         }
       }

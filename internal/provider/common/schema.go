@@ -11,6 +11,16 @@ import (
 // attributes are accepted so that older configurations keep working.
 const LookupOnlyInputNote = "Setting it does not filter the lookup: Permit's value replaces it."
 
+// KeyOnlyNote follows the description of each argument that names a resource,
+// role or relation by key and has the KeyNotID validator.
+const KeyOnlyNote = "A value that has the form of an ID, a UUID, fails validation."
+
+// UseKeyNote follows the description of each argument that names a user, tenant
+// or resource instance by key and that Permit returns as a key. Their keys can be
+// UUIDs, so no validator rejects an ID there.
+const UseKeyNote = "Use the key, not the ID: Permit returns keys, so an ID can make " +
+	"the apply fail or show a change on every run."
+
 func CreateBaseResourceSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"id": schema.StringAttribute{

@@ -53,9 +53,9 @@ resource "permitio_role_assignment" "jane_viewer" {
 
 ### Required
 
-- `role` (String) Role key to assign
-- `tenant` (String) Tenant key for scoped assignment
-- `user` (String) User key to assign the role to
+- `role` (String) The key of the role to assign. A value that has the form of an ID, a UUID, fails validation.
+- `tenant` (String) The key of the tenant the role applies in. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.
+- `user` (String) The key of the user to assign the role to. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.
 
 ### Read-Only
 

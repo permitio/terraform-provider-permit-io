@@ -64,11 +64,11 @@ resource "permitio_resource_instance_role_assignment" "jane_edits_quarterly_repo
 
 ### Required
 
-- `resource` (String) Resource type (e.g., 'workspace', 'document')
-- `resource_instance` (String) Resource instance key (e.g., 'ws-123', 'doc-456')
-- `role` (String) Role key to assign
-- `tenant` (String) Tenant key for scoped assignment
-- `user` (String) User key to assign the role to
+- `resource` (String) The key of the resource the instance belongs to, such as `document`. A value that has the form of an ID, a UUID, fails validation.
+- `resource_instance` (String) The key of the resource instance, such as `handbook`. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.
+- `role` (String) The key of the role to assign, a role of `resource`. A value that has the form of an ID, a UUID, fails validation.
+- `tenant` (String) The key of the tenant the resource instance belongs to. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.
+- `user` (String) The key of the user to assign the role to. Use the key, not the ID: Permit returns keys, so an ID can make the apply fail or show a change on every run.
 
 ### Read-Only
 

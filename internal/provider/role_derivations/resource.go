@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
@@ -37,42 +38,50 @@ func (r *RoleDerivationResource) Metadata(_ context.Context, request resource.Me
 func (r *RoleDerivationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := make(map[string]schema.Attribute)
 	attributes["resource"] = schema.StringAttribute{
-		MarkdownDescription: "The key or ID of the resource that `to_role` belongs to. " +
-			"Users get `to_role` on instances of this resource.",
+		MarkdownDescription: "The key of the resource that `to_role` belongs to. " +
+			"Users get `to_role` on instances of this resource. " + common.KeyOnlyNote,
 		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 	attributes["role"] = schema.StringAttribute{
 		MarkdownDescription: "The key of a role on `on_resource`. Users who have this role on an " +
-			"`on_resource` instance get `to_role` on the linked `resource` instances.",
+			"`on_resource` instance get `to_role` on the linked `resource` instances. " +
+			common.KeyOnlyNote,
 		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_role")},
 	}
 	attributes["on_resource"] = schema.StringAttribute{
-		MarkdownDescription: "The key of the related resource that `role` belongs to.",
-		Required:            true,
+		MarkdownDescription: "The key of the related resource that `role` belongs to. " +
+			common.KeyOnlyNote,
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 	attributes["to_role"] = schema.StringAttribute{
-		MarkdownDescription: "The key of the role on `resource` that users get through this derivation.",
-		Required:            true,
+		MarkdownDescription: "The key of the role on `resource` that users get through this " +
+			"derivation. " + common.KeyOnlyNote,
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_role")},
 	}
 	attributes["linked_by"] = schema.StringAttribute{
 		MarkdownDescription: "The key of the relation that links `on_resource` instances to " +
-			"`resource` instances.",
+			"`resource` instances. " + common.KeyOnlyNote,
 		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_relation")},
 	}
 
 	resp.Schema = schema.Schema{
@@ -178,8 +187,9 @@ func derivationID(model roleDerivationModel) string {
 // ImportState imports a role derivation by all five attributes, which Read needs
 // to find it: the API path names the role it grants, to_role on resource, and the
 // derivation is the grant of that role that matches on_resource, role and
-// linked_by. Read keeps resource as the import ID gives it, key or ID, so it must
-// match the configuration, or the next plan replaces the derivation.
+// linked_by. Every part is a key, as the configuration must use keys for all
+// five. Read keeps resource and to_role as the import ID gives them, so an ID in
+// either makes the next plan replace the derivation.
 func (r *RoleDerivationResource) ImportState(
 	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
 ) {

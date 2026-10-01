@@ -55,8 +55,8 @@ resource "permitio_relation" "parent" {
 
 - `key` (String) The key that identifies the object. Changing it replaces the object.
 - `name` (String) The name. This is a human-readable name for the object.  Changing it replaces the relation.
-- `object_resource` (String) The key of the object resource, which the relation is defined on: in "folder is parent of file", the file resource. Use the key, not the ID: Permit returns the key, so an ID makes the apply fail with an inconsistent result. Changing it replaces the relation.
-- `subject_resource` (String) The key of the subject resource: in "folder is parent of file", the folder resource. Use the key, not the ID: Permit returns the key, so an ID makes the apply fail with an inconsistent result. Changing it replaces the relation.
+- `object_resource` (String) The key of the object resource, which the relation is defined on: in "folder is parent of file", the file resource. A value that has the form of an ID, a UUID, fails validation. Changing it replaces the relation.
+- `subject_resource` (String) The key of the subject resource: in "folder is parent of file", the folder resource. A value that has the form of an ID, a UUID, fails validation. Changing it replaces the relation.
 
 ### Optional
 

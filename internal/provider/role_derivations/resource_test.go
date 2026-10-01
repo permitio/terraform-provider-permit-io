@@ -1,7 +1,6 @@
 package role_derivations_test
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -239,19 +238,18 @@ resource "permitio_role_derivation" "owner_edits_files" {
 `, editorDescription, editorPermissions)
 }
 
-// TestImportedRoleDerivationNamedByResourceID imports a role derivation created
-// outside Terraform, whose configuration names its resource by ID, with the ID as
-// the resource part of the import ID, and checks that the next plan leaves it
-// alone. Read keeps the resource the import ID gives, and a change of resource
-// replaces the derivation, which drops the permissions it grants until the
-// create.
-func TestImportedRoleDerivationNamedByResourceID(t *testing.T) {
+// TestImportedRoleDerivationPlansNoChange imports a role derivation created
+// outside Terraform by the keys in its import ID, as its configuration names
+// every object by key, and checks that the next plan leaves it alone. Read keeps
+// the resource the import ID gives, and a change of resource replaces the
+// derivation, which drops the permissions it grants until the create.
+func TestImportedRoleDerivationPlansNoChange(t *testing.T) {
 	m := mockpermit.New(t, mockpermit.Resources, mockpermit.ResourceRoles,
 		mockpermit.ResourceRelations, mockpermit.ImplicitGrants)
 	const address = "permitio_role_derivation.manager_edits_files"
 	const config = folderManagerFileEditorConfig + `
 resource "permitio_role_derivation" "manager_edits_files" {
-  resource    = permitio_resource.file.id
+  resource    = permitio_resource.file.key
   to_role     = permitio_role.editor.key
   on_resource = permitio_resource.folder.key
   role        = permitio_role.manager.key
@@ -274,13 +272,7 @@ resource "permitio_role_derivation" "manager_edits_files" {
 				ResourceName:       address,
 				ImportState:        true,
 				ImportStatePersist: true,
-				ImportStateIdFunc: func(state *terraform.State) (string, error) {
-					file, ok := state.RootModule().Resources["permitio_resource.file"]
-					if !ok {
-						return "", errors.New("the state has no permitio_resource.file")
-					}
-					return file.Primary.Attributes["id"] + ":editor:folder:manager:parent", nil
-				},
+				ImportStateId:      "file:editor:folder:manager:parent",
 			},
 			{
 				Config: config,
@@ -289,8 +281,7 @@ resource "permitio_role_derivation" "manager_edits_files" {
 						plancheck.ExpectResourceAction(address, plancheck.ResourceActionNoop),
 					},
 				},
-				Check: resource.TestCheckResourceAttrPair(address, "resource",
-					"permitio_resource.file", "id"),
+				Check: resource.TestCheckResourceAttr(address, "resource", "file"),
 			},
 		},
 	})

@@ -57,7 +57,7 @@ resource "permitio_resource_set" "drafts" {
 resource "permitio_relation" "parent" {
   key              = "parent"
   name             = "Parent"
-  subject_resource = permitio_resource.folder.id # expect: K6 NEEDS-REVIEW
+  subject_resource = permitio_resource.folder.id # expect: S15 NEEDS-REVIEW
   object_resource  = permitio_resource.document.key
 }
 
@@ -94,6 +94,28 @@ resource "permitio_resource_instance" "handbook" {
   resource   = permitio_resource.document.key
   tenant     = permitio_tenant.acme.key
   attributes = jsonencode({}) # expect: ST3 INFO
+}
+
+# Permit never created an instance without a tenant.
+resource "permitio_resource_instance" "memo" { # expect: S16 NEEDS-REVIEW
+  key      = "memo"
+  resource = permitio_resource.document.key
+}
+
+resource "permitio_resource_instance" "note" {
+  key      = "note"
+  resource = permitio_resource.document.key
+  tenant   = null # expect: S16 NEEDS-REVIEW
+}
+
+# A role is named by key only, even when the UUID is some object's key. An
+# instance key can be a UUID, so an ID there is only K6.
+resource "permitio_resource_instance_role_assignment" "alice_reads_handbook" {
+  user              = "alice"
+  role              = "8a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d" # expect: S15 NEEDS-REVIEW
+  resource          = permitio_resource.document.key
+  resource_instance = permitio_resource_instance.handbook.id # expect: K6 NEEDS-REVIEW
+  tenant            = permitio_tenant.acme.key
 }
 
 resource "permitio_user_attribute" "profile" {

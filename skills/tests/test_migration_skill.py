@@ -421,7 +421,7 @@ class ReferenceSyncTest(unittest.TestCase):
         cls.impacts = guide_plan_impacts()
 
     def test_the_guide_has_the_expected_number_of_entries(self) -> None:
-        self.assertGreaterEqual(len(self.entries), 47, sorted(self.entries))
+        self.assertGreaterEqual(len(self.entries), 49, sorted(self.entries))
 
     def test_every_guide_entry_has_a_section_and_back(self) -> None:
         missing = sorted(set(self.entries) - set(self.sections))

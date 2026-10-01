@@ -251,6 +251,42 @@ command.
 - Safety: SAFE.
 - Scanner: not reported.
 
+### S15. Arguments that name a resource, role or relation reject IDs
+
+[Guide: S15](https://registry.terraform.io/providers/permitio/permit-io/latest/docs/guides/version-1-upgrade#s15-arguments-that-name-a-resource-role-or-relation-reject-ids)
+
+- Detect: an `.id` reference, such as `permitio_resource.document.id`, or a UUID in a
+  relation's `subject_resource` and `object_resource`, any argument of a role
+  derivation, a resource instance's `resource`, a role assignment's `role`, and the
+  `role` and `resource` of resource instance role assignments and group resource
+  instance role assignments. 1.0 rejects a UUID there even when it is an object's key.
+  An ID from a variable, a local or a module output shows up only in the plan, or in
+  the apply when the plan doesn't know it yet.
+- Edit: use the key (`.key`). Where an ID never worked, the state already holds the key
+  and the next plan shows no change for it. A role derivation's `resource` and
+  `to_role` kept an ID as written, so changing them to the key replaces the
+  derivation; to avoid that, recommend `terraform state rm` and `terraform import`
+  with its keys, run only with the user's approval. A group resource instance role
+  assignment whose `role` or `resource` was an ID isn't in the state, although Permit
+  has it, so the plan creates it; recommend `terraform import` with its keys instead,
+  run only with the user's approval. A resource, role or relation whose own key is a
+  UUID needs a new key, which replaces it ([S1](#s1-changing-key-replaces-the-object)):
+  the user decides.
+- Safety: NEEDS-REVIEW.
+- Scanner: NEEDS-REVIEW.
+
+### S16. `permitio_resource_instance.tenant` is required
+
+[Guide: S16](https://registry.terraform.io/providers/permitio/permit-io/latest/docs/guides/version-1-upgrade#s16-permitio_resource_instancetenant-is-required)
+
+- Detect: a `permitio_resource_instance` resource block without `tenant`, or with
+  `tenant = null`.
+- Edit: add `tenant` with the key of the instance's tenant, which the user names. Such
+  an instance never applied with 0.0.x, because Permit rejects a create without a
+  tenant.
+- Safety: NEEDS-REVIEW.
+- Scanner: NEEDS-REVIEW.
+
 ## ST: State and import
 
 ### ST1. Import works on every resource
@@ -541,20 +577,22 @@ command.
 
 [Guide: K6](https://registry.terraform.io/providers/permitio/permit-io/latest/docs/guides/version-1-upgrade#k6-name-other-objects-by-key)
 
-- Detect: an argument that names another object with an `.id` reference, such as
-  `permitio_resource.document.id`, or a UUID: a relation's `subject_resource` and
-  `object_resource`, a resource set's `resource`, a role's `resource`, `extends` and
-  `permissions`, every argument of a role derivation, and the user, group, role,
-  resource, instance and tenant arguments of resource instances and role assignments.
-  The plan shows a change on every run, or the apply fails with an inconsistent result.
-  A UUID can also be the object's key, as when user keys come from an identity
-  provider: it names the object by key when a `permitio_` object has it as its `key`.
-  Condition set rules keep their arguments as written, so an ID there doesn't drift.
+- Detect: an `.id` reference, such as `permitio_resource.document.id`, or a UUID, in an
+  argument that names another object and that 1.0 doesn't check
+  ([S15](#s15-arguments-that-name-a-resource-role-or-relation-reject-ids) covers the
+  ones it rejects): a resource set's `resource`, a role's `resource`, `extends` and
+  `permissions`, a resource instance's `tenant`, and the user, group, instance and
+  tenant arguments of role assignments, resource instance role assignments and group
+  resource instance role assignments. The plan shows a change on every run, or the
+  apply fails with an inconsistent result. A UUID can also be the object's key, as
+  when user keys come from an identity provider: it names the object by key when a
+  `permitio_` object has it as its `key`. Condition set rules, and the `group` and
+  `tenant` of a group resource instance role assignment, keep their arguments as
+  written, so an ID there doesn't drift.
 - Edit: use the key (`.key`). The next plan can show an in-place update (a role's
   `extends` and `permissions`, or a resource set's `resource` changed from the ID to the
-  key of the same resource), or a replacement where the argument forces one: a
-  relation's `subject_resource` and `object_resource`, a role's `resource`, every
-  argument of a role derivation, a resource instance's `resource` and `tenant`, and the
+  key of the same resource), or a replacement where the argument forces one: a role's
+  `resource`, a resource instance's `tenant`, and the user, group, instance and tenant
   arguments of role assignments, resource instance role assignments and group resource
   instance role assignments.
 - Safety: NEEDS-REVIEW.

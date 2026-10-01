@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/permit-golang/pkg/permit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"strings"
@@ -82,36 +83,43 @@ func (r *ResourceInstanceRoleAssignmentResource) Schema(_ context.Context, _ res
 				},
 			},
 			"user": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "User key to assign the role to",
+				Required: true,
+				MarkdownDescription: "The key of the user to assign the role to. " +
+					common.UseKeyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"role": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Role key to assign",
+				Required: true,
+				MarkdownDescription: "The key of the role to assign, a role of `resource`. " +
+					common.KeyOnlyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{common.KeyNotID("permitio_role")},
 			},
 			"tenant": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Tenant key for scoped assignment",
+				Required: true,
+				MarkdownDescription: "The key of the tenant the resource instance belongs to. " +
+					common.UseKeyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"resource": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Resource type (e.g., 'workspace', 'document')",
+				Required: true,
+				MarkdownDescription: "The key of the resource the instance belongs to, such as " +
+					"`document`. " + common.KeyOnlyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{common.KeyNotID("permitio_resource")},
 			},
 			"resource_instance": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Resource instance key (e.g., 'ws-123', 'doc-456')",
+				Required: true,
+				MarkdownDescription: "The key of the resource instance, such as `handbook`. " +
+					common.UseKeyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

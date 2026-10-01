@@ -19,10 +19,7 @@ func (c *resourceInstanceClient) Create(ctx context.Context, plan resourceInstan
 		plan.Key.ValueString(),
 		plan.Resource.ValueString(),
 	)
-
-	if !plan.Tenant.IsNull() {
-		instanceCreate.SetTenant(plan.Tenant.ValueString())
-	}
+	instanceCreate.SetTenant(plan.Tenant.ValueString())
 
 	if !plan.Attributes.IsNull() {
 		attributes, err := common.DecodeJSONObject(plan.Attributes.ValueString())

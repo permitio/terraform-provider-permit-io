@@ -33,6 +33,7 @@ Each entry has an ID, such as `S4`, that stays the same across versions of this 
    - `auth_mechanism = "Headers"` ([S7](#s7-headers-proxy-authentication-is-rejected)), and mapping rules that repeat a `url` and `http_method` ([S8](#s8-mapping-rules-with-the-same-url-and-http_method-are-rejected)).
    - A user set or resource set that has a parent in Permit and no `parent_id` in the configuration ([S10](#s10-removing-parent_id-fails-at-plan-time)).
    - A `timeout` of 0 or less, or an `api_url` that isn't an absolute `http` or `https` URL ([S11](#s11-the-provider-checks-api_url-and-timeout)).
+   - An ID in an argument that names a resource, role or relation ([S15](#s15-arguments-that-name-a-resource-role-or-relation-reject-ids)), and a `permitio_resource_instance` without `tenant` ([S16](#s16-permitio_resource_instancetenant-is-required)).
    - A condition set held in the state under the other type ([ST4](#st4-a-condition-set-of-the-other-type-is-refused)).
    - Placeholder values in the provider block ([B4](#b4-the-provider-block-overrides-environment-variables)), and runs without a valid API key ([B3](#b3-the-provider-checks-the-api-key-on-every-run)).
 4. Run `terraform plan`. Compare every change with the plan impact of its entry below. Stop at any replacement (`-/+`) you didn't expect.
@@ -60,6 +61,8 @@ Each entry has an ID, such as `S4`, that stays the same across versions of this 
 | [S12](#s12-data-sources-require-only-their-key) | Data sources require only their key; the condition set data source works | None |
 | [S13](#s13-permitio_user_attributedescription-is-optional) | `permitio_user_attribute.description` is optional | None |
 | [S14](#s14-mapping-rules-can-match-a-regular-expression) | Mapping rules can match a regular expression (`url_type`) | None |
+| [S15](#s15-arguments-that-name-a-resource-role-or-relation-reject-ids) | Arguments that name a resource, role or relation reject IDs | Plan error until they use keys; then None, Create or Replacement |
+| [S16](#s16-permitio_resource_instancetenant-is-required) | `permitio_resource_instance.tenant` is required | Plan error until it is set |
 | [ST1](#st1-import-works-on-every-resource) | Import works on every resource | None |
 | [ST2](#st2-composite-import-ids-are-checked) | Composite import IDs are checked | Import error for a malformed ID |
 | [ST3](#st3-one-in-place-update-after-importing-with-empty-attributes) | One in-place update after importing with empty `attributes` | In-place update, once |
@@ -519,6 +522,94 @@ data "permitio_role" "admin" {
 
 **Plan impact:** None.
 
+### S15. Arguments that name a resource, role or relation reject IDs
+
+**Bug fix, except for a role derivation's `resource` and `to_role`: an ID never matched what Permit returns.**
+
+**What changed.** These arguments take the key of a resource, role or relation, and a value that has the form of a Permit ID, a UUID, fails validation:
+
+- `subject_resource` and `object_resource` on `permitio_relation`.
+- `resource`, `role`, `on_resource`, `to_role` and `linked_by` on `permitio_role_derivation`.
+- `resource` on `permitio_resource_instance`.
+- `role` on `permitio_role_assignment`.
+- `role` and `resource` on `permitio_resource_instance_role_assignment` and `permitio_group_resource_instance_role_assignment`.
+
+Permit returns keys for these arguments. In 0.0.x, an ID in them made the apply fail with an inconsistent result, or the plan showed a change on every run. The exceptions are a role derivation's `resource` and `to_role`, which the provider keeps as written, so an ID there worked. Because developers choose the keys of resources, roles and relations, the check also rejects a key that has the form of a UUID. Arguments that name users, tenants, groups and resource instances, whose keys can be UUIDs, still accept them ([K6](#k6-name-other-objects-by-key)).
+
+An ID that isn't known until apply, such as the `id` of a resource that the same apply creates, passes the plan. The apply then fails on it, after creating the objects it depends on.
+
+**Who is affected.** Configurations that set these arguments to an ID, such as `permitio_resource.document.id`, or to a key that has the form of a UUID.
+
+**What to do.** Reference the key, such as `permitio_resource.document.key`. A resource, role or relation whose own key has the form of a UUID needs a new key, which replaces it and deletes what depends on it in Permit ([S1](#s1-changing-key-replaces-the-object)).
+
+A role derivation whose `resource` or `to_role` was an ID is replaced when you change it to the key, which removes the roles it grants until the apply creates it again. To keep it, remove it from the state and import it by its keys ([ST1](#st1-import-works-on-every-resource)) instead:
+
+```shell
+terraform state rm permitio_role_derivation.managers_edit_files
+terraform import permitio_role_derivation.managers_edit_files file:editor:folder:manager:parent
+```
+
+A group resource instance role assignment whose `role` or `resource` was an ID isn't in the state, although Permit has it: the provider compared the ID with the keys Permit returns, didn't find the assignment, and dropped it from the state. Once the configuration uses keys, the plan creates it, and creating an assignment that the group already has may fail. Import it by its keys instead:
+
+```shell
+terraform import permitio_group_resource_instance_role_assignment.editors_handbook editors:editor:document:handbook:acme
+```
+
+Before (0.0.x):
+
+```terraform
+resource "permitio_relation" "parent" {
+  key              = "parent"
+  name             = "Parent folder"
+  subject_resource = permitio_resource.folder.id
+  object_resource  = permitio_resource.file.id
+}
+```
+
+After (1.0):
+
+```terraform
+resource "permitio_relation" "parent" {
+  key              = "parent"
+  name             = "Parent folder"
+  subject_resource = permitio_resource.folder.key
+  object_resource  = permitio_resource.file.key
+}
+```
+
+**Plan impact:** Plan error (`Expected a key, got an ID`) until the configuration uses keys. After that, none where the state holds the key; Create of a group resource instance role assignment that the ID made Terraform drop from the state, until you import it; and Replacement of a role derivation whose `resource` or `to_role` was an ID, unless you import it again.
+
+### S16. `permitio_resource_instance.tenant` is required
+
+**Bug fix: this could never work.**
+
+**What changed.** `tenant` on `permitio_resource_instance` is required. Permit creates a resource instance only in a tenant, and rejected a create without one, so a configuration without `tenant` never applied.
+
+**Who is affected.** Resource instances whose configuration has no `tenant`.
+
+**What to do.** Set `tenant` to the key of the instance's tenant.
+
+Before (0.0.x):
+
+```terraform
+resource "permitio_resource_instance" "handbook" {
+  key      = "handbook"
+  resource = permitio_resource.document.key
+}
+```
+
+After (1.0):
+
+```terraform
+resource "permitio_resource_instance" "handbook" {
+  key      = "handbook"
+  resource = permitio_resource.document.key
+  tenant   = permitio_tenant.acme.key
+}
+```
+
+**Plan impact:** Plan error (`The argument "tenant" is required`) until you set it.
+
 ## ST: State and import
 
 ### ST1. Import works on every resource
@@ -542,7 +633,7 @@ data "permitio_role" "admin" {
 | `permitio_resource_instance_role_assignment` | `user:role:resource:resource_instance:tenant` | no |
 | `permitio_group_resource_instance_role_assignment` | `group:role:resource:resource_instance:tenant` | no |
 
-Where the whole ID is a key, a key that contains `:` works. In `object_resource:key`, `object_resource` is the resource's key. In a role derivation ID, write the resource part as the configuration does: its ID if the configuration uses the ID, and its key otherwise; if they differ, the next plan replaces the derivation. A proxy config import reads the secret back from Permit.
+Where the whole ID is a key, a key that contains `:` works. In `object_resource:key`, `object_resource` is the resource's key. Every part of a role derivation ID is a key, as in its configuration ([S15](#s15-arguments-that-name-a-resource-role-or-relation-reject-ids)). A proxy config import reads the secret back from Permit.
 
 **Who is affected.** Anyone who wants to bring objects created outside Terraform, or left in Permit by a failed apply, under Terraform.
 
@@ -889,7 +980,12 @@ resource "permitio_proxy_config" "billing" {
 
 ### K6. Name other objects by key
 
-Arguments that name another object, such as `subject_resource` and `object_resource` on a relation, or the permissions of a role, work reliably only with keys. Permit returns keys, so an ID there never matches what Permit returns: the plan shows a change on every run, or the apply fails with an inconsistent result. 1.0 doesn't check this at plan time. Use keys, such as `permitio_resource.document.key`, rather than IDs.
+Arguments that name another object work reliably only with keys. Permit returns keys for most of them, so an ID there doesn't match what Permit returns: the plan shows a change on every run, or the apply fails with an inconsistent result. Use keys, such as `permitio_resource.document.key`, rather than IDs.
+
+1.0 rejects IDs at plan time in the arguments that name a resource, role or relation on relations, role derivations, resource instances and role assignments ([S15](#s15-arguments-that-name-a-resource-role-or-relation-reject-ids)). It doesn't check these arguments:
+
+- `user`, `group`, `tenant` and `resource_instance` on the role assignment resources, and `tenant` on `permitio_resource_instance`. Their keys can have the form of a UUID, such as user keys from an identity provider. Their descriptions say to use the key. A group resource instance role assignment keeps its `group` and `tenant` as written, so an ID there doesn't show a change; in the other arguments, an ID still doesn't match.
+- `resource`, `extends` and `permissions` on `permitio_role`, and `resource` on `permitio_resource_set`.
 
 ## KP: Kept on purpose
 

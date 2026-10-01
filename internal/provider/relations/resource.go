@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
@@ -57,22 +58,22 @@ func (c *RelationResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 	attributes["subject_resource"] = schema.StringAttribute{
 		Required: true,
 		MarkdownDescription: "The key of the subject resource: in \"folder is parent of " +
-			"file\", the folder resource. Use the key, not the ID: Permit returns the key, " +
-			"so an ID makes the apply fail with an inconsistent result. Changing it replaces " +
+			"file\", the folder resource. " + common.KeyOnlyNote + " Changing it replaces " +
 			"the relation.",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 	attributes["object_resource"] = schema.StringAttribute{
 		Required: true,
 		MarkdownDescription: "The key of the object resource, which the relation is " +
-			"defined on: in \"folder is parent of file\", the file resource. Use the key, " +
-			"not the ID: Permit returns the key, so an ID makes the apply fail with an " +
-			"inconsistent result. Changing it replaces the relation.",
+			"defined on: in \"folder is parent of file\", the file resource. " +
+			common.KeyOnlyNote + " Changing it replaces the relation.",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 
 	attributes["subject_resource_id"] = schema.StringAttribute{

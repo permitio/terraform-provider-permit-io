@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"strings"
 )
@@ -42,12 +43,13 @@ func (r *ResourceInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 	delete(attributes, "description")
 
 	attributes["resource"] = schema.StringAttribute{
-		MarkdownDescription: "The resource type key that this instance belongs to. " +
-			"Changing it replaces the instance.",
+		MarkdownDescription: "The key of the resource that this instance belongs to, such " +
+			"as `document`. " + common.KeyOnlyNote + " Changing it replaces the instance.",
 		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 	attributes["resource_id"] = schema.StringAttribute{
 		MarkdownDescription: "The unique resource type ID.",
@@ -57,9 +59,10 @@ func (r *ResourceInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 		},
 	}
 	attributes["tenant"] = schema.StringAttribute{
-		MarkdownDescription: "The tenant key for multi-tenant enforcement. Changing it " +
-			"replaces the instance.",
-		Optional: true,
+		MarkdownDescription: "The key of the tenant the instance belongs to; Permit needs " +
+			"one to create the instance. " + common.UseKeyNote + " Changing it replaces " +
+			"the instance.",
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},

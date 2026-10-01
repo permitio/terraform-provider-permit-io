@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/permit-golang/pkg/permit"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"strings"
@@ -80,22 +81,25 @@ func (r *RoleAssignmentResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 			},
 			"user": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "User key to assign the role to",
+				Required: true,
+				MarkdownDescription: "The key of the user to assign the role to. " +
+					common.UseKeyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"role": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Role key to assign",
+				MarkdownDescription: "The key of the role to assign. " + common.KeyOnlyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{common.KeyNotID("permitio_role")},
 			},
 			"tenant": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Tenant key for scoped assignment",
+				Required: true,
+				MarkdownDescription: "The key of the tenant the role applies in. " +
+					common.UseKeyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

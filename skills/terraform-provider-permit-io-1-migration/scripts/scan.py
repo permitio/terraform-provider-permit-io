@@ -48,6 +48,8 @@ RULES = {
     "S8": (REVIEW,),
     "S11": (REVIEW,),
     "S12": (INFO,),
+    "S15": (REVIEW,),
+    "S16": (REVIEW,),
     "ST2": (REVIEW,),
     "ST3": (INFO,),
     "B4": (REVIEW, INFO),
@@ -81,25 +83,29 @@ OPTIONAL_DATA_ARGS = {
     "permitio_role": ("name",),
     "permitio_condition_set": ("name", "type", "conditions"),
 }
-# Arguments that name another object, which works reliably only with its key (K6).
-OBJECT_ARGS = {
+# Arguments that take the key of a resource, role or relation, where 1.0 rejects an
+# ID, and any other UUID, at plan time (S15).
+KEY_ONLY_ARGS = {
     "permitio_relation": ("subject_resource", "object_resource"),
+    "permitio_role_derivation": ("resource", "on_resource", "role", "to_role", "linked_by"),
+    "permitio_resource_instance": ("resource",),
+    "permitio_role_assignment": ("role",),
+    "permitio_resource_instance_role_assignment": ("role", "resource"),
+    "permitio_group_resource_instance_role_assignment": ("role", "resource"),
+}
+# Role derivation arguments that the provider keeps as written, so an ID there
+# worked with 0.0.x, and changing it to the key plans a replacement (S15).
+KEPT_AS_WRITTEN = ("resource", "to_role")
+# The other arguments that name another object, which work reliably only with its
+# key. 1.0 doesn't check them, because their keys can be UUIDs (K6).
+OBJECT_ARGS = {
     "permitio_resource_set": ("resource",),
     "permitio_role": ("resource", "extends", "permissions"),
-    "permitio_role_derivation": ("resource", "on_resource", "role", "to_role", "linked_by"),
-    "permitio_resource_instance": ("resource", "tenant"),
-    "permitio_role_assignment": ("user", "role", "tenant"),
-    "permitio_resource_instance_role_assignment": (
-        "user",
-        "role",
-        "resource",
-        "resource_instance",
-        "tenant",
-    ),
+    "permitio_resource_instance": ("tenant",),
+    "permitio_role_assignment": ("user", "tenant"),
+    "permitio_resource_instance_role_assignment": ("user", "resource_instance", "tenant"),
     "permitio_group_resource_instance_role_assignment": (
         "group",
-        "role",
-        "resource",
         "resource_instance",
         "tenant",
     ),
@@ -968,9 +974,14 @@ class Scan:
                 )
         if kind in ("permitio_resource", "permitio_user_attribute"):
             self._check_attribute_types(path, block)
+        for argument in KEY_ONLY_ARGS.get(kind, ()):
+            if argument in attributes:
+                self._check_key_only(path, kind, attributes[argument])
         for argument in OBJECT_ARGS.get(kind, ()):
             if argument in attributes:
                 self._check_names_by_key(path, attributes[argument], keys)
+        if kind == "permitio_resource_instance":
+            self._check_instance_tenant(path, block)
         if kind == "permitio_proxy_config":
             self._check_proxy_config(path, block, index)
         if kind == "permitio_role_derivation":
@@ -1045,6 +1056,45 @@ class Scan:
                     f'attribute type "{value.text}" is not supported in 1.0, so the plan fails: '
                     "manage this object outside Terraform until it is",
                 )
+
+    def _check_key_only(self, path: str, kind: str, attribute: Attribute) -> None:
+        argument = attribute.name
+        value = value_of(attribute.tokens)
+        if ID_REFERENCE_RE.search(value.text):
+            found = "names another object by ID"
+        elif value.kind == "string" and UUID_RE.match(value.text):
+            found = "is a UUID"
+        else:
+            return
+        if kind == "permitio_role_derivation" and argument in KEPT_AS_WRITTEN:
+            change = (
+                "the change to the key replaces the derivation, unless it is removed from "
+                "the state and imported again by its keys, only with the user's approval"
+            )
+        else:
+            change = "a UUID that is the object's own key means giving the object a new key"
+        self.report(
+            path,
+            attribute.line,
+            "S15",
+            REVIEW,
+            f"{argument} {found}, and 1.0 accepts only the key of a resource, role or "
+            f"relation there, so the plan fails: use the key; {change}",
+        )
+
+    def _check_instance_tenant(self, path: str, block: Block) -> None:
+        tenant = block.attributes.get("tenant")
+        if tenant is not None and value_of(tenant.tokens).kind != "null":
+            return
+        self.report(
+            path,
+            tenant.line if tenant is not None else block.line,
+            "S16",
+            REVIEW,
+            "this resource instance has no tenant, which 1.0 requires, so the plan fails: "
+            "set it to the key of the instance's tenant (Permit never created an instance "
+            "without one)",
+        )
 
     def _check_names_by_key(self, path: str, attribute: Attribute, keys: set) -> None:
         argument = attribute.name

@@ -37,7 +37,7 @@ GOTOOLCHAIN=auto go build -o /tmp/mutationgate ./internal/acctest/mutationgate &
 ## Known patterns & pitfalls
 - **Null vs empty map**: Terraform distinguishes between null (field omitted) and empty map (`= {}`). When an Optional field's API returns an empty map but the user didn't specify the field, the provider must return null to match the plan. See `newAttributesModelsFromSDKWithPlan` for the pattern.
 - **Return after errors**: Always `return` after `response.Diagnostics.AddError()` in CRUD methods. If you don't, the code continues to set state with zero-value models, causing secondary "MISSING TYPE" panics because uninitialized `types.Set` fields have no element type info.
-- **Keys vs IDs in relations**: The `permitio_relation` resource's `subject_resource`/`object_resource` fields only work reliably with resource **keys**, not UUIDs. The API accepts both but always returns keys, causing state inconsistency when UUIDs are used.
+- **Keys vs IDs in references**: Arguments that name another object work only with its **key**: the API accepts an ID too but returns keys for most of them, so an ID there does not match the state. Arguments that name a resource, role or relation (relation `subject_resource`/`object_resource`, every role derivation argument, `resource_instance.resource`, and `role`/`resource` on the assignment resources) carry `common.KeyNotID`, which rejects UUID-shaped values at plan time. User, tenant, group and resource instance arguments have no validator, because those keys can be UUIDs; their descriptions say to use the key.
 - **Resource-scoped roles**: Use action keys only (e.g. `"read"`), not `"resource:action"` format. The `resource` field must reference an existing resource key.
 
 ## Code structure
