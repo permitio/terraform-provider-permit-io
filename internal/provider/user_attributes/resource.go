@@ -5,14 +5,17 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &UserAttributeResource{}
-	_ resource.ResourceWithConfigure = &UserAttributeResource{}
+	_ resource.Resource                = &UserAttributeResource{}
+	_ resource.ResourceWithConfigure   = &UserAttributeResource{}
+	_ resource.ResourceWithImportState = &UserAttributeResource{}
 )
 
 func NewUserAttributeResource() resource.Resource {
@@ -49,18 +52,27 @@ func (c *UserAttributeResource) Schema(_ context.Context, _ resource.SchemaReque
 	}
 	attributes["key"] = schema.StringAttribute{
 		Required:            true,
-		MarkdownDescription: "The key of the attribute",
+		MarkdownDescription: "The key of the attribute. Changing it replaces the attribute.",
+		PlanModifiers: []planmodifier.String{
+			stringplanmodifier.RequiresReplace(),
+		},
 	}
 	attributes["type"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "The type of the attribute",
+		Required: true,
+		MarkdownDescription: "The type of the attribute: `bool`, `number`, `string`, " +
+			"`time`, `array` or `json`.",
 		Validators: []validator.String{
 			common.AttributeTypeValidator{},
 		},
 	}
 	attributes["description"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "The description of the attribute",
+		Optional: true,
+		Computed: true,
+		MarkdownDescription: "The description of the attribute. Leaving it out keeps the " +
+			"current description; set it to `\"\"` to clear it.",
+		PlanModifiers: []planmodifier.String{
+			stringplanmodifier.UseNonNullStateForUnknown(),
+		},
 	}
 
 	response.Schema = schema.Schema{
@@ -83,7 +95,7 @@ func (c *UserAttributeResource) Create(ctx context.Context, request resource.Cre
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Failed creating user attribute",
-			err.Error(),
+			common.APIErrorDetail("create", "user attribute", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -103,9 +115,13 @@ func (c *UserAttributeResource) Read(ctx context.Context, request resource.ReadR
 	reality, err := c.client.Read(ctx, model.Key.ValueString())
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Failed reading user attribute",
-			err.Error(),
+			common.APIErrorDetail("read", "user attribute", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -126,7 +142,7 @@ func (c *UserAttributeResource) Update(ctx context.Context, request resource.Upd
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Failed updating user attribute",
-			err.Error(),
+			common.APIErrorDetail("update", "user attribute", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -145,11 +161,18 @@ func (c *UserAttributeResource) Delete(ctx context.Context, request resource.Del
 
 	err := c.client.Delete(ctx, model.Key.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting user attribute",
-			err.Error(),
+			common.APIErrorDetail("delete", "user attribute", model.Key.ValueString(), err),
 		)
 		return
 	}
+}
+
+// ImportState imports a user attribute by its key.
+func (c *UserAttributeResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

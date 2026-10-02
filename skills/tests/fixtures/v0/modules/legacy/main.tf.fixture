@@ -1,0 +1,16 @@
+terraform {
+  required_version = ">= 1.5.6" # expect: C1 NEEDS-REVIEW
+
+  required_providers {
+    permit = { # expect: KP3 INFO
+      source  = "registry.terraform.io/permitio/permit-io"
+      version = ">= 0.0.1" # expect: P1 SAFE
+    }
+  }
+}
+
+resource "permitio_tenant" "legacy" {
+  provider = permit
+  key      = "legacy"
+  name     = "Legacy"
+}

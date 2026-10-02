@@ -1,0 +1,14 @@
+terraform {
+  required_providers {
+    permitio = {
+      source  = "permitio/permit-io"
+      version = "~> 1.0"
+    }
+  }
+}
+
+resource "permitio_tenant" "fine" {
+  key        = "fine"
+  name       = "Fine"
+  updated_at = "2025-01-01T00:00:00Z" # expect: S5 NEEDS-REVIEW
+}

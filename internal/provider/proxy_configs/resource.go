@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -13,12 +14,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 	"strings"
 )
 
 var (
-	_ resource.Resource              = &proxyConfigResource{}
-	_ resource.ResourceWithConfigure = &proxyConfigResource{}
+	_ resource.Resource                = &proxyConfigResource{}
+	_ resource.ResourceWithConfigure   = &proxyConfigResource{}
+	_ resource.ResourceWithImportState = &proxyConfigResource{}
 )
 
 func NewProxyConfigResource() resource.Resource {
@@ -48,13 +52,17 @@ func (c *proxyConfigResource) Configure(_ context.Context, request resource.Conf
 		return
 	}
 
-	c.client = proxyConfigClient{client: permitClient}
-
+	// The update goes through the connection the provider's Configure stored with
+	// the SDK client, not through the SDK.
+	c.client = proxyConfigClient{client: permitClient, api: config.GetAPI()}
 }
 
 func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/create_proxy_config) for more information about proxy configs.",
+		MarkdownDescription: "Manages a proxy config: how the Permit Proxy authenticates to a " +
+			"backend service, and which requests to it map to which resource actions. See " +
+			"[the documentation](https://api.permit.io/v2/redoc#tag/Proxy-Config/operation/" +
+			"create_proxy_config) for more information about proxy configs.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -85,59 +93,125 @@ func (c *proxyConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"key": schema.StringAttribute{
-				MarkdownDescription: "Proxy Config is set to enable the Permit Proxy to make proxied requests as part of the Frontend AuthZ.\n\n",
-				Required:            true,
+				MarkdownDescription: "The key of the proxy config. Changing it replaces the " +
+					"proxy config.",
+				Required: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "The name of the proxy config, for example: 'Stripe API",
+				MarkdownDescription: "The name of the proxy config, for example: 'Stripe API'",
 				Required:            true,
 			},
 			"auth_mechanism": schema.StringAttribute{
-				MarkdownDescription: "Default: \"Bearer\"\nEnum: \"Bearer\" \"Basic\" \"Headers\"\nProxy config auth mechanism will define the authentication mechanism that will be used to authenticate the request.\n\nBearer injects the secret into the Authorization header as a Bearer token,\n\nBasic injects the secret into the Authorization header as a Basic user:password,\n\nHeaders injects plain headers into the request.",
-				Required:            true,
+				MarkdownDescription: "Enum: \"Bearer\" \"Basic\"\nProxy config auth mechanism will define the authentication mechanism that will be used to authenticate the request.\n\nBearer injects `auth_secret.bearer` into the Authorization header as a Bearer token,\n\nBasic injects `auth_secret.basic` into the Authorization header as a Basic user:password.\n\n" +
+					"Headers, which injects plain headers into the request, is not supported yet: " +
+					"the provider cannot send a Headers secret to the Permit API, so a plan that " +
+					"sets it fails.",
+				Required: true,
 				Validators: []validator.String{
 					authMechanismValidator{},
 				},
 			},
 			"auth_secret": schema.SingleNestedAttribute{
-				Required:            true,
-				MarkdownDescription: "Proxy config secret is set to enable the Permit Proxy to make proxied requests to the backend service.",
+				Required:  true,
+				Sensitive: true,
+				MarkdownDescription: "Proxy config secret is set to enable the Permit Proxy to make " +
+					"proxied requests to the backend service. Set the attribute that " +
+					"`auth_mechanism` names: `bearer` or `basic`. `headers` is for Headers " +
+					"authentication, which is not supported yet. Its values are sensitive: Terraform " +
+					"hides them in plan output, and an output that references one must be marked " +
+					"`sensitive = true`. Terraform still stores them in plain text in the state. " +
+					"Take them from a variable marked `sensitive = true` rather than writing them " +
+					"in the configuration.",
 				Attributes: map[string]schema.Attribute{
 					"bearer": schema.StringAttribute{
 						Optional: true,
+						MarkdownDescription: "The token the Permit Proxy sends in the " +
+							"Authorization header as a Bearer token. Required when " +
+							"`auth_mechanism` is `Bearer`.",
 					},
 					"basic": schema.StringAttribute{
 						Optional: true,
+						MarkdownDescription: "The `user:password` the Permit Proxy sends in " +
+							"the Authorization header as Basic credentials. Required when " +
+							"`auth_mechanism` is `Basic`.",
 					},
 					"headers": schema.MapAttribute{
 						Optional:    true,
 						ElementType: types.StringType,
+						MarkdownDescription: "The headers for Headers authentication, which is " +
+							"not supported yet. Only one of `bearer`, `basic` and `headers` may " +
+							"be set, and `auth_mechanism` needs the one it names, so a " +
+							"configuration cannot use `headers` yet.",
 					},
 				},
 			},
 			"mapping_rules": schema.ListNestedAttribute{
-				Required:            true,
-				MarkdownDescription: "Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method.",
+				Required: true,
+				MarkdownDescription: "Proxy config mapping rules will include the rules that will be used to map the request to the backend service by a URL and a http method. " +
+					"The Permit API identifies a rule by its `url` and `http_method`, so no two " +
+					"rules may have the same pair. When a rule leaves the list, or its `url` or " +
+					"`http_method` changes, the provider removes the old rule from Permit. Each " +
+					"create and update leaves Permit with the rules in the list's order. " +
+					"Terraform does not detect rules reordered outside Terraform: the state keeps " +
+					"the list's order, and the next update of the proxy config restores it in " +
+					"Permit.",
+				Validators: []validator.List{
+					uniqueMappingRulesValidator{},
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"url": schema.StringAttribute{
 							Required: true,
+							MarkdownDescription: "The URL that a request must match, such as " +
+								"`https://billing.example.com/v1/invoices`, or a regular " +
+								"expression when `url_type` is `regex`. A placeholder in the " +
+								"URL, such as `{invoice_id}` in `.../invoices/{invoice_id}`, " +
+								"makes the Permit API add an attribute of that name to " +
+								"`resource`, so a `permitio_resource` that manages that " +
+								"resource no longer matches Permit and its next plan shows the " +
+								"change.",
+						},
+						"url_type": schema.StringAttribute{
+							Optional: true,
+							MarkdownDescription: "How `url` matches the request URL. Set to " +
+								"`regex` to match it as a regular expression; omit it to match " +
+								"`url` as a URL. The API checks that `url` is a valid URL, or a " +
+								"valid regular expression, only when it creates the proxy " +
+								"config: an update stores `url` without checking it.",
+							Validators: []validator.String{
+								stringvalidator.OneOf(string(models.URLMatchTypeRegex)),
+							},
 						},
 						"http_method": schema.StringAttribute{
 							Required: true,
+							MarkdownDescription: "The HTTP method that a request must use, " +
+								"in lower case: `get`, `post`, `put`, `patch`, `delete`, " +
+								"`head` or `options`.",
 						},
 						"resource": schema.StringAttribute{
 							Required: true,
+							MarkdownDescription: "The key of the resource that a matching " +
+								"request acts on.",
 						},
 						"action": schema.StringAttribute{
 							Optional: true,
+							MarkdownDescription: "The key of the action on `resource` that a " +
+								"matching request is checked for.",
 						},
 						"priority": schema.Int64Attribute{
 							Optional: true,
+							MarkdownDescription: "The priority of the rule when more than one " +
+								"rule matches a request: the higher the number, the higher " +
+								"the precedence.",
 						},
 						"headers": schema.MapAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
+							MarkdownDescription: "Header values that a request must have to " +
+								"match the rule.",
 						},
 					},
 				},
@@ -174,11 +248,6 @@ func (c *proxyConfigResource) ValidateConfig(ctx context.Context, req resource.V
 		resp.Diagnostics.AddError("auth_mechanism was set to `bearer` but auth_secret.bearer is not set", "")
 		return
 	}
-
-	if strings.EqualFold(data.AuthMechanism.ValueString(), string(models.HEADERS)) && len(data.AuthSecret.Headers) == 0 {
-		resp.Diagnostics.AddError("auth_mechanism was set to `headers` but auth_secret.headers is not set", "")
-		return
-	}
 }
 
 func (c *proxyConfigResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -197,7 +266,7 @@ func (c *proxyConfigResource) Create(ctx context.Context, request resource.Creat
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to create proxy config",
-			fmt.Sprintf("Unable to create resource: %s", err),
+			common.APIErrorDetail("create", "proxy config", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -211,9 +280,14 @@ func (c *proxyConfigResource) Create(ctx context.Context, request resource.Creat
 }
 
 func (c *proxyConfigResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+	// Read takes only what it looks the proxy config up by and the order of the
+	// mapping rules: the state of an imported proxy config has no auth_secret yet.
 	var model proxyConfigModel
 
-	response.Diagnostics.Append(request.State.Get(ctx, &model)...)
+	response.Diagnostics.Append(request.State.GetAttribute(ctx, path.Root("id"), &model.Id)...)
+	response.Diagnostics.Append(request.State.GetAttribute(ctx, path.Root("key"), &model.Key)...)
+	response.Diagnostics.Append(request.State.GetAttribute(ctx, path.Root("mapping_rules"),
+		&model.MappingRules)...)
 
 	if response.Diagnostics.HasError() {
 		return
@@ -222,9 +296,13 @@ func (c *proxyConfigResource) Read(ctx context.Context, request resource.ReadReq
 	read, err := c.client.read(ctx, model)
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
-			"Unable to Read Condition Set",
-			fmt.Sprintf("Unable to read condition set: %s, Error: %s", read.Id.String(), err.Error()),
+			"Unable to read proxy config",
+			common.APIErrorDetail("read", "proxy config", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -238,20 +316,21 @@ func (c *proxyConfigResource) Read(ctx context.Context, request resource.ReadReq
 }
 
 func (c *proxyConfigResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	var model proxyConfigModel
+	var model, prior proxyConfigModel
 
 	response.Diagnostics.Append(request.Plan.Get(ctx, &model)...)
+	response.Diagnostics.Append(request.State.Get(ctx, &prior)...)
 
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	proxyConfig, err := c.client.update(ctx, model)
+	proxyConfig, err := c.client.update(ctx, model, prior)
 
 	if err != nil {
 		response.Diagnostics.AddError(
-			"Unable to update resource",
-			fmt.Sprintf("Unable to update resource: %s", err),
+			"Unable to update proxy config",
+			common.APIErrorDetail("update", "proxy config", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -271,11 +350,19 @@ func (c *proxyConfigResource) Delete(ctx context.Context, request resource.Delet
 
 	err := c.client.delete(ctx, model)
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Error deleting Proxy Config",
-			fmt.Sprintf("Could not delete Proxy Config, unexpected error: %s", err.Error()),
+			common.APIErrorDetail("delete", "proxy config", model.Key.ValueString(), err),
 		)
 		return
 	}
+}
+
+// ImportState imports a proxy config by its key. Read fills in the secret, which
+// the API returns, and the mapping rules in the order the API holds them.
+func (c *proxyConfigResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

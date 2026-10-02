@@ -1,0 +1,8 @@
+# The release workflow calls the test workflow as ./.github/workflows/test.yml.
+# zizmor asks for GitHub's self-repository syntax ($/...) instead, but actionlint
+# (v1.7.12) rejects it. Every other finding, including a new one of this rule in
+# another file, fails the hook.
+rules:
+  self-repository:
+    ignore:
+      - release.yml

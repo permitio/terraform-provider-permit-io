@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -28,39 +29,6 @@ type actionsModel struct {
 	Id          types.String `tfsdk:"id"`
 	Name        types.String `tfsdk:"name"`
 	Description types.String `tfsdk:"description"`
-}
-
-type attributeTypeValidator struct{}
-
-func (a attributeTypeValidator) Description(ctx context.Context) string {
-	return "The type of the attribute in the resource."
-}
-
-func (a attributeTypeValidator) MarkdownDescription(ctx context.Context) string {
-	return "The type of the attribute in the resource."
-}
-
-func (a attributeTypeValidator) ValidateString(ctx context.Context, request validator.StringRequest, response *validator.StringResponse) {
-	if request.ConfigValue.IsUnknown() {
-		response.Diagnostics.AddError("Unable to read resource attribute type",
-			fmt.Sprintf("Unable to read resource attribute type: %s", request.Path.String()),
-		)
-		return
-	}
-	if request.ConfigValue.IsNull() {
-		response.Diagnostics.AddError("Invalid resource attribute type",
-			fmt.Sprintf("Invalid null resource attribute type: %s", request.Path.String()),
-		)
-		return
-	}
-
-	value := request.ConfigValue.ValueString()
-	if !models.AttributeType(value).IsValid() {
-		response.Diagnostics.AddError("Invalid resource attribute type",
-			fmt.Sprintf("Invalid resource attribute type: %s", value),
-		)
-		return
-	}
 }
 
 type attributeModel struct {
@@ -149,71 +117,101 @@ func (d *ResourceDataSource) Metadata(_ context.Context, req datasource.Metadata
 // Schema defines the schema for the data source.
 func (d *ResourceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Reads a resource by its key, with its actions and attributes, " +
+			"such as one that Terraform does not manage. Only `key` selects the resource; " +
+			"every other attribute holds what Permit returns.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID Permit assigns to the resource.",
 			},
 			"organization_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the organization the resource belongs to.",
 			},
 			"project_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the project the resource belongs to.",
 			},
 			"environment_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the environment the resource belongs to.",
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "When the resource was created.",
 			},
 			"updated_at": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "When the resource was last updated.",
 			},
 			"key": schema.StringAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "The key of the resource to read.",
 			},
 			"name": schema.StringAttribute{
-				Required: true,
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "The name of the resource. " + common.LookupOnlyInputNote,
 			},
 			"urn": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The URN of the resource, or null when it has none. " +
+					common.LookupOnlyInputNote,
 			},
 			"description": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The description of the resource, or null when it has " +
+					"none. " + common.LookupOnlyInputNote,
 			},
 			"actions": schema.MapNestedAttribute{
+				MarkdownDescription: "The actions of the resource, by action key. " +
+					common.LookupOnlyInputNote,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
-							Computed: true,
+							Computed:            true,
+							MarkdownDescription: "The ID Permit assigns to the action.",
 						},
 						"name": schema.StringAttribute{
-							Required: true,
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "The name of the action.",
 						},
 						"description": schema.StringAttribute{
-							Optional: true,
-						},
-					},
-				},
-				Required: true,
-			},
-			"attributes": schema.MapNestedAttribute{
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"type": schema.StringAttribute{
-							Required: true,
-							Validators: []validator.String{
-								attributeTypeValidator{},
-							},
-						},
-						"description": schema.StringAttribute{
-							Optional: true,
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "The description of the action, or null.",
 						},
 					},
 				},
 				Optional: true,
+				Computed: true,
+			},
+			"attributes": schema.MapNestedAttribute{
+				MarkdownDescription: "The attributes of the resource, by attribute key. " +
+					common.LookupOnlyInputNote,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"type": schema.StringAttribute{
+							Required: true,
+							MarkdownDescription: "The type of the attribute: `bool`, " +
+								"`number`, `string`, `time`, `array` or `json`.",
+							Validators: []validator.String{
+								common.AttributeTypeValidator{},
+							},
+						},
+						"description": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "The description of the attribute, or null.",
+						},
+					},
+				},
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -230,9 +228,13 @@ func (d *ResourceDataSource) Read(ctx context.Context, request datasource.ReadRe
 
 	state, err := d.ResourceRead(ctx, data)
 	if err != nil {
+		lookup := data.Key.ValueString()
+		if data.Key.IsNull() {
+			lookup = data.Id.ValueString()
+		}
 		response.Diagnostics.AddError(
 			"Unable to Read Resource",
-			fmt.Sprintf("Unable to read resource: %s, Error: %s", data.Id.String(), err.Error()),
+			common.APIErrorDetail("read", "resource", lookup, err),
 		)
 		return
 	}

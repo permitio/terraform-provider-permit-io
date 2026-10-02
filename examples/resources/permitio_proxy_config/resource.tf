@@ -1,0 +1,45 @@
+terraform {
+  required_providers {
+    permitio = {
+      source = "permitio/permit-io"
+    }
+  }
+}
+
+variable "billing_api_token" {
+  description = "The token the Permit Proxy sends to the billing API."
+  type        = string
+  sensitive   = true
+}
+
+resource "permitio_proxy_config" "billing" {
+  key            = "billing"
+  name           = "Billing API"
+  auth_mechanism = "Bearer"
+  auth_secret = {
+    bearer = var.billing_api_token
+  }
+  mapping_rules = [
+    {
+      url         = "https://billing.example.com/v1/invoices"
+      http_method = "get"
+      resource    = "invoice"
+      action      = "read"
+    },
+    {
+      url         = "https://billing.example.com/v1/invoices"
+      http_method = "post"
+      resource    = "invoice"
+      action      = "create"
+    },
+    # A regex matches every invoice. A placeholder such as {invoice_id} in a url
+    # would make Permit add an invoice_id attribute to the invoice resource.
+    {
+      url         = "^https://billing\\.example\\.com/v1/invoices/[0-9]+$"
+      url_type    = "regex"
+      http_method = "get"
+      resource    = "invoice"
+      action      = "read"
+    },
+  ]
+}

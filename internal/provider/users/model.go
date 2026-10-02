@@ -2,6 +2,7 @@ package users
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 )
@@ -18,7 +19,7 @@ type userModel struct {
 	Attributes     types.String `tfsdk:"attributes"`
 }
 
-func tfModelFromUserRead(m models.UserRead) userModel {
+func tfModelFromUserRead(m models.UserRead) (userModel, error) {
 	r := userModel{}
 	r.Id = types.StringValue(m.Id)
 	r.Key = types.StringValue(m.Key)
@@ -31,14 +32,13 @@ func tfModelFromUserRead(m models.UserRead) userModel {
 
 	if len(m.Attributes) > 0 {
 		attributesJSON, err := json.Marshal(m.Attributes)
-		if err == nil {
-			r.Attributes = types.StringValue(string(attributesJSON))
-		} else {
-			r.Attributes = types.StringValue("{}")
+		if err != nil {
+			return userModel{}, fmt.Errorf("encoding the attributes: %w", err)
 		}
+		r.Attributes = types.StringValue(string(attributesJSON))
 	} else {
 		r.Attributes = types.StringNull()
 	}
 
-	return r
+	return r, nil
 }

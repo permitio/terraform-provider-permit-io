@@ -3,10 +3,12 @@ package resources
 import (
 	"context"
 	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type ResourceClient struct {
@@ -16,7 +18,8 @@ type ResourceClient struct {
 type ResourceMethods interface {
 	ResourceRead(ctx context.Context, data ResourceModel) (ResourceModel, error)
 	ResourceCreate(ctx context.Context, resourcePlan *ResourceModel) error
-	ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel) error
+	ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel,
+		priorAttributes attributesModel) error
 }
 
 func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (ResourceModel, error) {
@@ -39,20 +42,7 @@ func (d *ResourceClient) ResourceRead(ctx context.Context, data ResourceModel) (
 	)
 
 	if resource.Actions != nil {
-		actions = make(map[string]actionsModel)
-		for key, action := range *resource.Actions {
-			actionName := *action.Name
-			actionNew := actionsModel{
-				Id:   types.StringValue(action.Id),
-				Name: types.StringValue(actionName),
-			}
-			if action.Description == nil {
-				actionNew.Description = types.StringNull()
-			} else {
-				actionNew.Description = types.StringValue(*action.Description)
-			}
-			actions[key] = actionNew
-		}
+		actions = actionsFromSDK(*resource.Actions)
 	}
 	attributes = newAttributesModelsFromSDKWithPlan(resource.Attributes, data.Attributes)
 
@@ -77,7 +67,6 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 	var (
 		actions    map[string]models.ActionBlockEditable
 		attributes map[string]models.AttributeBlockEditable
-		urn        *string
 	)
 	attributes = resourcePlan.Attributes.toSDK()
 	actions = make(map[string]models.ActionBlockEditable)
@@ -87,15 +76,11 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 			Description: action.Description.ValueStringPointer(),
 		}
 	}
-	urn = nil
-	if !resourcePlan.Urn.IsUnknown() {
-		urn = resourcePlan.Urn.ValueStringPointer()
-	}
 	resourceCreate := models.ResourceCreate{
 		Key:         resourcePlan.Key.ValueString(),
 		Name:        resourcePlan.Name.ValueString(),
-		Urn:         urn,
-		Description: resourcePlan.Description.ValueStringPointer(),
+		Urn:         common.KnownStringPointer(resourcePlan.Urn),
+		Description: common.KnownStringPointer(resourcePlan.Description),
 		Actions:     actions,
 		Attributes:  &attributes,
 	}
@@ -103,16 +88,12 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 	if err != nil {
 		return err
 	}
-	actionsRead := make(map[string]actionsModel)
-	for key, action := range *resourceRead.Actions {
-		actionsRead[key] = actionsModel{
-			Id:          types.StringValue(action.Id),
-			Name:        types.StringPointerValue(action.Name),
-			Description: types.StringPointerValue(action.Description),
-		}
+	if resourceRead.Actions == nil {
+		return fmt.Errorf("the API answered the create of resource %q with no actions",
+			resourcePlan.Key.ValueString())
 	}
+	resourcePlan.Actions = actionsFromSDK(*resourceRead.Actions)
 	resourcePlan.Attributes = newAttributesModelsFromSDKWithPlan(resourceRead.Attributes, resourcePlan.Attributes)
-	resourcePlan.Actions = actionsRead
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
 	resourcePlan.CreatedAt = types.StringValue(resourceRead.CreatedAt.String())
@@ -124,7 +105,13 @@ func (r *ResourceClient) ResourceCreate(ctx context.Context, resourcePlan *Resou
 	return nil
 }
 
-func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel) error {
+// ResourceUpdate sends the plan's resource. priorAttributes is the attributes of
+// the prior state. The API keeps the attributes when the request nulls them and
+// deletes them all for an empty object, so when the plan has no attributes and
+// the prior state has some, it sends {} to delete them.
+func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *ResourceModel,
+	priorAttributes attributesModel,
+) error {
 	actions := make(map[string]models.ActionBlockEditable)
 	for actionKey, action := range resourcePlan.Actions {
 		// TODO: Known bug with Go SDK - null description doesn't get updated correctly
@@ -134,10 +121,13 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 		}
 	}
 	attributes := resourcePlan.Attributes.toSDK()
+	if resourcePlan.Attributes == nil && len(priorAttributes) > 0 {
+		attributes = map[string]models.AttributeBlockEditable{}
+	}
 	resourceUpdate := models.ResourceUpdate{
 		Name:        resourcePlan.Name.ValueStringPointer(),
-		Urn:         resourcePlan.Urn.ValueStringPointer(),
-		Description: resourcePlan.Description.ValueStringPointer(),
+		Urn:         common.KnownStringPointer(resourcePlan.Urn),
+		Description: common.KnownStringPointer(resourcePlan.Description),
 		Actions:     &actions,
 		Attributes:  &attributes,
 	}
@@ -154,29 +144,7 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 	resourcePlan.Description = types.StringPointerValue(resourceRead.Description)
 	resourcePlan.Urn = types.StringPointerValue(resourceRead.Urn)
 	if resourceRead.Actions != nil {
-		actions := make(map[string]actionsModel)
-		for actionKey, action := range *resourceRead.Actions {
-			var (
-				name        types.String
-				description types.String
-			)
-			if action.Name != nil {
-				name = types.StringValue(*action.Name)
-			} else {
-				name = types.StringValue(actionKey)
-			}
-			if action.Description != nil {
-				description = types.StringValue(*action.Description)
-			} else {
-				description = types.StringNull()
-			}
-			actions[actionKey] = actionsModel{
-				Id:          types.StringValue(action.Id),
-				Name:        name,
-				Description: description,
-			}
-		}
-		resourcePlan.Actions = actions
+		resourcePlan.Actions = actionsFromSDK(*resourceRead.Actions)
 	}
 	resourcePlan.UpdatedAt = types.StringValue(resourceRead.UpdatedAt.String())
 	resourcePlan.CreatedAt = types.StringValue(resourceRead.CreatedAt.String())
@@ -186,4 +154,22 @@ func (r *ResourceClient) ResourceUpdate(ctx context.Context, resourcePlan *Resou
 	resourcePlan.OrganizationId = types.StringValue(resourceRead.OrganizationId)
 
 	return nil
+}
+
+// actionsFromSDK converts the actions the API returns for a resource. An action
+// that the API returns without a name gets its key as the name.
+func actionsFromSDK(read map[string]models.ActionBlockRead) map[string]actionsModel {
+	actions := make(map[string]actionsModel, len(read))
+	for actionKey, action := range read {
+		name := types.StringValue(actionKey)
+		if action.Name != nil {
+			name = types.StringValue(*action.Name)
+		}
+		actions[actionKey] = actionsModel{
+			Id:          types.StringValue(action.Id),
+			Name:        name,
+			Description: types.StringPointerValue(action.Description),
+		}
+	}
+	return actions
 }

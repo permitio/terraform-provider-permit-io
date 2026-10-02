@@ -1,68 +1,620 @@
-# Terraform Provider testing workflow.
+# Terraform provider tests. The CI job at the end is the one check to require.
 name: Tests
 
-# This GitHub action runs your tests for each pull request and push.
-# Optionally, you can turn it on using a schedule for regular testing.
+# Pull requests into any branch, pushes to main and manual runs. There is no path
+# filter: a required check that never starts blocks the pull request. The release
+# workflow calls this one and publishes only when CI passes; a called run has the
+# release's push event, so acceptance runs with the keys the release passes.
 on:
   pull_request:
-    paths-ignore:
-      - 'README.md'
   push:
-    paths-ignore:
-      - 'README.md'
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      PERMITIO_API_KEY_1_0:
+        required: true
+      PERMITIO_API_KEY_1_1:
+        required: true
+      PERMITIO_API_KEY_1_2:
+        required: true
+      PERMITIO_API_KEY_1_3:
+        required: true
+      PERMITIO_API_KEY_1_4:
+        required: true
 
-# Testing only needs permissions to read the repository contents.
-permissions:
-  contents: read
+permissions: {}
 
-concurrency: ${{ github.workflow }}
+# Concurrency is set per job, not for the whole run: cancelling a run would also
+# cancel an acceptance leg that is already running against its Permit environment.
+# Build, each offline leg, prek, coverage, generate, goreleaser and dependency review
+# run once per ref at a time.
+# A new push to a pull request cancels the older run of these jobs; on main, and
+# for manual runs, the new one waits for it instead.
+
+# The Terraform that go generate (generate) uses. The offline job's Terraform legs
+# above the floor use the same version, and the prek job fails when they do not;
+# change them together. The checksum is the linux_amd64 line of the release's
+# SHA256SUMS, whose HashiCorp signature was verified when the version was pinned.
+env:
+  TERRAFORM_VERSION: 1.16.3
+  TERRAFORM_SHA256: 093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8
 
 jobs:
-  # Ensure project builds before running testing matrix
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-build
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@v4.1.1
-      - uses: actions/setup-go@v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: 'go.mod'
       - run: go mod download
-      # Unit tests only; acceptance tests skip without TF_ACC.
-      - run: go test ./...
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
-        with:
-          version: v2.14.0
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
-
-  generate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4.1.1
-      - uses: actions/setup-go@v5.0.0
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.4.0
-      - run: go generate ./...
-      - name: git diff
+      # Lists the provider schema changes a pull request makes, labelled BREAKING or
+      # non-breaking, in the job summary. Breaking changes are expected while 1.0.0 is
+      # prepared, so they are reported, not failed. schemadiff exits 0 (no breaking
+      # change), 1 (breaking changes) or 2 (could not compare), and 2 fails the step.
+      # The checkout keeps no token, so the base branch comes from the public URL.
+      - name: Report provider schema changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          SCHEMA: internal/provider/testdata/provider-schema.json
         run: |
-          git diff --compact-summary --exit-code || \
-            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+          go build -o "$RUNNER_TEMP/schemadiff" ./internal/acctest/schemadiff
+          git fetch --no-tags --depth=1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$BASE_REF"
+          echo "### Provider schema changes against $BASE_REF" >>"$GITHUB_STEP_SUMMARY"
+          in_base=$(git ls-tree --name-only FETCH_HEAD -- "$SCHEMA")
+          if [[ -z $in_base ]]; then
+            echo "no base schema: $BASE_REF has no $SCHEMA to compare with" |
+              tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git show "FETCH_HEAD:$SCHEMA" >"$RUNNER_TEMP/base-schema.json"
+          status=0
+          "$RUNNER_TEMP/schemadiff" "$RUNNER_TEMP/base-schema.json" "$SCHEMA" \
+            >"$RUNNER_TEMP/schemadiff.txt" || status=$?
+          cat "$RUNNER_TEMP/schemadiff.txt"
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/schemadiff.txt"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          case $status in
+            0) ;;
+            1) echo "::warning title=Breaking schema changes::See the job summary." ;;
+            *) exit "$status" ;;
+          esac
+      # golangci-lint runs in the prek job. vulnscan runs govulncheck, whose version
+      # comes from go.mod, and exits 1 on a vulnerability that is not accepted in
+      # the accept file and 2 when the scan did not complete.
+      - name: Scan for vulnerabilities
+        shell: bash
+        run: |
+          go build -o "$RUNNER_TEMP/vulnscan" ./internal/acctest/vulnscan
+          "$RUNNER_TEMP/vulnscan" -mode source -accept .github/vulnscan-accept.txt ./...
 
-  # Run acceptance tests in a matrix with Terraform CLI versions
-  test:
-    name: Terraform Provider Acceptance Tests
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  # Unit tests and offline provider tests, against the mock Permit API, on the
+  # Terraform floor and latest line, OpenTofu 1.11 and 1.12, and on Linux, macOS and
+  # Windows; the acceptance tests (TestAcc*) need the Permit API and run in the test
+  # job. The legs cover the Terraform floor (1.5.7) and the pinned 1.16 release
+  # (TERRAFORM_VERSION), a pinned OpenTofu 1.11 and 1.12 release, and the pinned
+  # Terraform on macOS arm64 and Windows amd64; the other published platforms are
+  # cross-compiled, not tested.
+  # Each checksum is the leg's line of the release's SHA256SUMS, whose signature
+  # (HashiCorp's or OpenTofu's) was verified when the version was pinned.
+  offline:
+    name: Offline tests (${{ matrix.cli }} ${{ matrix.version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: >-
+        ${{ github.workflow }}-${{ github.ref }}-offline-${{ matrix.os }}-${{
+        matrix.cli }}-${{ matrix.version }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     strategy:
       fail-fast: false
       matrix:
-        # list whatever Terraform versions here you would like to support
+        include:
+          - os: ubuntu-24.04
+            cli: terraform
+            version: 1.5.7
+            platform: linux_amd64
+            sha256: c0ed7bc32ee52ae255af9982c8c88a7a4c610485cf1d55feeb037eab75fa082c
+          - os: ubuntu-24.04
+            cli: terraform
+            version: 1.16.3
+            platform: linux_amd64
+            sha256: 093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8
+          - os: ubuntu-24.04
+            cli: tofu
+            version: 1.11.14
+            platform: linux_amd64
+            sha256: 8279a6c6d4044899ae77190fc50c40c147615a76aca13ea605d68320c424c2a6
+          - os: ubuntu-24.04
+            cli: tofu
+            version: 1.12.6
+            platform: linux_amd64
+            sha256: 5dc43da4f750f33873dc25e94587128709e819e544b7be9016b255316153c3a8
+          - os: macos-15
+            cli: terraform
+            version: 1.16.3
+            platform: darwin_arm64
+            sha256: c2c45425ea4568da9803e127e589186cb3798a5944d9aff5a5bc15dd18267560
+          - os: windows-2025
+            cli: terraform
+            version: 1.16.3
+            platform: windows_amd64
+            sha256: 6f908a90e5637afe72705290afd1cd71fc4f2877303ca77f05a8c6ead196b11c
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Git on Windows turns LF into CRLF on checkout, and the tests compare
+      # committed files byte for byte.
+      - name: Keep committed line endings
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+      - run: go mod download
+      # Runs in RUNNER_TEMP with relative paths, which bash reads the same way on
+      # every runner. The sha256sum on macOS takes no --check or --strict, so the
+      # macOS leg uses shasum.
+      - name: Install ${{ matrix.cli }} ${{ matrix.version }}
+        working-directory: ${{ runner.temp }}
+        env:
+          CLI: ${{ matrix.cli }}
+          CLI_VERSION: ${{ matrix.version }}
+          PLATFORM: ${{ matrix.platform }}
+          CLI_SHA256: ${{ matrix.sha256 }}
+        run: |
+          case $CLI in
+            terraform)
+              release="https://releases.hashicorp.com/terraform/${CLI_VERSION}"
+              ;;
+            tofu)
+              release="https://github.com/opentofu/opentofu/releases/download/v${CLI_VERSION}"
+              ;;
+            *)
+              echo "::error title=Install::Unknown CLI ${CLI}."
+              exit 2
+              ;;
+          esac
+          curl -fsSL --retry 3 --retry-connrefused -o cli.zip \
+            "${release}/${CLI}_${CLI_VERSION}_${PLATFORM}.zip"
+          if [[ $RUNNER_OS == macOS ]]; then
+            echo "${CLI_SHA256}  cli.zip" | shasum -a 256 --check --strict
+          else
+            echo "${CLI_SHA256}  cli.zip" | sha256sum --check --strict
+          fi
+          unzip -q cli.zip -d cli
+      # checkgotest exits 1 when a test fails or skips, and 2 when no test runs or a
+      # required test never runs: the tenant test against the mock, the upgrade test
+      # from v0.0.25, the consumer fixtures test, or the test that validates every
+      # example, which a rename would otherwise drop without notice. The upgrade test
+      # downloads v0.0.25 for the runner's platform from the Terraform registry;
+      # v0.0.25 was published for every leg's platform, so the test is required on
+      # every leg. checkgotest is built first because go run turns every non-zero
+      # exit into 1. OpenTofu reads a provider source without a hostname as
+      # registry.opentofu.org, so its legs attach this build there.
+      - name: Run offline tests
+        env:
+          CLI: ${{ matrix.cli }}
+          TF_ACC_PROVIDER_HOST: >-
+            ${{ matrix.cli == 'tofu' && 'registry.opentofu.org' || 'registry.terraform.io' }}
+          REQUIRED_TEST: >-
+            github.com/permitio/terraform-provider-permit-io/internal/provider/tenants
+            TestTenantCreateUpdateDestroy
+          REQUIRED_UPGRADE_TEST: >-
+            github.com/permitio/terraform-provider-permit-io/internal/provider
+            TestUpgradeFromV0025
+          REQUIRED_CONSUMER_TEST: >-
+            github.com/permitio/terraform-provider-permit-io
+            TestConsumerFixtures
+          REQUIRED_EXAMPLES_TEST: >-
+            github.com/permitio/terraform-provider-permit-io
+            TestExamples
+        run: |
+          exe=$(go env GOEXE)
+          export TF_ACC_TERRAFORM_PATH="$RUNNER_TEMP/cli/$CLI$exe"
+          "$TF_ACC_TERRAFORM_PATH" version
+          go build -o "$RUNNER_TEMP/checkgotest$exe" ./internal/acctest/checkgotest
+          go test -count=1 -json -skip '^TestAcc' ./... |
+            "$RUNNER_TEMP/checkgotest$exe" -require "$REQUIRED_TEST" \
+              -require "$REQUIRED_UPGRADE_TEST" -require "$REQUIRED_CONSUMER_TEST" \
+              -require "$REQUIRED_EXAMPLES_TEST"
+
+  # Runs every hook in .pre-commit-config.yaml on every file. The golangci-lint
+  # version is set only there. The checksum is the release's .sha256 asset for
+  # linux x86_64, which matches the one prek-action records for this version.
+  prek:
+    name: prek
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-prek
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    env:
+      PREK_VERSION: 0.5.3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # CI gates only the jobs in its needs, so every other job must be listed there.
+      # Exits 1 when the jobs and CI's needs differ, and 2 when no job is read.
+      - name: Check that CI needs every job
+        shell: bash
+        env:
+          WORKFLOW: .github/workflows/test.yml
+        run: |
+          jobs=$(yq '.jobs | keys | .[] | select(. != "ci")' "$WORKFLOW" | sort)
+          needs=$(yq '.jobs.ci.needs[]' "$WORKFLOW" | sort)
+          if [[ -z $jobs ]]; then
+            echo "::error title=CI needs::No jobs read from $WORKFLOW."
+            exit 2
+          fi
+          if [[ $jobs != "$needs" ]]; then
+            echo "::error title=CI needs::CI's needs must list every other job in $WORKFLOW."
+            diff <(echo "$jobs") <(echo "$needs") || true
+            exit 1
+          fi
+          echo "CI needs every other job: ${jobs//$'\n'/, }."
+      # release.yml calls this workflow from its tests job, and GitHub refuses the whole
+      # release run when a job here asks for a permission that job does not grant, even
+      # a job the release skips. Exits 1 when a grant is missing, and 2 when no
+      # permission or caller is read.
+      - name: Check that the release grants every job's permissions
+        shell: bash
+        env:
+          WORKFLOW: .github/workflows/test.yml
+          RELEASE: .github/workflows/release.yml
+        run: |
+          if ! asked=$(yq '(.permissions, .jobs[].permissions) | select(. != null) |
+            to_entries | .[] | .key + " " + .value' "$WORKFLOW" | sort -u) ||
+            [[ -z $asked ]]; then
+            echo "::error title=Release permissions::No permissions read from $WORKFLOW."
+            exit 2
+          fi
+          if [[ $(yq '.jobs.tests.uses' "$RELEASE") != "./$WORKFLOW" ]]; then
+            echo "::error title=Release permissions::The tests job in $RELEASE does not" \
+              "call $WORKFLOW."
+            exit 2
+          fi
+          missing=""
+          while read -r scope level; do
+            granted=$(yq ".jobs.tests.permissions[\"$scope\"]" "$RELEASE")
+            case $level:$granted in
+              none:* | read:read | read:write | write:write) ;;
+              *) missing+="$scope: $level, " ;;
+            esac
+          done <<<"$asked"
+          if [[ -n $missing ]]; then
+            echo "::error title=Release permissions::The tests job in $RELEASE must grant" \
+              "${missing%, }."
+            exit 1
+          fi
+          echo "The release grants every permission test.yml asks for: ${asked//$'\n'/, }."
+      # The offline job's Terraform legs run two versions: the floor, which is the
+      # lower, and TERRAFORM_VERSION, whose linux_amd64 leg has TERRAFORM_SHA256.
+      # Exits 1 when they do not, and 2 when no Terraform leg is read.
+      - name: Check that the offline job tests the pinned Terraform
+        shell: bash
+        env:
+          WORKFLOW: .github/workflows/test.yml
+        run: |
+          legs='.jobs.offline.strategy.matrix.include[] | select(.cli == "terraform")'
+          linux='select(.version == strenv(TERRAFORM_VERSION) and .platform == "linux_amd64")'
+          versions=$(yq "$legs | .version" "$WORKFLOW" | sort -uV)
+          if [[ -z $versions ]]; then
+            echo "::error title=Terraform legs::No Terraform legs read from $WORKFLOW."
+            exit 2
+          fi
+          count=$(wc -l <<<"$versions")
+          highest=$(tail -n 1 <<<"$versions")
+          pinned=$(yq "$legs | $linux | .sha256" "$WORKFLOW")
+          if [[ $count -ne 2 || $highest != "$TERRAFORM_VERSION" ]]; then
+            echo "::error title=Terraform legs::The Terraform legs run ${versions//$'\n'/, };" \
+              "expected the floor and ${TERRAFORM_VERSION}."
+            exit 1
+          fi
+          if [[ $pinned != "$TERRAFORM_SHA256" ]]; then
+            echo "::error title=Terraform legs::The linux_amd64 leg of ${TERRAFORM_VERSION}" \
+              "has checksum '${pinned}', expected TERRAFORM_SHA256."
+            exit 1
+          fi
+          echo "The Terraform legs run ${versions//$'\n'/ and }."
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        id: go
+        with:
+          go-version-file: 'go.mod'
+      - name: Install prek
+        env:
+          PREK_SHA256: c1475ddc56df0003c780557d9b52273d9eb19c9ef8d91143f3ce03511182a36e
+        run: |
+          asset=prek-x86_64-unknown-linux-gnu
+          archive="$RUNNER_TEMP/$asset.tar.gz"
+          curl -fsSL --retry 3 --retry-connrefused -o "$archive" \
+            "https://github.com/j178/prek/releases/download/v${PREK_VERSION}/${asset}.tar.gz"
+          echo "${PREK_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$asset" >>"$GITHUB_PATH"
+      # Hook binaries are built with the job's Go, so its version is in the key.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/prek
+          key: >-
+            prek-${{ runner.os }}-go${{ steps.go.outputs.go-version }}-${{ env.PREK_VERSION }}-${{
+            hashFiles('.pre-commit-config.yaml') }}
+      # Exits 1 when a hook fails, and 2 when fewer than EXPECTED_HOOKS hooks pass
+      # (a hook skipped, through SKIP or for want of files, or removed from the
+      # config). Change EXPECTED_HOOKS when you add or remove a hook.
+      - name: Run hooks
+        shell: bash
+        env:
+          EXPECTED_HOOKS: 7
+        run: |
+          prek run --all-files --show-diff-on-failure --color=never |
+            tee "$RUNNER_TEMP/prek.txt"
+          passed=$(grep -c 'Passed$' "$RUNNER_TEMP/prek.txt" || true)
+          if [[ $passed -ne $EXPECTED_HOOKS ]]; then
+            echo "::error title=prek::${passed} of ${EXPECTED_HOOKS} hooks passed; see the log."
+            exit 2
+          fi
+
+  # Maps the provider's calls to the operations of the vendored Permit API spec,
+  # coverage/openapi.json, checks the triage in coverage/operations.yaml and decodes
+  # fixtures of every response the provider reads with the SDK's models, offline.
+  # apicoverage exits 1 on a finding and 2 when it did not run, such as on a spec
+  # that is not the one coverage/spec.lock.json pins. Its report goes to the job
+  # summary. The weekly coverage workflow runs it against the live spec.
+  coverage:
+    name: API coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-coverage
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+      - name: Check the API coverage
+        shell: bash
+        run: |
+          go build -o "$RUNNER_TEMP/apicoverage" ./internal/acctest/apicoverage
+          status=0
+          "$RUNNER_TEMP/apicoverage" >"$RUNNER_TEMP/coverage.md" || status=$?
+          tee -a "$GITHUB_STEP_SUMMARY" <"$RUNNER_TEMP/coverage.md"
+          exit "$status"
+
+  # Regenerates the docs and formats the examples in a checkout directory that is
+  # not named after the repository, so the output cannot depend on that name.
+  generate:
+    name: generate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-generate
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: src
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          path: src
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+      # The pinned Terraform (TERRAFORM_VERSION, as in the offline job's legs above
+      # the floor), on PATH for terraform fmt and tfplugindocs.
+      - name: Install Terraform
+        run: |
+          release="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
+          zip="$RUNNER_TEMP/terraform.zip"
+          curl -fsSL --retry 3 --retry-connrefused -o "$zip" \
+            "${release}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_SHA256}  ${zip}" | sha256sum --check --strict
+          unzip -q "$zip" -d "$RUNNER_TEMP/terraform"
+          echo "$RUNNER_TEMP/terraform" >>"$GITHUB_PATH"
+      # The committed pages are deleted first, so a page that go generate does not
+      # write shows up as deleted and the count below is of pages it wrote.
+      # tfplugindocs deletes these directories itself before it renders.
+      - name: Run go generate
+        run: |
+          rm -r docs/resources docs/data-sources
+          go generate ./...
+      # Exits 1 when go generate changed, added or deleted a file, and 2 when it
+      # wrote fewer than MIN_DOCS resource and data source pages. Change MIN_DOCS
+      # when you add or remove a resource or data source.
+      - name: Check generated files
+        env:
+          MIN_DOCS: 19
+        run: |
+          changes=$(git status --porcelain)
+          if [[ -n $changes ]]; then
+            printf '%s\n' "$changes"
+            git diff
+            echo "::error title=go generate::Generated files differ from the commit." \
+              "Run 'go generate ./...' and commit the result."
+            exit 1
+          fi
+          shopt -s nullglob
+          docs=(docs/resources/*.md docs/data-sources/*.md)
+          if (( ${#docs[@]} < MIN_DOCS )); then
+            echo "::error title=go generate::${#docs[@]} doc pages, expected at least ${MIN_DOCS}."
+            exit 2
+          fi
+          echo "Generated files match the commit; ${#docs[@]} doc pages."
+      # tfplugindocs 0.16 validate checks the file layout only: which files and
+      # directories templates/ and docs/ hold, such as a stray docs/notes.md or a
+      # .html.md page. go generate above fails on a template syntax or field error.
+      # validate checks docs/ only when there is no templates/, so it runs a second
+      # time in a copy of docs/ alone. Exits 1 when templates/ or docs/ holds a file
+      # or directory tfplugindocs does not expect there, and 2 when
+      # templates/index.md.tmpl or docs/index.md is missing.
+      - name: Validate the doc templates and pages
+        run: |
+          for file in templates/index.md.tmpl docs/index.md; do
+            if [[ ! -f $file ]]; then
+              echo "::error title=tfplugindocs validate::No ${file} to validate."
+              exit 2
+            fi
+          done
+          go tool tfplugindocs validate
+          go build -o "$RUNNER_TEMP/tfplugindocs" \
+            github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
+          pages="$RUNNER_TEMP/doc-pages"
+          mkdir "$pages"
+          cp -R docs "$pages/"
+          (cd "$pages" && "$RUNNER_TEMP/tfplugindocs" validate)
+
+  # On pull requests that change how a release is made (.goreleaser.yml, the
+  # release workflow or its files check) or what it compiles (go.mod, go.sum),
+  # checks .goreleaser.yml, builds a snapshot release for every platform, unsigned
+  # and unpublished, and checks its files as the release workflow does. Other runs
+  # skip the steps and pass, so CI can need this job.
+  goreleaser:
+    name: goreleaser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-goreleaser
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          # The pull request's merge commit and its first parent, the base branch.
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check whether the release or Go module files changed
+        id: changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD -- .goreleaser.yml .tool-versions \
+            .github/workflows/release.yml .github/scripts/check-release-artifacts.sh \
+            go.mod go.sum)
+          if [[ -n $changed ]]; then
+            echo "Release or Go module files changed: ${changed//$'\n'/, }"
+            echo "release=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "::notice title=goreleaser skipped::No release or Go module file changed."
+            echo "release=false" >>"$GITHUB_OUTPUT"
+          fi
+      # No module cache: the release workflow builds without one too.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        if: steps.changes.outputs.release == 'true'
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94  # v7.2.3
+        if: steps.changes.outputs.release == 'true'
+        with:
+          version-file: .tool-versions
+          install-only: true
+      # A snapshot is not signed, so the files check runs without -s and -t.
+      - name: Build and check a snapshot release
+        if: steps.changes.outputs.release == 'true'
+        shell: bash
+        run: |
+          goreleaser check
+          goreleaser release --snapshot --clean --skip=sign
+          .github/scripts/check-release-artifacts.sh dist
+
+  # Fails a pull request that brings in a dependency version (a Go module or an
+  # action) with a known vulnerability of high or critical severity. It compares the
+  # pull request's dependency graph with its base branch's, so it runs on pull
+  # requests only; on other events the job is skipped, not passed with its steps
+  # skipped, so that CI can tell whether the review ran.
+  dependency-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write  # posts the review's summary on the pull request when it fails
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-dependency-review
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+  # Runs the acceptance tests against the Permit API on Terraform 1.0 to 1.4, below
+  # the supported floor (1.5.7): extra coverage, not a support claim. Each version
+  # has its own Permit environment and API key, and the check names stay as they
+  # are. These legs will move to one Terraform version with scratch environments
+  # once PER-16580 lands. They start only after the offline tests pass.
+  test:
+    name: Terraform Provider Acceptance Tests
+    needs: [build, offline]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      # GitHub gives no repository secrets to pull requests from forks or to runs
+      # whose actor is Dependabot, whatever the event and re-runs included, so those
+      # runs cannot reach the Permit API.
+      HAS_PERMIT_SECRETS: >-
+        ${{ github.actor != 'dependabot[bot]' &&
+        (github.event_name != 'pull_request' ||
+        github.event.pull_request.head.repo.full_name == github.repository) }}
+    # Each Terraform version's leg uses its own fixed Permit environment, so only one
+    # leg per version runs at a time across all refs. This group never cancels a
+    # running leg, and the workflow has no run-level group, so a new push does not
+    # cancel one either. GitHub keeps one waiting leg per group: a newer leg from any
+    # ref cancels the waiting one, and that run's CI fails until it is re-run.
+    # Runs without the API key reach no environment and get a group per ref. The
+    # condition repeats HAS_PERMIT_SECRETS because env is not available here.
+    concurrency:
+      group: >-
+        acceptance-${{ (github.actor != 'dependabot[bot]' &&
+        (github.event_name != 'pull_request' ||
+        github.event.pull_request.head.repo.full_name == github.repository))
+        && 'permit' || github.ref }}-${{ matrix.terraform }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
         terraform:
           - '1.0.*'
           - '1.1.*'
@@ -70,71 +622,106 @@ jobs:
           - '1.3.*'
           - '1.4.*'
     steps:
-      - uses: actions/checkout@v4.1.1
-      - uses: actions/setup-go@v5.0.0
+      - name: Explain skipped acceptance tests
+        if: env.HAS_PERMIT_SECRETS != 'true'
+        run: >-
+          echo "::notice title=Acceptance tests skipped::This run was started by
+          Dependabot or comes from a fork, so it gets no Permit API key. A maintainer
+          can run the acceptance tests with Run workflow on a branch of this repository."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: env.HAS_PERMIT_SECRETS == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        if: env.HAS_PERMIT_SECRETS == 'true'
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@v2.0.3
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        if: env.HAS_PERMIT_SECRETS == 'true'
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
+        if: env.HAS_PERMIT_SECRETS == 'true'
 
       - name: Run tests with Terraform 1.0
-        if: matrix.terraform == '1.0.*'
+        if: env.HAS_PERMIT_SECRETS == 'true' && matrix.terraform == '1.0.*'
         env:
           TF_ACC: "1"
           PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_0 }}
           PERMITIO_TIMEOUT: 20
-        run: |
-          for i in 1 2 3 4 5; do
-            go test -v -cover ./internal/provider/ && break || sleep 10
-          done
+        run: go test -count=1 -v -cover -coverpkg=./... ./internal/provider/
 
       - name: Run tests with Terraform 1.1
-        if: matrix.terraform == '1.1.*'
+        if: env.HAS_PERMIT_SECRETS == 'true' && matrix.terraform == '1.1.*'
         env:
           TF_ACC: "1"
           PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_1 }}
           PERMITIO_TIMEOUT: 20
-        run: |
-          for i in 1 2 3 4 5; do
-            go test -v -cover ./internal/provider/ && break || sleep 10
-          done
+        run: go test -count=1 -v -cover -coverpkg=./... ./internal/provider/
 
       - name: Run tests with Terraform 1.2
-        if: matrix.terraform == '1.2.*'
+        if: env.HAS_PERMIT_SECRETS == 'true' && matrix.terraform == '1.2.*'
         env:
           TF_ACC: "1"
           PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_2 }}
           PERMITIO_TIMEOUT: 20
-        run: |
-          for i in 1 2 3 4 5; do
-            go test -v -cover ./internal/provider/ && break || sleep 10
-          done
+        run: go test -count=1 -v -cover -coverpkg=./... ./internal/provider/
 
       - name: Run tests with Terraform 1.3
-        if: matrix.terraform == '1.3.*'
+        if: env.HAS_PERMIT_SECRETS == 'true' && matrix.terraform == '1.3.*'
         env:
           TF_ACC: "1"
           PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_3 }}
           PERMITIO_TIMEOUT: 20
-        run: |
-          for i in 1 2 3 4 5; do
-            go test -v -cover ./internal/provider/ && break || sleep 10
-          done
+        run: go test -count=1 -v -cover -coverpkg=./... ./internal/provider/
 
       - name: Run tests with Terraform 1.4
-        if: matrix.terraform == '1.4.*'
+        if: env.HAS_PERMIT_SECRETS == 'true' && matrix.terraform == '1.4.*'
         env:
           TF_ACC: "1"
           PERMITIO_API_KEY: ${{ secrets.PERMITIO_API_KEY_1_4 }}
           PERMITIO_TIMEOUT: 20
+        run: go test -count=1 -v -cover -coverpkg=./... ./internal/provider/
+
+  # The one check to require. It runs whatever happened to the jobs it needs, since
+  # a skipped required check counts as passing, and fails unless each of them
+  # succeeded: a failed, cancelled or skipped job fails it. Acceptance runs without
+  # the API key succeed with their steps skipped. The one exception is dependency
+  # review, which runs on pull requests only: on a push or a manual run, a release's
+  # call included, its job is skipped and that passes; on any other event it must
+  # succeed. Exits 1 when a job did not succeed, and 2 when the results of fewer or
+  # more than EXPECTED_JOBS jobs arrive. Change EXPECTED_JOBS when you change needs.
+  ci:
+    name: CI
+    if: always()
+    needs: [build, coverage, dependency-review, generate, goreleaser, offline, prek, test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check the needed jobs
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+          EXPECTED_JOBS: 8
         run: |
-          for i in 1 2 3 4 5; do
-            go test -v -cover ./internal/provider/ && break || sleep 10
-          done
-
-        
-
+          if ! results=$(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"$NEEDS"); then
+            echo "::error title=CI::Could not read the job results."
+            exit 2
+          fi
+          printf '%s\n' "$results"
+          count=$(grep -c . <<<"$results" || true)
+          if [[ $count -ne $EXPECTED_JOBS ]]; then
+            echo "::error title=CI::${count} job results, expected ${EXPECTED_JOBS}."
+            exit 2
+          fi
+          failed=$(grep -v ' success$' <<<"$results" || true)
+          if [[ $EVENT == push || $EVENT == workflow_dispatch ]]; then
+            failed=$(grep -vx 'dependency-review skipped' <<<"$failed" || true)
+          fi
+          if [[ -n $failed ]]; then
+            echo "::error title=CI::Jobs that did not succeed: ${failed//$'\n'/, }"
+            exit 1
+          fi

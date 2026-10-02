@@ -9,6 +9,7 @@ import (
 
 type mappingRuleModel struct {
 	Url        types.String `tfsdk:"url"`
+	UrlType    types.String `tfsdk:"url_type"`
 	HttpMethod types.String `tfsdk:"http_method"`
 	Resource   types.String `tfsdk:"resource"`
 	Action     types.String `tfsdk:"action"`
@@ -44,6 +45,11 @@ func (model *proxyConfigModel) toProxyConfigCreate(ctx context.Context) (models.
 			HttpMethod: models.Methods(rule.HttpMethod.ValueString()),
 			Resource:   rule.Resource.ValueString(),
 			Action:     rule.Action.ValueStringPointer(),
+		}
+
+		if !rule.UrlType.IsNull() {
+			urlType := models.UrlMatchType(rule.UrlType.ValueString())
+			mappingRules[i].UrlType = &urlType
 		}
 
 		if !rule.Priority.IsNull() {
@@ -87,25 +93,113 @@ func (model *proxyConfigModel) toProxyConfigCreate(ctx context.Context) (models.
 		proxyConfigCreate.Secret = model.AuthSecret.Basic.ValueString()
 	case models.BEARER:
 		proxyConfigCreate.Secret = model.AuthSecret.Bearer.ValueString()
-	case models.HEADERS:
 	}
 
 	return proxyConfigCreate, nil
 }
 
-func (model *proxyConfigModel) toProxyConfigUpdate(ctx context.Context) (models.ProxyConfigUpdate, error) {
+// proxyConfigPatch is the body of a proxy config update. The API rejects an update
+// without the secret, and takes a missing auth_mechanism as Bearer, so the body
+// always has both. The API merges the mapping rules of an update into the stored
+// ones by url and http_method, in the order sent: it removes the stored rule with
+// the pair of a removedMappingRule, replaces the stored rule with the pair of any
+// other rule in its place or adds that rule at the end, and keeps every stored
+// rule the update does not name.
+type proxyConfigPatch struct {
+	Name          string `json:"name"`
+	AuthMechanism string `json:"auth_mechanism"`
+	Secret        string `json:"secret"`
+	// MappingRules holds a removedMappingRule for each rule of the prior state and
+	// then a models.MappingRule for each planned rule, so the API ends up with the
+	// planned rules in the planned order. It is never nil: the API rejects null.
+	MappingRules []any `json:"mapping_rules"`
+}
+
+// removedMappingRule asks the API to remove the stored mapping rule with this url
+// and http_method. The API requires a resource on every rule, even one it removes.
+type removedMappingRule struct {
+	Url          string `json:"url"`
+	HttpMethod   string `json:"http_method"`
+	Resource     string `json:"resource"`
+	ShouldDelete bool   `json:"should_delete"`
+}
+
+// toProxyConfigPatch returns the update that makes the proxy config in prior
+// state the planned one: the planned name, auth mechanism and secret, a
+// removedMappingRule for each url and http_method in prior, and then the planned
+// mapping rules. The API removes every prior rule and then adds each planned one
+// at the end, so one request leaves it with exactly the planned rules in the
+// planned order.
+func (model *proxyConfigModel) toProxyConfigPatch(
+	ctx context.Context, prior proxyConfigModel,
+) (proxyConfigPatch, error) {
 	created, err := model.toProxyConfigCreate(ctx)
 
 	if err != nil {
-		return models.ProxyConfigUpdate{}, err
+		return proxyConfigPatch{}, err
 	}
 
-	return models.ProxyConfigUpdate{
-		Name:          &created.Name,
-		Secret:        &created.Secret,
-		AuthMechanism: created.AuthMechanism,
-		MappingRules:  created.MappingRules,
+	rules := make([]any, 0, len(prior.MappingRules)+len(created.MappingRules))
+	removed := map[mappingRuleKey]bool{}
+	for _, rule := range prior.MappingRules {
+		key := rule.key()
+		if removed[key] {
+			continue
+		}
+		removed[key] = true
+		rules = append(rules, removedMappingRule{
+			Url:          key.url,
+			HttpMethod:   key.httpMethod,
+			Resource:     rule.Resource.ValueString(),
+			ShouldDelete: true,
+		})
+	}
+	for _, rule := range created.MappingRules {
+		rules = append(rules, rule)
+	}
+
+	return proxyConfigPatch{
+		Name:          created.Name,
+		AuthMechanism: model.AuthMechanism.ValueString(),
+		Secret:        created.Secret,
+		MappingRules:  rules,
 	}, nil
+}
+
+// mappingRuleKey is what the API identifies a mapping rule by: its url and
+// http_method.
+type mappingRuleKey struct {
+	url, httpMethod string
+}
+
+func (rule mappingRuleModel) key() mappingRuleKey {
+	return mappingRuleKey{url: rule.Url.ValueString(), httpMethod: rule.HttpMethod.ValueString()}
+}
+
+// orderMappingRules returns rules, as the API returned them, in the order of the
+// same rules in want, matched by url and http_method, followed by the rules want
+// does not have, in the API's order. An update leaves the API with the planned
+// order, but a change made outside Terraform can leave it with another. The state
+// keeps the configuration's order, and a rule only the API has goes at the end,
+// where the next plan removes it.
+func orderMappingRules(rules, want []mappingRuleModel) []mappingRuleModel {
+	used := make([]bool, len(rules))
+	ordered := make([]mappingRuleModel, 0, len(rules))
+	for _, wanted := range want {
+		for i, rule := range rules {
+			if !used[i] && rule.key() == wanted.key() {
+				used[i] = true
+				ordered = append(ordered, rule)
+				break
+			}
+		}
+	}
+	for i, rule := range rules {
+		if !used[i] {
+			ordered = append(ordered, rule)
+		}
+	}
+	return ordered
 }
 
 func (model *proxyConfigModel) fromProxyConfigRead(sdkModel *models.ProxyConfigRead) {
@@ -115,9 +209,14 @@ func (model *proxyConfigModel) fromProxyConfigRead(sdkModel *models.ProxyConfigR
 	model.EnvironmentId = types.StringValue(sdkModel.EnvironmentId)
 	model.Key = types.StringValue(sdkModel.Key)
 	model.Name = types.StringValue(sdkModel.Name)
-	model.AuthMechanism = types.StringValue(string(*sdkModel.AuthMechanism))
+	// A response without auth_mechanism has the API's default, Bearer.
+	authMechanism := models.BEARER
+	if sdkModel.AuthMechanism != nil {
+		authMechanism = *sdkModel.AuthMechanism
+	}
+	model.AuthMechanism = types.StringValue(string(authMechanism))
 
-	switch *sdkModel.AuthMechanism {
+	switch authMechanism {
 	case models.BASIC:
 		model.AuthSecret.Basic = types.StringValue(sdkModel.Secret)
 	case models.BEARER:
@@ -131,6 +230,12 @@ func (model *proxyConfigModel) fromProxyConfigRead(sdkModel *models.ProxyConfigR
 			Url:        types.StringValue(rule.Url),
 			HttpMethod: types.StringValue(string(rule.HttpMethod)),
 			Resource:   types.StringValue(rule.Resource),
+		}
+
+		if rule.IsRegexUrl() {
+			resultRules[i].UrlType = types.StringValue(string(models.URLMatchTypeRegex))
+		} else {
+			resultRules[i].UrlType = types.StringNull()
 		}
 
 		if rule.Action != nil {

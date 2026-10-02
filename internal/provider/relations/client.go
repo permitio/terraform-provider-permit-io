@@ -2,8 +2,10 @@ package relations
 
 import (
 	"context"
+
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type relationClient struct {
@@ -14,7 +16,7 @@ func (c *relationClient) Create(ctx context.Context, plan relationModel) (relati
 	relationCreate := models.RelationCreate{
 		Key:             plan.Key.ValueString(),
 		Name:            plan.Name.ValueString(),
-		Description:     plan.Description.ValueStringPointer(),
+		Description:     common.KnownStringPointer(plan.Description),
 		SubjectResource: plan.SubjectResource.ValueString(),
 	}
 

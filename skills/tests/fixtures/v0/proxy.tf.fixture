@@ -1,0 +1,62 @@
+variable "billing_api_key" {
+  type      = string
+  sensitive = true
+}
+
+resource "permitio_proxy_config" "billing" {
+  key            = "billing"
+  name           = "Billing API"
+  auth_mechanism = "Headers" # expect: S7 NEEDS-REVIEW
+  auth_secret = {
+    headers = { "x-api-key" = var.billing_api_key }
+  }
+  mapping_rules = [
+    {
+      url         = "https://billing.example.com/v1/invoices"
+      http_method = "get"
+      resource    = "invoice"
+      action      = "read"
+    },
+    { url = "https://billing.example.com/v1/invoices", http_method = "get", resource = "invoice", action = "list" }, # expect: S8 NEEDS-REVIEW
+    {
+      url         = "https://billing.example.com/v1/invoices/{invoice_id}" # expect: K5 NEEDS-REVIEW
+      http_method = "put"
+      resource    = permitio_resource.invoice.key
+      action      = "read"
+    },
+    {
+      url         = "https://billing.example.com/v1/customers/{customer_id}" # expect: K5 INFO
+      http_method = "get"
+      resource    = "customer"
+      action      = "read"
+    },
+    {
+      url         = "^https://billing\\.example\\.com/v1/items/[0-9]{4}$"
+      url_type    = "regex"
+      http_method = "get"
+      resource    = "invoice"
+      action      = "read"
+    },
+  ]
+}
+
+output "billing_secret" {
+  value = permitio_proxy_config.billing.auth_secret # expect: S6 NEEDS-REVIEW
+}
+
+output "billing_config" {
+  value = permitio_proxy_config.billing # expect: S6 NEEDS-REVIEW
+}
+
+output "billing_bearer" {
+  value = "Bearer ${permitio_proxy_config.billing.auth_secret.bearer}" # expect: S6 NEEDS-REVIEW
+}
+
+output "billing_id" {
+  value = permitio_proxy_config.billing.id
+}
+
+output "billing_secret_marked" {
+  value     = permitio_proxy_config.billing.auth_secret
+  sensitive = true
+}

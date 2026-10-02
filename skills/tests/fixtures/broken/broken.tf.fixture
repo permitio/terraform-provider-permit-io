@@ -1,0 +1,3 @@
+resource "permitio_tenant" "broken" {
+  key  = "broken"
+  name = "Broken"

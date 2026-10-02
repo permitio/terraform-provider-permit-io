@@ -1,0 +1,11 @@
+# Vulnerabilities that vulnscan (internal/acctest/vulnscan) reports without failing.
+# One per line: the ID, the scan mode that reports it (source or binary), and why
+# it is accepted. vulnscan prints each accepted vulnerability with its reason,
+# never accepts one in called code, and fails on an entry that its mode no longer
+# reports, so remove an entry once its vulnerability is gone.
+
+# golang.org/x/crypto/openpgp is unmaintained and has no fixed version. x/crypto
+# is in the module graph only for the test dependencies and the tfplugindocs tool;
+# no package imports x/crypto/openpgp, and the provider binaries do not contain
+# x/crypto.
+GO-2026-5932 source x/crypto/openpgp has no fixed version and no package imports it

@@ -1,0 +1,1 @@
+Headers authentication is not supported yet; use Bearer or Basic

@@ -1,0 +1,32 @@
+# A configuration written for 0.0.x. Each "expect:" comment names what the scanner
+# must report on that line; "expect-next:" names what it reports on the next line.
+terraform {
+  required_version = ">= 1.0" # expect: C1 NEEDS-REVIEW
+
+  required_providers {
+    permitio = {
+      source  = "permitio/permit-io"
+      version = "~> 0.0.1" # expect: P1 SAFE
+    }
+  }
+
+  backend "s3" {
+    bucket = "example-terraform-state"
+    key    = "permit/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+
+provider "permitio" {
+  api_url = "https://api.permit.io" # expect: B4 INFO
+  api_key = "YOUR_API_KEY"          # expect: B4 NEEDS-REVIEW
+  timeout = 0                       # expect: S11 NEEDS-REVIEW
+}
+
+provider "permitio" {
+  alias   = "staging"
+  api_url = "api.permit.io"               # expect: S11 NEEDS-REVIEW
+  api_key = "not-a-real-key-0123456789"   # expect: B4 NEEDS-REVIEW
+  timeout = -5                            # expect: S11 NEEDS-REVIEW
+  version = "~> 0.0.20"                   # expect: P1 SAFE
+}

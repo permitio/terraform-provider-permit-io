@@ -4,29 +4,69 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
+// userSetModel holds the attributes of a user set, which a resource set has too.
+type userSetModel struct {
+	Id             types.String         `tfsdk:"id"`
+	OrganizationId types.String         `tfsdk:"organization_id"`
+	ProjectId      types.String         `tfsdk:"project_id"`
+	EnvironmentId  types.String         `tfsdk:"environment_id"`
+	Key            types.String         `tfsdk:"key"`
+	Name           types.String         `tfsdk:"name"`
+	Description    types.String         `tfsdk:"description"`
+	Conditions     jsontypes.Normalized `tfsdk:"conditions"`
+	ParentId       types.String         `tfsdk:"parent_id"`
+}
+
+// ConditionSetModel holds a user set or a resource set. A user set has no
+// resource attribute, so its Resource stays null.
 type ConditionSetModel struct {
-	Id             types.String `tfsdk:"id"`
-	OrganizationId types.String `tfsdk:"organization_id"`
-	ProjectId      types.String `tfsdk:"project_id"`
-	EnvironmentId  types.String `tfsdk:"environment_id"`
-	Key            types.String `tfsdk:"key"`
-	Name           types.String `tfsdk:"name"`
-	Description    types.String `tfsdk:"description"`
-	Conditions     types.String `tfsdk:"conditions"`
-	Resource       types.String `tfsdk:"resource"`
-	ParentId       types.String `tfsdk:"parent_id"`
+	userSetModel
+	Resource types.String `tfsdk:"resource"`
 }
 
 type ConditionSetClient struct {
 	client *permit.Client
 }
 
-func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (ConditionSetModel, error) {
+// conditionSetTypes gives the name of each type of condition set and the
+// resource type that manages it.
+var conditionSetTypes = map[models.ConditionSetType]struct{ name, resourceType string }{
+	models.USERSET:     {name: "user set", resourceType: "permitio_user_set"},
+	models.RESOURCESET: {name: "resource set", resourceType: "permitio_resource_set"},
+}
+
+// wrongTypeError is the error of a read that finds a condition set of another
+// type than the one the resource type manages, such as a resource set imported
+// as a user set.
+type wrongTypeError struct {
+	key       string
+	want, got models.ConditionSetType
+}
+
+func (e wrongTypeError) Error() string {
+	want, got := conditionSetTypes[e.want], conditionSetTypes[e.got]
+	if got.name == "" {
+		return fmt.Sprintf("The condition set %q has the type %q, so %s cannot manage it.",
+			e.key, e.got, want.resourceType)
+	}
+	return fmt.Sprintf("The condition set %q is a %s, not a %s, so %s cannot manage it. "+
+		"Import it as %s instead; if it is in the state already, remove it with "+
+		"terraform state rm first.", e.key, got.name, want.name, want.resourceType,
+		got.resourceType)
+}
+
+// Read reads the condition set with the key, or the ID when the key is null, of
+// data. It fails with a wrongTypeError when the set is not of conditionSetType.
+func (c *ConditionSetClient) Read(ctx context.Context, conditionSetType models.ConditionSetType,
+	data ConditionSetModel,
+) (ConditionSetModel, error) {
 	var keyOrId string
 
 	if data.Key.IsNull() {
@@ -41,29 +81,36 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 		return ConditionSetModel{}, err
 	}
 
-	conditionsMarshalled, err := json.Marshal(conditionSet.Conditions)
+	// The API leaves out the type of a user set, its default.
+	setType := models.USERSET
+	if conditionSet.Type != nil {
+		setType = *conditionSet.Type
+	}
+	if setType != conditionSetType {
+		return ConditionSetModel{}, wrongTypeError{
+			key: conditionSet.Key, want: conditionSetType, got: setType,
+		}
+	}
 
+	conditions, err := common.JSONObjectValue(conditionSet.Conditions, data.Conditions)
 	if err != nil {
-		return ConditionSetModel{}, err
+		return ConditionSetModel{}, fmt.Errorf("conditions: %w", err)
 	}
 
-	// Handle resource: if API returns null, keep it null to maintain consistency
+	// Handle resource: if API returns null, keep it null to maintain consistency.
+	// The API returns the resource's key; keep its ID where the state has that,
+	// so that naming the resource by ID does not plan an update on every plan.
 	var resource types.String
-	if conditionSet.Resource != nil {
-		resource = types.StringValue(conditionSet.Resource.Key)
-	} else {
+	switch {
+	case conditionSet.Resource == nil:
 		resource = types.StringPointerValue(nil)
+	case data.Resource.ValueString() == conditionSet.Resource.Id:
+		resource = data.Resource
+	default:
+		resource = types.StringValue(conditionSet.Resource.Key)
 	}
 
-	// Handle description: if API returns null and state is null, keep it null
-	// This ensures consistency for omitted description fields
-	var description types.String
-	if conditionSet.Description != nil {
-		description = types.StringPointerValue(conditionSet.Description)
-	} else {
-		// API returned null - explicitly set to null to maintain consistency
-		description = types.StringPointerValue(nil)
-	}
+	description := descriptionValue(conditionSet.Description, data.Description)
 
 	// Handle parent_id: if API returns null, keep it null to maintain consistency
 	var parentId types.String
@@ -83,39 +130,47 @@ func (c *ConditionSetClient) Read(ctx context.Context, data ConditionSetModel) (
 	}
 
 	state := ConditionSetModel{
-		Id:             types.StringValue(conditionSet.Id),
-		OrganizationId: types.StringValue(conditionSet.OrganizationId),
-		ProjectId:      types.StringValue(conditionSet.ProjectId),
-		EnvironmentId:  types.StringValue(conditionSet.EnvironmentId),
-		Key:            types.StringValue(conditionSet.Key),
-		Name:           types.StringValue(conditionSet.Name),
-		Description:    description,
-		Resource:       resource,
-		ParentId:       parentId,
-		Conditions:     types.StringValue(string(conditionsMarshalled)),
+		userSetModel: userSetModel{
+			Id:             types.StringValue(conditionSet.Id),
+			OrganizationId: types.StringValue(conditionSet.OrganizationId),
+			ProjectId:      types.StringValue(conditionSet.ProjectId),
+			EnvironmentId:  types.StringValue(conditionSet.EnvironmentId),
+			Key:            types.StringValue(conditionSet.Key),
+			Name:           types.StringValue(conditionSet.Name),
+			Description:    description,
+			ParentId:       parentId,
+			Conditions:     conditions,
+		},
+		Resource: resource,
 	}
 
 	return state, nil
 }
 
-func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models.ConditionSetType, conditionSetPlan *ConditionSetModel) error {
-	var conditions map[string]any
-	err := json.Unmarshal([]byte(conditionSetPlan.Conditions.ValueString()), &conditions)
-
+// NamesSetResource reports whether resource, the ID or the key of a resource,
+// names the resource of the resource set with this key.
+func (c *ConditionSetClient) NamesSetResource(ctx context.Context, setKey, resource string,
+) (bool, error) {
+	conditionSet, err := c.client.Api.ConditionSets.Get(ctx, setKey)
 	if err != nil {
-		return err
+		return false, err
+	}
+	current := conditionSet.Resource
+	return current != nil && (resource == current.Id || resource == current.Key), nil
+}
+
+func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models.ConditionSetType, conditionSetPlan *ConditionSetModel) error {
+	conditions, err := common.DecodeJSONObject(conditionSetPlan.Conditions.ValueString())
+	if err != nil {
+		return fmt.Errorf("conditions: %w", err)
 	}
 
 	conditionSetCreate := models.ConditionSetCreate{
-		Key:        conditionSetPlan.Key.ValueString(),
-		Name:       conditionSetPlan.Name.ValueString(),
-		Type:       &conditionSetType,
-		Conditions: conditions,
-	}
-
-	// Only set description if it's not null and not empty
-	if !conditionSetPlan.Description.IsNull() && conditionSetPlan.Description.ValueString() != "" {
-		conditionSetCreate.Description = conditionSetPlan.Description.ValueStringPointer()
+		Key:         conditionSetPlan.Key.ValueString(),
+		Name:        conditionSetPlan.Name.ValueString(),
+		Description: common.KnownStringPointer(conditionSetPlan.Description),
+		Type:        &conditionSetType,
+		Conditions:  conditions,
 	}
 
 	if !conditionSetPlan.Resource.IsNull() {
@@ -149,12 +204,8 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 		return err
 	}
 
-	// Set description from API response, or null if API returns null
-	if conditionSetRead.Description != nil {
-		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
-	} else {
-		conditionSetPlan.Description = types.StringPointerValue(nil)
-	}
+	conditionSetPlan.Description = descriptionValue(conditionSetRead.Description,
+		conditionSetPlan.Description)
 	// Handle parent_id from API response
 	if conditionSetRead.ParentId != nil {
 		parentIdBytes, err := json.Marshal(conditionSetRead.ParentId)
@@ -179,16 +230,18 @@ func (c *ConditionSetClient) Create(ctx context.Context, conditionSetType models
 }
 
 func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *ConditionSetModel) error {
-	var conditions map[string]any
-	err := json.Unmarshal([]byte(conditionSetPlan.Conditions.ValueString()), &conditions)
-
+	conditions, err := common.DecodeJSONObject(conditionSetPlan.Conditions.ValueString())
 	if err != nil {
-		return err
+		return fmt.Errorf("conditions: %w", err)
 	}
 
+	// A description the configuration leaves out is sent as "", which clears it:
+	// the Go SDK leaves a null description out of the request, and the API keeps
+	// the description then.
+	description := conditionSetPlan.Description.ValueString()
 	csUpdate := models.ConditionSetUpdate{
 		Name:        conditionSetPlan.Name.ValueStringPointer(),
-		Description: conditionSetPlan.Description.ValueStringPointer(),
+		Description: &description,
 		Conditions:  conditions,
 	}
 
@@ -211,19 +264,15 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 		return err
 	}
 
-	conditionsMarshalled, err := json.Marshal(conditionSetRead.Conditions)
-
+	updatedConditions, err := common.JSONObjectValue(conditionSetRead.Conditions,
+		conditionSetPlan.Conditions)
 	if err != nil {
-		return err
+		return fmt.Errorf("conditions: %w", err)
 	}
 
 	conditionSetPlan.Name = types.StringValue(conditionSetRead.Name)
-	// Set description from API response, or null if API returns null
-	if conditionSetRead.Description != nil {
-		conditionSetPlan.Description = types.StringPointerValue(conditionSetRead.Description)
-	} else {
-		conditionSetPlan.Description = types.StringPointerValue(nil)
-	}
+	conditionSetPlan.Description = descriptionValue(conditionSetRead.Description,
+		conditionSetPlan.Description)
 	// Handle parent_id from API response
 	if conditionSetRead.ParentId != nil {
 		parentIdBytes, err := json.Marshal(conditionSetRead.ParentId)
@@ -243,11 +292,22 @@ func (c *ConditionSetClient) Update(ctx context.Context, conditionSetPlan *Condi
 	conditionSetPlan.ProjectId = types.StringValue(conditionSetRead.ProjectId)
 	conditionSetPlan.Id = types.StringValue(conditionSetRead.Id)
 	conditionSetPlan.OrganizationId = types.StringValue(conditionSetRead.OrganizationId)
-	conditionSetPlan.Conditions = types.StringValue(string(conditionsMarshalled))
+	conditionSetPlan.Conditions = updatedConditions
 
 	return nil
 }
 
 func (c *ConditionSetClient) Delete(ctx context.Context, key string) error {
 	return c.client.Api.ConditionSets.Delete(ctx, key)
+}
+
+// descriptionValue returns the description of a condition set that the API
+// answered with, where prior is the description of the plan or the prior state.
+// The provider clears a description by sending "", so when the API answers with
+// no description or "", the value keeps a null or "" that prior has.
+func descriptionValue(api *string, prior types.String) types.String {
+	if (api == nil || *api == "") && (prior.IsNull() || prior.Equal(types.StringValue(""))) {
+		return prior
+	}
+	return types.StringPointerValue(api)
 }

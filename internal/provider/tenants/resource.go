@@ -2,7 +2,7 @@ package tenants
 
 import (
 	"context"
-	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
@@ -10,8 +10,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &TenantResource{}
-	_ resource.ResourceWithConfigure = &TenantResource{}
+	_ resource.Resource                = &TenantResource{}
+	_ resource.ResourceWithConfigure   = &TenantResource{}
+	_ resource.ResourceWithImportState = &TenantResource{}
 )
 
 func NewTenantResource() resource.Resource {
@@ -40,9 +41,9 @@ func (r *TenantResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 	}
 
 	attributes["attributes"] = schema.StringAttribute{
-		MarkdownDescription: "Arbitrary tenant attributes in JSON format that will be used to enforce attribute-based access control policies.",
+		MarkdownDescription: "Arbitrary tenant attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ tier = \"gold\" })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the tenant has no attributes, so removing it clears them in Permit.",
 		Optional:            true,
-		Computed:            true,
+		CustomType:          jsontypes.NormalizedType{},
 	}
 
 	resp.Schema = schema.Schema{
@@ -65,7 +66,7 @@ func (r *TenantResource) Create(ctx context.Context, request resource.CreateRequ
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to create tenant",
-			fmt.Errorf("unable to create tenant: %w", err).Error(),
+			common.APIErrorDetail("create", "tenant", plan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -82,12 +83,16 @@ func (r *TenantResource) Read(ctx context.Context, request resource.ReadRequest,
 		return
 	}
 
-	tenantRead, err := r.client.Read(ctx, model.Key.ValueString())
+	tenantRead, err := r.client.Read(ctx, model.Key.ValueString(), model.Attributes)
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to read tenant",
-			fmt.Errorf("unable to read tenant: %w", err).Error(),
+			common.APIErrorDetail("read", "tenant", model.Key.ValueString(), err),
 		)
 		return
 	}
@@ -109,7 +114,7 @@ func (r *TenantResource) Update(ctx context.Context, request resource.UpdateRequ
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to update tenant",
-			fmt.Errorf("unable to update tenant: %w", err).Error(),
+			common.APIErrorDetail("update", "tenant", plan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -127,10 +132,17 @@ func (r *TenantResource) Delete(ctx context.Context, request resource.DeleteRequ
 
 	err := r.client.Delete(ctx, model.Key.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Unable to delete tenant",
-			fmt.Errorf("unable to delete tenant: %w", err).Error(),
+			common.APIErrorDetail("delete", "tenant", model.Key.ValueString(), err),
 		)
 	}
+}
+
+// ImportState imports a tenant by its key.
+func (r *TenantResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -106,7 +107,7 @@ func (d *UserAttributeDataSource) Read(ctx context.Context, request datasource.R
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to read user attribute",
-			fmt.Sprintf("Unable to read user attribute with key %s: %s", data.Key.ValueString(), err.Error()),
+			common.APIErrorDetail("read", "user attribute", data.Key.ValueString(), err),
 		)
 		return
 	}

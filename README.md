@@ -5,17 +5,25 @@
 Permit.io is a cloud-based authorization service that allows you to define and manage permissions for your application.
 In order to make it easier and safer to manage your objects and policies in Permit.io, we have created a Terraform provider.
 
-_This provider repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
-
 ## Documentation
 
 - Use our public docs site for more info - https://docs.permit.io
 - This Terraform provider has an auto-generated documentation site - https://registry.terraform.io/providers/permitio/permit-io/latest/docs
 
+## Upgrading from 0.0.x to 1.0
+
+Read the [version 1 upgrade guide](docs/guides/version-1-upgrade.md), also on the
+[Terraform Registry](https://registry.terraform.io/providers/permitio/permit-io/latest/docs/guides/version-1-upgrade),
+before you change the version constraint to `~> 1.0`. Each change it lists says who is
+affected, what to do, and what the plan shows, including any replacement.
 
 ## Usage
 
 The [examples directory](./examples) contains a number of examples of how to use the provider.
+Each resource and data source has an example under `examples/resources/` or
+`examples/data-sources/`, which its page in `docs/` shows. The tests validate every example
+under `examples/` with the provider built from this repository; the snippets below are not
+validated, so the examples are the reference.
 
 ### Provider Definition
 
@@ -23,8 +31,8 @@ The [examples directory](./examples) contains a number of examples of how to use
 terraform {
   required_providers {
     permitio = {
-      source  = "registry.terraform.io/permitio/permit-io"
-      version = "~> 0.0.1"
+      source  = "permitio/permit-io"
+      version = "~> 1.0"
     }
   }
 }
@@ -33,10 +41,12 @@ terraform {
 ### Configure the Provider
 
 ```hcl
-provider "permitio" {
-    api_url = "https://api.permit.io" # Defaults to - "https://api.permit.io - Can be set as an environment variable PERMITIO_API_URL
-    api_key = "YOUR_API_KEY" # Can be set as an environment variable PERMITIO_API_KEY
-}
+# Set the API key in api_key or in the PERMITIO_API_KEY environment variable.
+# api_url (default https://api.permit.io) and timeout (seconds, default 10) can
+# also be set with PERMITIO_API_URL and PERMITIO_TIMEOUT. A value set in this
+# block takes precedence over its environment variable, so leave an argument out
+# to use the environment variable.
+provider "permitio" {}
 ```
 
 ### Creating Objects in Permitio
@@ -69,13 +79,12 @@ resource "permitio_role" "reader" {
   key         = "reader"
   name        = "Reader"
   description = "A role that allows reading documents"
+  # Building the permission from the resource's key makes Terraform create the
+  # resource before the role.
   permissions = [
-    "document:read"
+    "${permitio_resource.document.key}:read"
   ]
   extends     = []
-  depends_on  = [
-    permitio_resource.document # This is required to ensure that the resource is created before the role (for the permissions assignment)
-  ]
 }
 ```
 
@@ -105,8 +114,22 @@ resource "permitio_tenant" "acme_corp" {
 
 ## Requirements
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.26
+To use the provider, one of:
+
+- [Terraform](https://developer.hashicorp.com/terraform/install) 1.5.7 or later. The offline
+  tests, against a mock of the Permit API, run on 1.5.7 and 1.16.
+- [OpenTofu](https://opentofu.org/docs/intro/install/) 1.11 or later. The offline tests run on
+  1.11 and 1.12.
+
+To build the provider from source: [Go](https://go.dev/doc/install) 1.26 or later.
+
+Each release is published for 13 platforms: `darwin_amd64`, `darwin_arm64`,
+`freebsd_386`, `freebsd_amd64`, `freebsd_arm`, `freebsd_arm64`, `linux_386`,
+`linux_amd64`, `linux_arm`, `linux_arm64`, `windows_386`, `windows_amd64` and
+`windows_arm64`. The offline tests run on `linux_amd64` with each of those Terraform and
+OpenTofu versions, and on `darwin_arm64` and `windows_amd64` with Terraform 1.16; the
+other platforms are cross-compiled and not tested. On macOS the provider needs
+macOS 12 (Monterey) or later, because it is built with Go 1.26.
 
 ## Building The Provider
 
@@ -131,10 +154,6 @@ go mod tidy
 ```
 
 Then commit the changes to `go.mod` and `go.sum`.
-
-## Using the provider
-
-Fill this in for each provider
 
 ## Developing the Provider
 

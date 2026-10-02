@@ -2,19 +2,31 @@ package conditionsets
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &conditionSetResource{}
-	_ resource.ResourceWithConfigure = &conditionSetResource{}
+	_ resource.Resource                = &UserSetResource{}
+	_ resource.ResourceWithConfigure   = &UserSetResource{}
+	_ resource.Resource                = &ResourceSetResource{}
+	_ resource.ResourceWithConfigure   = &ResourceSetResource{}
+	_ resource.ResourceWithModifyPlan  = &ResourceSetResource{}
+	_ resource.ResourceWithImportState = &UserSetResource{}
+	_ resource.ResourceWithImportState = &ResourceSetResource{}
 )
 
 func NewResourceSetResource() resource.Resource {
@@ -64,20 +76,57 @@ func (c *conditionSetResource) Configure(_ context.Context, request resource.Con
 	c.client = ConditionSetClient{client: permitClient}
 }
 
-func (c *conditionSetResource) Metadata(_ context.Context, _ resource.MetadataRequest, _ *resource.MetadataResponse) {
-	// should be completely implemented in ResourceSet/UserSet
-	panic("not implemented")
-}
-
 func (c *ResourceSetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := c.baseAttributes()
 	attributes["resource"] = schema.StringAttribute{
 		Required: true,
+		MarkdownDescription: "The resource whose instances the set selects, by key, such as " +
+			"`document`. Changing it to another resource replaces the set, which also deletes " +
+			"the condition set rules on it. Changing it between the key and the ID of the same " +
+			"resource updates the set in place.",
 	}
 
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
-		Attributes:          attributes,
+		MarkdownDescription: "Manages a resource set: a condition set that selects the " +
+			"instances of a resource by their attributes, for use in a " +
+			"`permitio_condition_set_rule`. See [our documentation]" +
+			"(https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/" +
+			"create_condition_set) for more information on condition sets.",
+		Attributes: attributes,
+	}
+}
+
+// ModifyPlan replaces a resource set when its resource changes, as the API cannot
+// move a set to another resource. The configuration may name the resource by ID
+// or by key, so a change between the ID and the key of the set's own resource
+// updates the set in place: a replacement would also delete the rules on the set.
+func (c *ResourceSetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest,
+	resp *resource.ModifyPlanResponse,
+) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var key, prior, planned types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("key"), &key)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("resource"), &prior)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("resource"), &planned)...)
+	if resp.Diagnostics.HasError() || planned.Equal(prior) {
+		return
+	}
+	if planned.IsUnknown() || c.client.client == nil {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("resource"))
+		return
+	}
+	same, err := c.client.NamesSetResource(ctx, key.ValueString(), planned.ValueString())
+	if err != nil && !common.IsNotFoundErr(err) {
+		resp.Diagnostics.AddError(
+			"Unable to read resource set",
+			common.APIErrorDetail("read", "resource set", key.ValueString(), err),
+		)
+		return
+	}
+	if !same {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("resource"))
 	}
 }
 
@@ -85,20 +134,19 @@ func (c *UserSetResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	attributes := c.baseAttributes()
 
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "See the [our documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/create_condition_set) for more information on condition sets.",
-		Attributes:          attributes,
+		MarkdownDescription: "Manages a user set: a condition set that selects users by " +
+			"their attributes, for use in a `permitio_condition_set_rule`. See [our " +
+			"documentation](https://api.permit.io/v2/redoc#tag/Condition-Sets/operation/" +
+			"create_condition_set) for more information on condition sets.",
+		Attributes: attributes,
 	}
-}
-
-func (c *conditionSetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	panic("not implemented")
 }
 
 func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"id": schema.StringAttribute{
 			Computed:            true,
-			MarkdownDescription: "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.\n\n",
+			MarkdownDescription: "The ID Permit assigns to the condition set.",
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseNonNullStateForUnknown(),
 			},
@@ -125,38 +173,93 @@ func (c *conditionSetResource) baseAttributes() map[string]schema.Attribute {
 			},
 		},
 		"key": schema.StringAttribute{
-			MarkdownDescription: "A unique id by which Permit will identify the condition set. The key will be used as the generated rego rule name.",
-			Required:            true,
+			MarkdownDescription: "A unique id by which Permit will identify the condition " +
+				"set. The key will be used as the generated rego rule name. Changing it " +
+				"replaces the set, which also deletes the condition set rules on it.",
+			Required: true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplace(),
+			},
 		},
 		"name": schema.StringAttribute{
 			MarkdownDescription: "A descriptive name for the set, i.e: 'US based employees' or 'Users behind VPN'",
 			Required:            true,
 		},
 		"description": schema.StringAttribute{
-			MarkdownDescription: "an optional longer description of the set",
+			MarkdownDescription: "an optional longer description of the set. Removing it clears the description in Permit.",
 			Optional:            true,
-			Computed:            true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseNonNullStateForUnknown(),
-			},
 		},
 		"conditions": schema.StringAttribute{
-			MarkdownDescription: "a boolean expression that consists of multiple conditions, with and/or logic.",
+			MarkdownDescription: "a boolean expression that consists of multiple conditions, with and/or logic. A JSON object, such as `jsonencode({ allOf = [...] })`. Differences in whitespace and key order from the object Permit returns do not show as changes.",
 			Required:            true,
-		},
-		"resource": schema.StringAttribute{
-			MarkdownDescription: "The resource id to which the condition set applies. This is only required for resource sets.",
-			Optional:            true,
+			CustomType:          jsontypes.NormalizedType{},
 		},
 		"parent_id": schema.StringAttribute{
-			MarkdownDescription: "The parent condition set id. Allows creating a nested condition set hierarchy.",
+			MarkdownDescription: "The parent condition set id. Allows creating a nested condition set hierarchy. A plan that removes it from a set that has a parent fails: the provider cannot detach a set from its parent in place. To remove it from such a set, run `terraform taint` on the set and apply: Terraform replaces the set, which deletes its condition set rules. `terraform apply -replace` fails with the same error.",
 			Optional:            true,
-			Computed:            true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseNonNullStateForUnknown(),
+				refuseParentRemoval{},
 			},
 		},
 	}
+}
+
+// refuseParentRemoval is the plan modifier of parent_id that fails a plan that
+// removes the parent of a set that has one. The API detaches a set only when an
+// update sends parent_id as null, and the Go SDK leaves a null parent_id out of
+// the request, so the apply would keep the parent (PER-16604).
+type refuseParentRemoval struct{}
+
+func (refuseParentRemoval) Description(context.Context) string {
+	return "Fails a plan that removes the parent of a condition set that has one."
+}
+
+func (m refuseParentRemoval) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (refuseParentRemoval) PlanModifyString(_ context.Context, req planmodifier.StringRequest,
+	resp *planmodifier.StringResponse,
+) {
+	if req.Plan.Raw.IsNull() || req.StateValue.IsNull() || !req.PlanValue.IsNull() {
+		return
+	}
+	resp.Diagnostics.AddAttributeError(req.Path, "Cannot remove the parent of a condition set",
+		fmt.Sprintf("The condition set has the parent %s. The Permit API detaches a set "+
+			"from its parent only when an update sends parent_id as null, which the "+
+			"Permit Go SDK the provider uses cannot send, so an apply would keep the "+
+			"parent. Keep parent_id in the configuration, detach the set outside "+
+			"Terraform and then remove parent_id, or mark the set for replacement with "+
+			"terraform taint and then apply, which creates it again without a parent; "+
+			"Permit deletes the set's condition set rules when it deletes the set. "+
+			"terraform apply -replace does not help: its plan still starts from the "+
+			"set that has the parent, and fails with this error.", req.StateValue))
+}
+
+// modelSource is a plan or a state, which get reads a condition set from.
+type modelSource interface {
+	Get(ctx context.Context, target any) diag.Diagnostics
+}
+
+// get reads the attributes of this type of condition set from source into model.
+// A user set has no resource attribute, so it leaves model.Resource null.
+func (c *conditionSetResource) get(ctx context.Context, source modelSource,
+	model *ConditionSetModel,
+) diag.Diagnostics {
+	if c.conditionSetType == models.USERSET {
+		return source.Get(ctx, &model.userSetModel)
+	}
+	return source.Get(ctx, model)
+}
+
+// set writes the attributes of this type of condition set from model into state.
+func (c *conditionSetResource) set(ctx context.Context, state *tfsdk.State,
+	model ConditionSetModel,
+) diag.Diagnostics {
+	if c.conditionSetType == models.USERSET {
+		return state.Set(ctx, model.userSetModel)
+	}
+	return state.Set(ctx, model)
 }
 
 func (c *conditionSetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -164,7 +267,7 @@ func (c *conditionSetResource) Create(ctx context.Context, req resource.CreateRe
 		plan ConditionSetModel
 	)
 
-	diags := req.Plan.Get(ctx, &plan)
+	diags := c.get(ctx, req.Plan, &plan)
 	resp.Diagnostics.Append(diags...)
 
 	if resp.Diagnostics.HasError() {
@@ -173,14 +276,14 @@ func (c *conditionSetResource) Create(ctx context.Context, req resource.CreateRe
 
 	if err := c.client.Create(ctx, c.conditionSetType, &plan); err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to create resource",
-			fmt.Sprintf("Unable to create resource: %s", err),
+			"Unable to create condition set",
+			common.APIErrorDetail("create", "condition set", plan.Key.ValueString(), err),
 		)
 		return
 	}
 
 	// Set state to fully populated data
-	diags = resp.State.Set(ctx, plan)
+	diags = c.set(ctx, &resp.State, plan)
 	resp.Diagnostics.Append(diags...)
 
 	if resp.Diagnostics.HasError() {
@@ -192,23 +295,32 @@ func (c *conditionSetResource) Create(ctx context.Context, req resource.CreateRe
 func (c *conditionSetResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var data ConditionSetModel
 
-	response.Diagnostics.Append(request.State.Get(ctx, &data)...)
+	response.Diagnostics.Append(c.get(ctx, request.State, &data)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	state, err := c.client.Read(ctx, data)
+	state, err := c.client.Read(ctx, c.conditionSetType, data)
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
+		var wrongType wrongTypeError
+		if errors.As(err, &wrongType) {
+			response.Diagnostics.AddError("Condition set of another type", wrongType.Error())
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to Read Condition Set",
-			fmt.Sprintf("Unable to read condition set: %s, Error: %s", data.Id.String(), err.Error()),
+			common.APIErrorDetail("read", "condition set", data.Key.ValueString(), err),
 		)
 		return
 	}
 
 	// Set state
-	diags := response.State.Set(ctx, &state)
+	diags := c.set(ctx, &response.State, state)
 	response.Diagnostics.Append(diags...)
 	if response.Diagnostics.HasError() {
 		return
@@ -221,7 +333,7 @@ func (c *conditionSetResource) Update(ctx context.Context, req resource.UpdateRe
 		plan ConditionSetModel
 	)
 
-	diags := req.Plan.Get(ctx, &plan)
+	diags := c.get(ctx, req.Plan, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -229,12 +341,12 @@ func (c *conditionSetResource) Update(ctx context.Context, req resource.UpdateRe
 
 	if err := c.client.Update(ctx, &plan); err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update resource",
-			fmt.Sprintf("Unable to update resource: %s", err),
+			"Unable to update condition set",
+			common.APIErrorDetail("update", "condition set", plan.Key.ValueString(), err),
 		)
 		return
 	}
-	diags = resp.State.Set(ctx, plan)
+	diags = c.set(ctx, &resp.State, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -245,7 +357,7 @@ func (c *conditionSetResource) Update(ctx context.Context, req resource.UpdateRe
 func (c *conditionSetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Retrieve values from state
 	var state ConditionSetModel
-	diags := req.State.Get(ctx, &state)
+	diags := c.get(ctx, req.State, &state)
 	resp.Diagnostics.Append(diags...)
 
 	if resp.Diagnostics.HasError() {
@@ -254,11 +366,20 @@ func (c *conditionSetResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	err := c.client.Delete(ctx, state.Key.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error Deleting Condition Set",
-			"Could not delete resource, unexpected error: "+err.Error(),
+			common.APIErrorDetail("delete", "condition set", state.Key.ValueString(), err),
 		)
 		return
 	}
+}
+
+// ImportState imports a user set or a resource set by its key. An imported resource
+// set names its resource by key. Read fails on a set of the other type, so a
+// resource set cannot be imported as a user set, or the reverse.
+func (c *conditionSetResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

@@ -7,13 +7,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &RoleDerivationResource{}
-	_ resource.ResourceWithConfigure = &RoleDerivationResource{}
+	_ resource.Resource                = &RoleDerivationResource{}
+	_ resource.ResourceWithConfigure   = &RoleDerivationResource{}
+	_ resource.ResourceWithImportState = &RoleDerivationResource{}
 )
 
 func NewRoleDerivationResource() resource.Resource {
@@ -36,42 +38,50 @@ func (r *RoleDerivationResource) Metadata(_ context.Context, request resource.Me
 func (r *RoleDerivationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := make(map[string]schema.Attribute)
 	attributes["resource"] = schema.StringAttribute{
-		MarkdownDescription: "The key or ID of the resource that `to_role` belongs to. " +
-			"Users get `to_role` on instances of this resource.",
+		MarkdownDescription: "The key of the resource that `to_role` belongs to. " +
+			"Users get `to_role` on instances of this resource. " + common.KeyOnlyNote,
 		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 	attributes["role"] = schema.StringAttribute{
 		MarkdownDescription: "The key of a role on `on_resource`. Users who have this role on an " +
-			"`on_resource` instance get `to_role` on the linked `resource` instances.",
+			"`on_resource` instance get `to_role` on the linked `resource` instances. " +
+			common.KeyOnlyNote,
 		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_role")},
 	}
 	attributes["on_resource"] = schema.StringAttribute{
-		MarkdownDescription: "The key of the related resource that `role` belongs to.",
-		Required:            true,
+		MarkdownDescription: "The key of the related resource that `role` belongs to. " +
+			common.KeyOnlyNote,
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 	attributes["to_role"] = schema.StringAttribute{
-		MarkdownDescription: "The key of the role on `resource` that users get through this derivation.",
-		Required:            true,
+		MarkdownDescription: "The key of the role on `resource` that users get through this " +
+			"derivation. " + common.KeyOnlyNote,
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_role")},
 	}
 	attributes["linked_by"] = schema.StringAttribute{
 		MarkdownDescription: "The key of the relation that links `on_resource` instances to " +
-			"`resource` instances.",
+			"`resource` instances. " + common.KeyOnlyNote,
 		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_relation")},
 	}
 
 	resp.Schema = schema.Schema{
@@ -80,7 +90,8 @@ func (r *RoleDerivationResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"`on_resource` instance linked by the `linked_by` relation. For example, " +
 			"`role = \"manager\"`, `on_resource = \"folder\"`, `to_role = \"editor\"`, " +
 			"`resource = \"file\"` and `linked_by = \"parent\"` make folder managers editors of " +
-			"the files in their folders. See [the documentation](" +
+			"the files in their folders. Every argument forces replacement: changing one " +
+			"removes the derivation and creates a new one. See [the documentation](" +
 			"https://api.permit.io/v2/redoc#tag/Implicit-Grants/operation/create_implicit_grant) " +
 			"for more information on role derivations.",
 	}
@@ -98,7 +109,7 @@ func (r *RoleDerivationResource) Create(ctx context.Context, request resource.Cr
 	roleRead, err := r.client.Create(ctx, plan)
 
 	if err != nil {
-		detail := fmt.Errorf("unable to create role derivation: %w", err).Error()
+		detail := common.APIErrorDetail("create", "role derivation", derivationID(plan), err)
 		if common.IsNotFoundErr(err) {
 			detail += fmt.Sprintf(
 				"\n\nCheck that to_role %q is a role on resource %q, role %q is a role on "+
@@ -133,7 +144,7 @@ func (r *RoleDerivationResource) Read(ctx context.Context, request resource.Read
 		}
 		response.Diagnostics.AddError(
 			"Unable to read role derivation",
-			fmt.Errorf("unable to read role derivation: %w", err).Error(),
+			common.APIErrorDetail("read", "role derivation", derivationID(model), err),
 		)
 		return
 	}
@@ -141,8 +152,10 @@ func (r *RoleDerivationResource) Read(ctx context.Context, request resource.Read
 	response.Diagnostics.Append(response.State.Set(ctx, &reality)...)
 }
 
-func (r *RoleDerivationResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	panic("")
+func (r *RoleDerivationResource) Update(
+	_ context.Context, _ resource.UpdateRequest, response *resource.UpdateResponse,
+) {
+	common.AddReplaceOnlyUpdateError(&response.Diagnostics, "role derivation")
 }
 
 func (r *RoleDerivationResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
@@ -155,10 +168,30 @@ func (r *RoleDerivationResource) Delete(ctx context.Context, request resource.De
 
 	err := r.client.Delete(ctx, model)
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting role derivation",
-			fmt.Errorf("unable to delete role derivation: %w", err).Error(),
+			common.APIErrorDetail("delete", "role derivation", derivationID(model), err),
 		)
 	}
+}
+
+// derivationID names a role derivation in error messages by the role it derives
+// from and the role it grants, each as resource:role.
+func derivationID(model roleDerivationModel) string {
+	return fmt.Sprintf("%s:%s to %s:%s",
+		model.OnResource.ValueString(), model.Role.ValueString(),
+		model.Resource.ValueString(), model.ToRole.ValueString())
+}
+
+// ImportState imports a role derivation by all five attributes, which Read needs
+// to find it: the API path names the role it grants, to_role on resource, and the
+// derivation is the grant of that role that matches on_resource, role and
+// linked_by. Every part is a key, as the configuration must use keys for all
+// five. Read keeps resource and to_role as the import ID gives them, so an ID in
+// either makes the next plan replace the derivation.
+func (r *RoleDerivationResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "resource:to_role:on_resource:role:linked_by", request, response)
 }

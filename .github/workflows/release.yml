@@ -1,46 +1,220 @@
-# Terraform Provider release workflow.
+# Publishes a provider release when a version tag is pushed. Each job needs the one
+# before it: the tag is checked, the tests run, the release is built without being
+# published, its binaries are scanned for vulnerabilities, its files are checked,
+# and only then, once a reviewer approves the release environment's deployment, is
+# it built again, signed and published. The second build must match the checked
+# one file for file.
 name: Release
 
-# This GitHub action creates a release when a tag that matches the pattern
-# "v*" (e.g. v0.1.0) is created.
 on:
   push:
     tags:
       - 'v*'
 
-# Releases need permissions to read and write the repository contents.
-# GitHub considers creating releases and uploading assets as writing contents.
-permissions:
-  contents: write
+permissions: {}
+
+# One run per tag at a time; a second run of the same tag waits for the first.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # The number of platforms .goreleaser.yml builds for, and so of binaries to scan.
+  PLATFORMS: 13
 
 jobs:
-  goreleaser:
-    runs-on: ubuntu-latest
-    # The release environment holds the signing key and its passphrase, waits for
-    # a reviewer's approval and deploys only from v* tags. Its secrets take
-    # precedence over repository secrets of the same name.
-    environment: release
+  tag:
+    name: Check the tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - name: Check that the tag is a version
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error title=Release tag::$TAG is not a version such as v1.2.3 or v1.2.3-rc.1."
+            exit 1
+          fi
+          echo "Releasing $TAG."
+
+  # A called workflow's jobs get at most what this job grants, and GitHub refuses
+  # the whole run when one asks for more, even a job that will be skipped. So this
+  # job grants every permission a test.yml job asks for; the prek job checks it.
+  tests:
+    name: Tests
+    needs: tag
+    permissions:
+      contents: read
+      pull-requests: write  # for test.yml's dependency review, which a release run skips
+    uses: ./.github/workflows/test.yml
+    secrets:
+      PERMITIO_API_KEY_1_0: ${{ secrets.PERMITIO_API_KEY_1_0 }}
+      PERMITIO_API_KEY_1_1: ${{ secrets.PERMITIO_API_KEY_1_1 }}
+      PERMITIO_API_KEY_1_2: ${{ secrets.PERMITIO_API_KEY_1_2 }}
+      PERMITIO_API_KEY_1_3: ${{ secrets.PERMITIO_API_KEY_1_3 }}
+      PERMITIO_API_KEY_1_4: ${{ secrets.PERMITIO_API_KEY_1_4 }}
+
+  # Builds the release as it will be published, but unsigned and unpublished.
+  build:
+    name: Build
+    needs: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          # Allow goreleaser to access older tag information.
+          # GoReleaser reads the previous tags.
           fetch-depth: 0
-      - uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: 'go.mod'
-          cache: true
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+          cache: false
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94  # v7.2.3
+        with:
+          version-file: .tool-versions
+          args: release --clean --skip=publish,sign
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: release-build
+          path: |
+            dist/*.zip
+            dist/*_SHA256SUMS
+            dist/metadata.json
+          if-no-files-found: error
+
+  # Scans every platform's binary. vulnscan exits 1 on a vulnerability that is not
+  # accepted and 2 when the scan did not complete; either fails the release.
+  scan:
+    name: Scan the binaries
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-build
+          path: dist
+      - name: Scan the binaries
+        shell: bash
+        run: |
+          for zip in dist/*.zip; do
+            dir="bin/$(basename "$zip" .zip)"
+            mkdir -p "$dir"
+            unzip -q "$zip" 'terraform-provider-permit-io_v*' -d "$dir"
+          done
+          go build -o "$RUNNER_TEMP/vulnscan" ./internal/acctest/vulnscan
+          report="$RUNNER_TEMP/vulnscan-report.txt"
+          status=0
+          "$RUNNER_TEMP/vulnscan" -mode binary -binaries "$PLATFORMS" \
+            -accept .github/vulnscan-accept.txt bin/*/terraform-provider-permit-io_v* \
+            >"$report" || status=$?
+          cat "$report"
+          {
+            echo "### Vulnerability scan of the release binaries"
+            echo '```'
+            cat "$report"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        if: always()
+        with:
+          name: vulnscan-report
+          path: ${{ runner.temp }}/vulnscan-report.txt
+          if-no-files-found: error
+
+  artifacts:
+    name: Check the release files
+    needs: scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-build
+          path: dist
+      - name: Check the release files
+        env:
+          TAG: ${{ github.ref_name }}
+        run: .github/scripts/check-release-artifacts.sh -t "$TAG" dist
+
+  # Builds the release again, signs it and uploads it as a draft. The draft is
+  # published only when its files pass the same check, with the signature, and
+  # its checksums equal those of the build that was scanned and checked. The
+  # release environment holds this job until a required reviewer approves it, and
+  # deploys only from v* tags. No other job reads the signing secrets.
+  publish:
+    name: Publish
+    needs: artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write  # creates the release and uploads its files
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-build
+          path: ${{ runner.temp }}/checked
       - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@72b6676b71ab476b77e676928516f6982eef7a41 # v5.3.0
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd  # v7.0.0
         id: import_gpg
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94  # v7.2.3
         with:
+          version-file: .tool-versions
           args: release --clean
         env:
-          # GitHub sets the GITHUB_TOKEN secret automatically.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+      - name: Check the draft's files
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          CHECKED: ${{ runner.temp }}/checked
+        run: |
+          .github/scripts/check-release-artifacts.sh -s -t "$TAG" dist
+          sums="terraform-provider-permit-io_${TAG#v}_SHA256SUMS"
+          if ! cmp "$CHECKED/$sums" "dist/$sums"; then
+            diff "$CHECKED/$sums" "dist/$sums" || true
+            echo "::error title=Release::The signed build differs from the build that was scanned."
+            exit 1
+          fi
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

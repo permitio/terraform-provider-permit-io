@@ -6,8 +6,29 @@ Terraform provider for Permit.io - manages Permit.io resources (resources, roles
 ## Build & Test
 ```bash
 GOTOOLCHAIN=auto go build ./...                    # Build
+GOTOOLCHAIN=auto go test -count=1 -skip '^TestAcc' ./...  # Unit and offline tests (mock Permit API, no key needed)
 PERMITIO_API_KEY=<key> GOTOOLCHAIN=auto TF_ACC=1 go test ./internal/provider/ -run <TestName> -v -timeout 300s  # Acceptance tests
+prek install && prek run --all-files               # Hooks, as the CI prek job runs them (prek >= 0.5.3)
+GOTOOLCHAIN=auto go build -o /tmp/vulnscan ./internal/acctest/vulnscan && GOTOOLCHAIN=auto /tmp/vulnscan -mode source -accept .github/vulnscan-accept.txt ./...  # Vulnerability scan, as CI runs it
+GOTOOLCHAIN=auto go generate ./...                 # Docs and example formatting (needs terraform on PATH); CI fails on any change
+GOTOOLCHAIN=auto go build -o /tmp/apicoverage ./internal/acctest/apicoverage && /tmp/apicoverage  # API coverage check against the vendored spec, as CI runs it (exit 0 pass, 1 findings, 2 did not run); to update the spec, curl -fsSo coverage/openapi.json https://api.permit.io/v2/openapi.json, run /tmp/apicoverage -update-lock (it rewrites the file without descriptions, summaries, titles and examples, and pins it) and triage the new operations in coverage/operations.yaml
+GOTOOLCHAIN=auto go build -o /tmp/mutationgate ./internal/acctest/mutationgate && TF_ACC_TERRAFORM_PATH=<terraform> /tmp/mutationgate -gremlins <gremlins> -base origin/main  # Mutation tests on changed lines (gremlins at the version in mutation.yml; exit 0 pass, 1 efficacy below -threshold 90, 2 did not run); defaults bound it: 2 workers and go test -p 2, -timeout-coefficient 5 (max 5), each test process at most -cap 3m and -memory-mib 4096 (RLIMIT_AS on Linux, footprint polling on macOS); locally pass a -memory-mib below any memory watchdog
 ```
+- Tool versions: golangci-lint, actionlint, zizmor and shellcheck in `.pre-commit-config.yaml` (Dependabot updates the SHAs and `# frozen:` tags), tfplugindocs and govulncheck in go.mod's `tool` directive (vulnscan runs it as `go tool govulncheck`, so go.mod is its only pin), GoReleaser in `.tool-versions`.
+- `vulnscan` fails on every vulnerability govulncheck reports, called or not, unless `.github/vulnscan-accept.txt` lists it: one line with its ID, the scan mode (source or binary) and the reason. Accepted ones are still printed, called code cannot be accepted, and an entry that a complete scan no longer reports fails. Exit codes: 0 pass, 1 findings, 2 the scan did not complete.
+- The only zizmor ignore in `.github/zizmor.yml` is the self-repository rule for release.yml: it calls test.yml as `./.github/workflows/test.yml` because actionlint rejects the `$/` syntax zizmor asks for.
+- CI in test.yml is the aggregate check: it fails unless every job in its `needs` succeeded, except that `dependency-review` may be skipped on a push or a manual run (a release's call included). Add a new job to `needs` (the prek job fails when one is missing) and change `EXPECTED_JOBS`; add or remove a resource or data source and change the generate job's `MIN_DOCS`.
+- The `dependency-review` job in test.yml fails a pull request that brings in a dependency version with a high or critical vulnerability. It runs on pull requests only.
+- release.yml publishes on a `v*` tag: it calls test.yml, then builds, scans and checks the release. The publish job, the only one that reads the GPG signing secrets, runs in the `release` environment, which waits for a reviewer's approval and deploys only from `v*` tags. A called workflow's job cannot ask for more permissions than its caller grants, even when it will be skipped, so release.yml's `tests` job grants every permission a test.yml job asks for, `pull-requests: write` for dependency review included; the prek job fails when one is missing.
+
+## Offline tests
+- Offline provider tests run Terraform against `internal/acctest/mockpermit`, a fake Permit API. Set `TF_ACC_TERRAFORM_PATH=/path/to/terraform` or put `terraform` on `PATH`; otherwise terraform-plugin-testing downloads the latest Terraform release.
+- `mockpermit.New(t, mockpermit.Tenants)` serves only the listed route sets and points the provider at the fake through `PERMITIO_API_URL`/`PERMITIO_API_KEY` with `t.Setenv`, so these tests cannot use `t.Parallel`. A request to a route the fake does not serve fails the test; add the route to the mock's route table. So does a path with an empty or dot segment, which usually means an empty key or ID.
+- CI pipes `go test -json` into `internal/acctest/checkgotest`, which fails the run when a test skips or no test runs. An offline test must not call `t.Skip`.
+- Name every test that needs the real API `TestAcc*`: the Build job skips those by name and fails on any other test that skips, including a `resource.Test` without `TF_ACC`.
+- `TestConsumerFixtures` (`consumer_test.go`) runs `validate` with this build on `testdata/consumer/`: `valid/*.tf` must validate and declare every resource and data source, and each `invalid/<case>/` holds a `main.tf` that must fail and an `expect.txt` with text every error must contain. When a schema change adds a rule users can break, add a case and raise `minInvalidFixtures`. It runs the CLI in `TF_ACC_TERRAFORM_PATH` or `terraform` on `PATH` and fails when neither is set; it does not download one.
+- `TestExamples` (`examples_test.go`) runs `validate` the same way in every `examples/` directory with a `.tf` file, and fails when the provider, a resource or a data source has no `examples/provider/provider.tf`, `examples/resources/<name>/resource.tf` or `examples/data-sources/<name>/data-source.tf` declaring it, which its doc page embeds. Each example declares `required_providers`, so it validates on its own. When you add an example directory, raise `minExampleDirs`.
+- `TestSchemaDescriptions` fails when the provider, a resource, a data source or any attribute has no description; the docs show them.
 
 ## Testing with real API
 - Use `PERMITIO_API_KEY` env var (not `PERMIT_API_KEY`)
@@ -18,11 +39,12 @@ PERMITIO_API_KEY=<key> GOTOOLCHAIN=auto TF_ACC=1 go test ./internal/provider/ -r
 ## Known patterns & pitfalls
 - **Null vs empty map**: Terraform distinguishes between null (field omitted) and empty map (`= {}`). When an Optional field's API returns an empty map but the user didn't specify the field, the provider must return null to match the plan. See `newAttributesModelsFromSDKWithPlan` for the pattern.
 - **Return after errors**: Always `return` after `response.Diagnostics.AddError()` in CRUD methods. If you don't, the code continues to set state with zero-value models, causing secondary "MISSING TYPE" panics because uninitialized `types.Set` fields have no element type info.
-- **Keys vs IDs in relations**: The `permitio_relation` resource's `subject_resource`/`object_resource` fields only work reliably with resource **keys**, not UUIDs. The API accepts both but always returns keys, causing state inconsistency when UUIDs are used.
+- **Keys vs IDs in references**: Arguments that name another object work only with its **key**: the API accepts an ID too but returns keys for most of them, so an ID there does not match the state. Arguments that name a resource, role or relation (relation `subject_resource`/`object_resource`, every role derivation argument, `resource_instance.resource`, and `role`/`resource` on the assignment resources) carry `common.KeyNotID`, which rejects UUID-shaped values at plan time. User, tenant, group and resource instance arguments have no validator, because those keys can be UUIDs; their descriptions say to use the key.
 - **Resource-scoped roles**: Use action keys only (e.g. `"read"`), not `"resource:action"` format. The `resource` field must reference an existing resource key.
 
 ## Code structure
 - `internal/provider/` - All resource implementations
 - Each resource type has: `resource.go` (schema + CRUD), `client.go` (API calls), `model.go` (data models)
 - `internal/provider/common/` - Shared utilities
+- `internal/acctest/` - Test support: `mockpermit` (the fake Permit API) and `checkgotest` (the CI test result checker)
 - SDK: `github.com/permitio/permit-golang` v1.2.8

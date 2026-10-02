@@ -7,13 +7,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &RelationResource{}
-	_ resource.ResourceWithConfigure = &RelationResource{}
+	_ resource.Resource                = &RelationResource{}
+	_ resource.ResourceWithConfigure   = &RelationResource{}
+	_ resource.ResourceWithImportState = &RelationResource{}
 )
 
 func NewRelationResource() resource.Resource {
@@ -36,33 +38,61 @@ func (c *RelationResource) Configure(ctx context.Context, request resource.Confi
 func (c *RelationResource) Schema(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
 	attributes := common.CreateBaseResourceSchema()
 
+	// The Permit API has no operation that updates a relation, so a new name or
+	// description replaces it.
+	for _, name := range []string{"name", "description"} {
+		attribute, ok := attributes[name].(schema.StringAttribute)
+		if !ok {
+			response.Diagnostics.AddError("Invalid relation schema",
+				fmt.Sprintf("The base schema's %s is a %T, not a string attribute. "+
+					"Please report this issue to the provider developers.",
+					name, attributes[name]))
+			return
+		}
+		attribute.PlanModifiers = append(attribute.PlanModifiers,
+			stringplanmodifier.RequiresReplace())
+		attribute.MarkdownDescription += " Changing it replaces the relation."
+		attributes[name] = attribute
+	}
+
 	attributes["subject_resource"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "The subject resource ID or key",
+		Required: true,
+		MarkdownDescription: "The key of the subject resource: in \"folder is parent of " +
+			"file\", the folder resource. " + common.KeyOnlyNote + " Changing it replaces " +
+			"the relation.",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 	attributes["object_resource"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "The object resource ID or key",
+		Required: true,
+		MarkdownDescription: "The key of the object resource, which the relation is " +
+			"defined on: in \"folder is parent of file\", the file resource. " +
+			common.KeyOnlyNote + " Changing it replaces the relation.",
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 
 	attributes["subject_resource_id"] = schema.StringAttribute{
-		MarkdownDescription: "The subject resource ID",
+		MarkdownDescription: "The ID of the subject resource.",
 		Computed:            true,
 	}
 	attributes["object_resource_id"] = schema.StringAttribute{
-		MarkdownDescription: "The object resource ID",
+		MarkdownDescription: "The ID of the object resource.",
 		Computed:            true,
 	}
 
 	response.Schema = schema.Schema{
-		Attributes:          attributes,
-		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Resource-Relations/operation/create_resource_relation) for more information about Relations",
+		Attributes: attributes,
+		MarkdownDescription: "Manages a relation between two resources, such as \"folder is " +
+			"parent of file\", for relationship-based access control with " +
+			"`permitio_role_derivation`. Permit cannot update a relation, so changing any " +
+			"argument replaces it. See [the documentation](https://api.permit.io/v2/redoc#" +
+			"tag/Resource-Relations/operation/create_resource_relation) for more information " +
+			"about Relations",
 	}
 }
 
@@ -80,7 +110,7 @@ func (c *RelationResource) Create(ctx context.Context, request resource.CreateRe
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Failed creating relation",
-			fmt.Errorf("unable to create relation: %w", err).Error(),
+			common.APIErrorDetail("create", "relation", relationID(plan), err),
 		)
 		return
 	}
@@ -97,12 +127,21 @@ func (c *RelationResource) Read(ctx context.Context, request resource.ReadReques
 		return
 	}
 
-	reality, err := c.client.Read(ctx, model.ObjectResourceId.ValueString(), model.Key.ValueString())
+	// An imported relation has only the key of its object resource.
+	objectResource := model.ObjectResourceId
+	if objectResource.IsNull() {
+		objectResource = model.ObjectResource
+	}
+	reality, err := c.client.Read(ctx, objectResource.ValueString(), model.Key.ValueString())
 
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Failed reading relation",
-			fmt.Errorf("unable to read relation %s/%s: %w", model.ObjectResourceId, model.Key, err).Error(),
+			common.APIErrorDetail("read", "relation", relationID(model), err),
 		)
 		return
 	}
@@ -127,11 +166,24 @@ func (c *RelationResource) Delete(ctx context.Context, request resource.DeleteRe
 
 	err := c.client.Delete(ctx, model.ObjectResource.ValueString(), model.Key.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Failed deleting relation",
-			fmt.Errorf("unable to delete relation %s/%s: %w", model.ObjectResource.ValueString(), model.Key.ValueString(), err).Error(),
+			common.APIErrorDetail("delete", "relation", relationID(model), err),
 		)
 		return
 	}
+}
+
+// relationID names a relation in error messages by its object resource and key.
+func relationID(model relationModel) string {
+	return model.ObjectResource.ValueString() + "/" + model.Key.ValueString()
+}
+
+// ImportState imports a relation by the key of its object resource and its own
+// key, the two that name it in the API.
+func (c *RelationResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "object_resource:key", request, response)
 }

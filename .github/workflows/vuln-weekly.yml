@@ -1,0 +1,133 @@
+# Scans for known vulnerabilities every week, since new ones are published after a
+# release: the source on the default branch, and the binaries of every platform in
+# the latest published release, which is what users install. The results go to the
+# job summary and, when the SLACK_WEBHOOK_URL secret is set, to Slack. The run
+# fails when either scan finds a vulnerability that is not accepted in
+# .github/vulnscan-accept.txt, or did not complete.
+name: Weekly vulnerability scan
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  # The number of platforms each release has a zip for.
+  PLATFORMS: 13
+
+jobs:
+  scan:
+    name: Scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+      - run: go build -o "$RUNNER_TEMP/vulnscan" ./internal/acctest/vulnscan
+      # Each scan step records vulnscan's exit code, 0 (pass), 1 (vulnerabilities)
+      # or 2 (did not complete), and passes, so the report step sees both scans.
+      - name: Scan the source
+        id: source
+        shell: bash
+        run: |
+          status=0
+          "$RUNNER_TEMP/vulnscan" -mode source -accept .github/vulnscan-accept.txt ./... \
+            >"$RUNNER_TEMP/source.txt" || status=$?
+          cat "$RUNNER_TEMP/source.txt"
+          echo "status=$status" >>"$GITHUB_OUTPUT"
+      # Downloads every asset of the latest release but the signature, checks them
+      # against the release's checksums and unzips the binaries. A failure here
+      # leaves no status, which the report counts as a scan that did not complete.
+      - name: Download the latest release
+        id: download
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          release="$RUNNER_TEMP/release"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "$release" \
+            --pattern '*.zip' --pattern '*_SHA256SUMS' --pattern '*_manifest.json'
+          (cd "$release" && sha256sum --check --strict ./*_SHA256SUMS)
+          for zip in "$release"/*.zip; do
+            dir="bin/$(basename "$zip" .zip)"
+            mkdir -p "$dir"
+            unzip -q "$zip" 'terraform-provider-permit-io_v*' -d "$dir"
+          done
+      - name: Scan the latest release
+        id: release
+        shell: bash
+        run: |
+          status=0
+          "$RUNNER_TEMP/vulnscan" -mode binary -binaries "$PLATFORMS" \
+            -accept .github/vulnscan-accept.txt \
+            bin/*/terraform-provider-permit-io_v* \
+            >"$RUNNER_TEMP/release.txt" || status=$?
+          cat "$RUNNER_TEMP/release.txt"
+          echo "status=$status" >>"$GITHUB_OUTPUT"
+      # Exits with the worse of the two results: 2 when either scan did not complete
+      # or left no status, otherwise 1 when either found vulnerabilities.
+      - name: Report
+        if: always()
+        shell: bash
+        env:
+          SOURCE_STATUS: ${{ steps.source.outputs.status }}
+          RELEASE_STATUS: ${{ steps.release.outputs.status }}
+          TAG: ${{ steps.download.outputs.tag }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          describe() {
+            case $1 in
+              0) echo "passed" ;;
+              1) echo "found vulnerabilities" ;;
+              *) echo "did not complete" ;;
+            esac
+          }
+          source_result=$(describe "${SOURCE_STATUS:-2}")
+          release_result=$(describe "${RELEASE_STATUS:-2}")
+          summary="Source on ${GITHUB_REF_NAME}: ${source_result}."
+          summary+=" Latest release ${TAG:-(not found)}: ${release_result}."
+          echo "$summary"
+          {
+            echo "### Weekly vulnerability scan"
+            echo "$summary"
+            for scan in source release; do
+              if [[ -f $RUNNER_TEMP/$scan.txt ]]; then
+                echo "#### The $scan scan"
+                echo '```'
+                cat "$RUNNER_TEMP/$scan.txt"
+                echo '```'
+              fi
+            done
+          } >>"$GITHUB_STEP_SUMMARY"
+          if [[ -n $SLACK_WEBHOOK_URL ]]; then
+            text="${GITHUB_REPOSITORY} weekly vulnerability scan: ${summary} ${RUN_URL}"
+            jq -n --arg text "$text" '{text: $text}' |
+              curl -fsS --retry 3 -X POST -H 'Content-Type: application/json' \
+                --data @- "$SLACK_WEBHOOK_URL" ||
+              echo "::warning title=Slack::Could not post the result to Slack."
+          fi
+          worst=0
+          for status in "${SOURCE_STATUS:-2}" "${RELEASE_STATUS:-2}"; do
+            if [[ $status != 0 && $status != 1 ]]; then
+              worst=2
+            elif [[ $status == 1 && $worst == 0 ]]; then
+              worst=1
+            fi
+          done
+          exit "$worst"

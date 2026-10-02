@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -45,52 +46,76 @@ func (d *RoleDataSource) Metadata(_ context.Context, req datasource.MetadataRequ
 // Schema defines the schema for the data source.
 func (d *RoleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Reads a role by its key: a top-level role, or with `resource` " +
+			"a role on that resource. Only `key` and `resource` select the role; every other " +
+			"attribute holds what Permit returns.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID Permit assigns to the role.",
 			},
 			"organization_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the organization the role belongs to.",
 			},
 			"project_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the project the role belongs to.",
 			},
 			"environment_id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "The ID of the environment the role belongs to.",
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "When the role was created.",
 			},
 			"updated_at": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "When the role was last updated.",
 			},
 			"key": schema.StringAttribute{
-				Required: true,
+				Required:            true,
+				MarkdownDescription: "The key of the role to read.",
 			},
 			"name": schema.StringAttribute{
-				Required: true,
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "The name of the role. " + common.LookupOnlyInputNote,
 			},
 			"description": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The description of the role, or null when it has none. " +
+					common.LookupOnlyInputNote,
 			},
 			"permissions": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
 				Computed:    true,
+				MarkdownDescription: "The permissions the role grants: " +
+					"`resource_key:action_key` pairs for a top-level role, such as " +
+					"`document:read`, and action keys of `resource` for a resource role, such " +
+					"as `read`. " + common.LookupOnlyInputNote,
 			},
 			"extends": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
 				Computed:    true,
+				MarkdownDescription: "The keys of the roles whose permissions this role " +
+					"inherits. " + common.LookupOnlyInputNote,
 			},
 			"resource": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+				MarkdownDescription: "The key of the resource the role belongs to. Set it to " +
+					"read a resource role; leave it out to read a top-level role, and it is " +
+					"then null.",
 			},
 			"resource_id": schema.StringAttribute{
 				Computed: true,
+				MarkdownDescription: "The ID of the resource the role belongs to, or null for " +
+					"a top-level role.",
 			},
 		},
 	}
@@ -110,8 +135,9 @@ func (d *RoleDataSource) Read(ctx context.Context, request datasource.ReadReques
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to read role",
-			fmt.Errorf("unable to read role %s: %w", roleRead, err).Error(),
+			common.APIErrorDetail("read", "role", roleID(data), err),
 		)
+		return
 	}
 
 	// Set state

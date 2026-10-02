@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/config"
 )
 
@@ -33,8 +34,7 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Configure(_ context.Contex
 		return
 	}
 
-	permitClient, ok := request.ProviderData.(*permit.Client)
-	if !ok {
+	if _, ok := request.ProviderData.(*permit.Client); !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
 			fmt.Sprintf("Expected *permit.Client, got: %T.", request.ProviderData),
@@ -42,14 +42,9 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Configure(_ context.Contex
 		return
 	}
 
-	// Get the global config set by the provider
-	r.client = groupResourceInstanceRoleAssignmentClient{
-		client:          permitClient,
-		cachedApiUrl:    config.GetGlobalApiUrl(),
-		cachedToken:     config.GetGlobalApiKey(),
-		cachedProjectId: "",
-		cachedEnvId:     "",
-	}
+	// The requests go through the connection the provider's Configure stored with
+	// the SDK client, not through the SDK.
+	r.client = groupResourceInstanceRoleAssignmentClient{api: config.GetAPI()}
 }
 
 func (r *GroupResourceInstanceRoleAssignmentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -60,46 +55,55 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Schema(_ context.Context, 
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Assigns a role to a group on a specific resource instance within a tenant. " +
 			"This uses the Permit.io Groups API to manage group-level permissions on resource instances. " +
-			"For user-specific assignments, use `permitio_resource_instance_role_assignment` instead.",
+			"For user-specific assignments, use `permitio_resource_instance_role_assignment` " +
+			"instead. Every argument forces replacement: changing one removes the assignment and " +
+			"creates a new one.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Unique identifier of the role assignment",
+				MarkdownDescription: "The key of the group, the same as `group`.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseNonNullStateForUnknown(),
 				},
 			},
 			"group": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Group key to assign the role to",
+				Required: true,
+				MarkdownDescription: "The key of the group to assign the role to. Use " +
+					"the key, not the ID.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"role": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Role key to assign",
+				Required: true,
+				MarkdownDescription: "The key of the role to assign, a role of `resource`. " +
+					common.KeyOnlyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{common.KeyNotID("permitio_role")},
 			},
 			"resource": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Resource type (e.g., 'workspace', 'document')",
+				Required: true,
+				MarkdownDescription: "The key of the resource the instance belongs to, such as " +
+					"`document`. " + common.KeyOnlyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{common.KeyNotID("permitio_resource")},
 			},
 			"resource_instance": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Resource instance key (e.g., 'ws-123', 'doc-456')",
+				Required: true,
+				MarkdownDescription: "The key of the resource instance, such as `handbook`. " +
+					common.UseKeyNote,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"tenant": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Tenant key for scoped assignment",
+				Required: true,
+				MarkdownDescription: "The key of the tenant the resource instance belongs to. " +
+					"Use the key, not the ID.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -118,8 +122,8 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Create(ctx context.Context
 	if err := r.client.Create(ctx, &plan); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create group resource instance role assignment",
-			fmt.Sprintf("Unable to assign role %s to group %s on resource %s instance %s in tenant %s: %s",
-				plan.Role.ValueString(), plan.Group.ValueString(), plan.Resource.ValueString(), plan.ResourceInstance.ValueString(), plan.Tenant.ValueString(), err),
+			common.APIErrorDetail("create", "group resource instance role assignment",
+				assignmentID(plan), err),
 		)
 		return
 	}
@@ -136,14 +140,14 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Read(ctx context.Context, 
 
 	state, err := r.client.Read(ctx, data)
 	if err != nil {
-		// If the resource is not found, remove it from state (drift detection)
-		if strings.Contains(err.Error(), "not found") {
+		if common.IsNotFoundErr(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError(
 			"Unable to read group resource instance role assignment",
-			fmt.Sprintf("Unable to read group resource instance role assignment: %s", err.Error()),
+			common.APIErrorDetail("read", "group resource instance role assignment",
+				assignmentID(data), err),
 		)
 		return
 	}
@@ -151,8 +155,10 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Read(ctx context.Context, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *GroupResourceInstanceRoleAssignmentResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	panic("updating GroupResourceInstanceRoleAssignments is not implemented")
+func (r *GroupResourceInstanceRoleAssignmentResource) Update(
+	_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse,
+) {
+	common.AddReplaceOnlyUpdateError(&resp.Diagnostics, "group resource instance role assignment")
 }
 
 func (r *GroupResourceInstanceRoleAssignmentResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -162,30 +168,28 @@ func (r *GroupResourceInstanceRoleAssignmentResource) Delete(ctx context.Context
 		return
 	}
 
-	if err := r.client.Delete(ctx, &state); err != nil {
+	if err := r.client.Delete(ctx, &state); err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error deleting group resource instance role assignment",
-			fmt.Sprintf("Could not unassign role %s from group %s on resource %s instance %s in tenant %s: %s",
-				state.Role.ValueString(), state.Group.ValueString(), state.Resource.ValueString(), state.ResourceInstance.ValueString(), state.Tenant.ValueString(), err.Error()),
+			common.APIErrorDetail("delete", "group resource instance role assignment",
+				assignmentID(state), err),
 		)
 	}
 }
 
-func (r *GroupResourceInstanceRoleAssignmentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Format: group:role:resource:resource_instance:tenant
-	parts := strings.Split(req.ID, ":")
-	if len(parts) != 5 {
-		resp.Diagnostics.AddError(
-			"Invalid import ID format",
-			"Expected format: group:role:resource:resource_instance:tenant\n\n"+
-				"Example: terraform import permitio_group_resource_instance_role_assignment.example \"developers:read-write:workspace:ws-123:default\"",
-		)
-		return
-	}
+// assignmentID names an assignment in error messages the way its import ID does,
+// as group:role:resource:resource_instance:tenant.
+func assignmentID(model GroupResourceInstanceRoleAssignmentModel) string {
+	return strings.Join([]string{
+		model.Group.ValueString(), model.Role.ValueString(), model.Resource.ValueString(),
+		model.ResourceInstance.ValueString(), model.Tenant.ValueString(),
+	}, ":")
+}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource"), parts[2])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_instance"), parts[3])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), parts[4])...)
+// ImportState imports an assignment by the keys of its group, role, resource,
+// resource instance and tenant.
+func (r *GroupResourceInstanceRoleAssignmentResource) ImportState(
+	ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "group:role:resource:resource_instance:tenant", req, resp)
 }

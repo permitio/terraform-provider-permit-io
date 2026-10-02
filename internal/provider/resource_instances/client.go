@@ -2,10 +2,12 @@ package resource_instances
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 )
 
 type resourceInstanceClient struct {
@@ -13,25 +15,17 @@ type resourceInstanceClient struct {
 }
 
 func (c *resourceInstanceClient) Create(ctx context.Context, plan resourceInstanceModel) (resourceInstanceModel, error) {
-	// Parse attributes from JSON string
-	var attributes map[string]interface{}
-	if !plan.Attributes.IsNull() && plan.Attributes.ValueString() != "" {
-		err := json.Unmarshal([]byte(plan.Attributes.ValueString()), &attributes)
-		if err != nil {
-			return resourceInstanceModel{}, err
-		}
-	}
-
 	instanceCreate := models.NewResourceInstanceCreate(
 		plan.Key.ValueString(),
 		plan.Resource.ValueString(),
 	)
+	instanceCreate.SetTenant(plan.Tenant.ValueString())
 
-	if !plan.Tenant.IsNull() {
-		instanceCreate.SetTenant(plan.Tenant.ValueString())
-	}
-
-	if attributes != nil {
+	if !plan.Attributes.IsNull() {
+		attributes, err := common.DecodeJSONObject(plan.Attributes.ValueString())
+		if err != nil {
+			return resourceInstanceModel{}, fmt.Errorf("attributes: %w", err)
+		}
 		instanceCreate.SetAttributes(attributes)
 	}
 
@@ -43,36 +37,41 @@ func (c *resourceInstanceClient) Create(ctx context.Context, plan resourceInstan
 		return resourceInstanceModel{}, fmt.Errorf("create returned nil response")
 	}
 
-	return tfModelFromResourceInstanceRead(*created), nil
+	return tfModelFromResourceInstanceRead(*created, plan.Attributes)
 }
 
-func (c *resourceInstanceClient) Read(ctx context.Context, key string, resource string) (resourceInstanceModel, error) {
+// Read returns the instance with this key of this resource. priorAttributes is
+// the attributes of the prior state; see tfModelFromResourceInstanceRead.
+func (c *resourceInstanceClient) Read(ctx context.Context, key string, resource string,
+	priorAttributes jsontypes.Normalized,
+) (resourceInstanceModel, error) {
 	instanceId := fmt.Sprintf("%s:%s", resource, key)
 	instance, err := c.client.Api.ResourceInstances.Get(ctx, instanceId)
 	if err != nil {
 		return resourceInstanceModel{}, err
 	}
 	if instance == nil {
-		return resourceInstanceModel{}, fmt.Errorf("instance %s not found", instanceId)
+		return resourceInstanceModel{}, fmt.Errorf("instance %s %w", instanceId, common.ErrNotFound)
 	}
 
-	return tfModelFromResourceInstanceRead(*instance), nil
+	return tfModelFromResourceInstanceRead(*instance, priorAttributes)
 }
 
+// Update sends the attributes of plan. The API replaces an instance's attributes
+// whole and keeps them when the request leaves them out, so attributes left out
+// of the configuration are sent as {} to clear them.
 func (c *resourceInstanceClient) Update(ctx context.Context, plan resourceInstanceModel) (resourceInstanceModel, error) {
-	// Parse attributes from JSON string
-	var attributes map[string]interface{}
-	if !plan.Attributes.IsNull() && plan.Attributes.ValueString() != "" {
-		err := json.Unmarshal([]byte(plan.Attributes.ValueString()), &attributes)
+	attributes := map[string]any{}
+	if !plan.Attributes.IsNull() {
+		var err error
+		attributes, err = common.DecodeJSONObject(plan.Attributes.ValueString())
 		if err != nil {
-			return resourceInstanceModel{}, err
+			return resourceInstanceModel{}, fmt.Errorf("attributes: %w", err)
 		}
 	}
 
 	instanceUpdate := models.NewResourceInstanceUpdate()
-	if attributes != nil {
-		instanceUpdate.SetAttributes(attributes)
-	}
+	instanceUpdate.SetAttributes(attributes)
 
 	instanceId := fmt.Sprintf("%s:%s", plan.Resource.ValueString(), plan.Key.ValueString())
 	updated, err := c.client.Api.ResourceInstances.Update(ctx, instanceId, *instanceUpdate)
@@ -83,7 +82,7 @@ func (c *resourceInstanceClient) Update(ctx context.Context, plan resourceInstan
 		return resourceInstanceModel{}, fmt.Errorf("update returned nil response for %s", instanceId)
 	}
 
-	return tfModelFromResourceInstanceRead(*updated), nil
+	return tfModelFromResourceInstanceRead(*updated, plan.Attributes)
 }
 
 func (c *resourceInstanceClient) Delete(ctx context.Context, key string, resource string) error {

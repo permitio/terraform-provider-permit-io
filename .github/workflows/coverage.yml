@@ -1,0 +1,85 @@
+# Checks the live Permit API spec every week, since the API changes between
+# releases of the provider: fetches it from the URL coverage/spec.lock.json pins,
+# reports how it drifted from the vendored coverage/openapi.json, leaving
+# descriptions, summaries, titles and examples aside, and runs the coverage check
+# against it. The report goes to the job summary and, when the SLACK_WEBHOOK_URL
+# secret is set, the result to Slack. The run fails when the spec drifted, the
+# check finds untriaged operations or decode failures, or the check did not run.
+# Drift is fixed by a pull request that updates the vendored spec and its lock and
+# triages the changes; CLAUDE.md says how.
+name: Weekly API spec drift check
+
+on:
+  schedule:
+    - cron: '41 6 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    name: Drift
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+      - run: go build -o "$RUNNER_TEMP/apicoverage" ./internal/acctest/apicoverage
+      # Records apicoverage's exit code, 0 (no drift, check passed), 1 (drift or
+      # findings) or 2 (did not run), and passes, so the report step sees it. A
+      # failed fetch leaves no status, which the report counts as not having run.
+      - name: Check the live spec
+        id: check
+        shell: bash
+        run: |
+          url=$(jq -r .url coverage/spec.lock.json)
+          curl -fsSL --retry 3 --retry-connrefused -o "$RUNNER_TEMP/live.json" "$url"
+          status=0
+          "$RUNNER_TEMP/apicoverage" -live "$RUNNER_TEMP/live.json" \
+            >"$RUNNER_TEMP/report.md" || status=$?
+          cat "$RUNNER_TEMP/report.md"
+          echo "status=$status" >>"$GITHUB_OUTPUT"
+      - name: Report
+        if: always()
+        shell: bash
+        env:
+          STATUS: ${{ steps.check.outputs.status }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case ${STATUS:-2} in
+            0) result="no drift, and the coverage check passed" ;;
+            1) result="the live spec drifted or the coverage check found problems" ;;
+            *) result="the check did not run" ;;
+          esac
+          summary="Permit API spec against the vendored one: ${result}."
+          echo "$summary"
+          {
+            echo "### Weekly API spec drift check"
+            echo "$summary"
+            if [[ -f $RUNNER_TEMP/report.md ]]; then
+              cat "$RUNNER_TEMP/report.md"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+          if [[ -n $SLACK_WEBHOOK_URL ]]; then
+            text="${GITHUB_REPOSITORY} weekly API spec drift check: ${result}. ${RUN_URL}"
+            jq -n --arg text "$text" '{text: $text}' |
+              curl -fsS --retry 3 -X POST -H 'Content-Type: application/json' \
+                --data @- "$SLACK_WEBHOOK_URL" ||
+              echo "::warning title=Slack::Could not post the result to Slack."
+          fi
+          case ${STATUS:-2} in
+            0 | 1) exit "$STATUS" ;;
+            *) exit 2 ;;
+          esac

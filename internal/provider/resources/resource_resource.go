@@ -16,8 +16,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &ResourceResource{}
-	_ resource.ResourceWithConfigure = &ResourceResource{}
+	_ resource.Resource                = &ResourceResource{}
+	_ resource.ResourceWithConfigure   = &ResourceResource{}
+	_ resource.ResourceWithImportState = &ResourceResource{}
 )
 
 // NewResourceResource is a helper function to simplify the provider implementation.
@@ -53,7 +54,11 @@ func (r *ResourceResource) Metadata(_ context.Context, req resource.MetadataRequ
 // Schema defines the schema for the resource.
 func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "See [the documentation](https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource) for more information about resources.",
+		MarkdownDescription: "Manages a resource: a type of object that your application " +
+			"protects, such as a document, with the actions users can take on it and the " +
+			"attributes that policies can check. See [the documentation]" +
+			"(https://api.permit.io/v2/redoc#tag/Resources/operation/create_resource) for more " +
+			"information about resources.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -91,13 +96,17 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"updated_at": schema.StringAttribute{
-				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Timestamp when the resource was last updated",
 			},
 			"key": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "A URL-friendly name of the resource (i.e: slug). You will be able to query later using this key instead of the id (UUID) of the resource.",
+				Required: true,
+				MarkdownDescription: "A URL-friendly name of the resource (i.e: slug). You " +
+					"will be able to query later using this key instead of the id (UUID) of " +
+					"the resource. Changing it replaces the resource.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -112,25 +121,32 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"description": schema.StringAttribute{
-				Optional:            true,
-				Computed:            true,
-				MarkdownDescription: "An optional longer description of what this resource respresents in your system",
+				Optional: true,
+				Computed: true,
+				MarkdownDescription: "An optional longer description of what this resource " +
+					"represents in your system. Leaving it out keeps the description the " +
+					"resource has in Permit.",
 			},
 			"actions": schema.MapNestedAttribute{
-				MarkdownDescription: "A actions definition block, typically contained within a resource type definition block.\n    The actions represents the ways you can interact with a protected resource.",
+				MarkdownDescription: "The actions users can take on the resource, by action " +
+					"key, such as `read`. A top-level role grants one as the permission " +
+					"`resource_key:action_key`, and a role on this resource as the action key.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
-							Computed: true,
+							Computed:            true,
+							MarkdownDescription: "The ID Permit assigns to the action.",
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseNonNullStateForUnknown(),
 							},
 						},
 						"name": schema.StringAttribute{
-							Required: true,
+							Required:            true,
+							MarkdownDescription: "The name of the action.",
 						},
 						"description": schema.StringAttribute{
-							Optional: true,
+							Optional:            true,
+							MarkdownDescription: "A description of the action.",
 						},
 					},
 				},
@@ -142,12 +158,15 @@ func (r *ResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 					Attributes: map[string]schema.Attribute{
 						"type": schema.StringAttribute{
 							Required: true,
+							MarkdownDescription: "The type of the attribute: `bool`, " +
+								"`number`, `string`, `time`, `array` or `json`.",
 							Validators: []validator.String{
 								common.AttributeTypeValidator{},
 							},
 						},
 						"description": schema.StringAttribute{
-							Optional: true,
+							Optional:            true,
+							MarkdownDescription: "A description of the attribute.",
 						},
 					},
 				},
@@ -171,7 +190,7 @@ func (r *ResourceResource) Create(ctx context.Context, req resource.CreateReques
 	if err := r.ResourceCreate(ctx, &resourcePlan); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create resource",
-			fmt.Sprintf("Unable to create resource: %s", err),
+			common.APIErrorDetail("create", "resource", resourcePlan.Key.ValueString(), err),
 		)
 		return
 	}
@@ -195,9 +214,13 @@ func (r *ResourceResource) Read(ctx context.Context, request resource.ReadReques
 
 	state, err := r.ResourceRead(ctx, data)
 	if err != nil {
+		if common.IsNotFoundErr(err) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError(
 			"Unable to Read Resource",
-			fmt.Sprintf("Unable to read resource: %s, Error: %s", data.Id.String(), err.Error()),
+			common.APIErrorDetail("read", "resource", data.Key.ValueString(), err),
 		)
 		return
 	}
@@ -214,26 +237,23 @@ func (r *ResourceResource) Read(ctx context.Context, request resource.ReadReques
 func (r *ResourceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var (
 		resourcePlan ResourceModel
+		prior        ResourceModel
 	)
-	diags := req.Plan.Get(ctx, &resourcePlan)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &resourcePlan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	tflog.Info(ctx, fmt.Sprintf("update %v", resourcePlan.Actions))
 
-	if err := r.ResourceUpdate(ctx, &resourcePlan); err != nil {
+	if err := r.ResourceUpdate(ctx, &resourcePlan, prior.Attributes); err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update resource",
-			fmt.Sprintf("Unable to update resource: %s", err),
+			common.APIErrorDetail("update", "resource", resourcePlan.Key.ValueString(), err),
 		)
 		return
 	}
-	diags = resp.State.Set(ctx, resourcePlan)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, resourcePlan)...)
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
@@ -247,12 +267,19 @@ func (r *ResourceResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	err := r.client.Api.Resources.Delete(ctx, state.Key.ValueString())
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		resp.Diagnostics.AddError(
 			"Error Deleting Resource",
-			"Could not delete resource, unexpected error: "+err.Error(),
+			common.APIErrorDetail("delete", "resource", state.Key.ValueString(), err),
 		)
 		return
 	}
 
+}
+
+// ImportState imports a resource by its key.
+func (r *ResourceResource) ImportState(
+	ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse,
+) {
+	common.ImportState(ctx, "key", request, response)
 }

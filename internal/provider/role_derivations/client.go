@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/permitio/permit-golang/pkg/models"
 	"github.com/permitio/permit-golang/pkg/permit"
+	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"github.com/samber/lo"
 )
 
@@ -55,8 +56,7 @@ func (c *apiClient) Read(ctx context.Context, plan roleDerivationModel) (roleDer
 	})
 
 	if !found {
-		return roleDerivationModel{},
-			fmt.Errorf("derivation not found")
+		return roleDerivationModel{}, fmt.Errorf("derivation %w", common.ErrNotFound)
 	}
 
 	return tfModelFromDerivedRoleRuleRead(plan, derivation), nil

@@ -1,0 +1,3 @@
+# The import examples are sh snippets that the docs embed as they are, so they
+# carry no shebang.
+shell=sh

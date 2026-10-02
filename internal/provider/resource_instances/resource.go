@@ -2,12 +2,13 @@ package resource_instances
 
 import (
 	"context"
-	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/permitio/terraform-provider-permit-io/internal/provider/common"
 	"strings"
 )
@@ -42,11 +43,13 @@ func (r *ResourceInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 	delete(attributes, "description")
 
 	attributes["resource"] = schema.StringAttribute{
-		MarkdownDescription: "The resource type key that this instance belongs to.",
-		Required:            true,
+		MarkdownDescription: "The key of the resource that this instance belongs to, such " +
+			"as `document`. " + common.KeyOnlyNote + " Changing it replaces the instance.",
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
+		Validators: []validator.String{common.KeyNotID("permitio_resource")},
 	}
 	attributes["resource_id"] = schema.StringAttribute{
 		MarkdownDescription: "The unique resource type ID.",
@@ -56,16 +59,18 @@ func (r *ResourceInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 		},
 	}
 	attributes["tenant"] = schema.StringAttribute{
-		MarkdownDescription: "The tenant key for multi-tenant enforcement.",
-		Optional:            true,
+		MarkdownDescription: "The key of the tenant the instance belongs to; Permit needs " +
+			"one to create the instance. " + common.UseKeyNote + " Changing it replaces " +
+			"the instance.",
+		Required: true,
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
 		},
 	}
 	attributes["attributes"] = schema.StringAttribute{
-		MarkdownDescription: "Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies.",
+		MarkdownDescription: "Arbitrary resource instance attributes in JSON format that will be used to enforce attribute-based access control policies. A JSON object, such as `jsonencode({ pages = 12 })`. Differences in whitespace and key order from the object Permit returns do not show as changes. Leaving the argument out means the instance has no attributes, so removing it clears them in Permit.",
 		Optional:            true,
-		Computed:            true,
+		CustomType:          jsontypes.NormalizedType{},
 	}
 
 	resp.Schema = schema.Schema{
@@ -88,7 +93,7 @@ func (r *ResourceInstanceResource) Create(ctx context.Context, request resource.
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to create resource instance",
-			fmt.Errorf("unable to create resource instance: %w", err).Error(),
+			common.APIErrorDetail("create", "resource instance", instanceID(plan), err),
 		)
 		return
 	}
@@ -105,7 +110,8 @@ func (r *ResourceInstanceResource) Read(ctx context.Context, request resource.Re
 		return
 	}
 
-	instanceRead, err := r.client.Read(ctx, model.Key.ValueString(), model.Resource.ValueString())
+	instanceRead, err := r.client.Read(ctx, model.Key.ValueString(), model.Resource.ValueString(),
+		model.Attributes)
 
 	if err != nil {
 		if common.IsNotFoundErr(err) {
@@ -114,7 +120,7 @@ func (r *ResourceInstanceResource) Read(ctx context.Context, request resource.Re
 		}
 		response.Diagnostics.AddError(
 			"Unable to read resource instance",
-			fmt.Errorf("unable to read resource instance: %w", err).Error(),
+			common.APIErrorDetail("read", "resource instance", instanceID(model), err),
 		)
 		return
 	}
@@ -136,7 +142,7 @@ func (r *ResourceInstanceResource) Update(ctx context.Context, request resource.
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Unable to update resource instance",
-			fmt.Errorf("unable to update resource instance: %w", err).Error(),
+			common.APIErrorDetail("update", "resource instance", instanceID(plan), err),
 		)
 		return
 	}
@@ -154,13 +160,19 @@ func (r *ResourceInstanceResource) Delete(ctx context.Context, request resource.
 
 	err := r.client.Delete(ctx, model.Key.ValueString(), model.Resource.ValueString())
 
-	if err != nil {
+	if err != nil && !common.IsNotFoundErr(err) {
 		response.Diagnostics.AddError(
 			"Unable to delete resource instance",
-			fmt.Errorf("unable to delete resource instance %s:%s: %w", model.Resource.ValueString(), model.Key.ValueString(), err).Error(),
+			common.APIErrorDetail("delete", "resource instance", instanceID(model), err),
 		)
 		return
 	}
+}
+
+// instanceID names a resource instance in error messages the way its import ID
+// does, as resource:key.
+func instanceID(model resourceInstanceModel) string {
+	return model.Resource.ValueString() + ":" + model.Key.ValueString()
 }
 
 // ImportState implements resource.ResourceWithImportState.

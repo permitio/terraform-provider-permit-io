@@ -1,0 +1,8 @@
+# The tests copy this into v0/.terraform/modules/vendored/ (git ignores .terraform
+# directories): a module Terraform downloaded, which the scanner must skip.
+resource "permitio_user_set" "vendored" {
+  key        = "vendored"
+  name       = "Vendored"
+  resource   = "document"
+  updated_at = "2025-01-01T00:00:00Z"
+}
