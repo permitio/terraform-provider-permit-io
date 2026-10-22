@@ -136,5 +136,18 @@ jobs:
             go test -v -cover ./internal/provider/ && break || sleep 10
           done
 
-        
-
+  # The one check the main branch's ruleset requires besides the jobs above: it passes only when
+  # every other job succeeded, so a skipped or cancelled job can't pass for a green run.
+  ci:
+    name: CI
+    if: always()
+    needs: [build, generate, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the needed jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'length == 3 and all(.[]; .result == "success")' > /dev/null
